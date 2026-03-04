@@ -138,7 +138,30 @@ export default function LeaveRequestPage() {
     }
     setAlert(null);
     setSubmitState(mode === "draft" ? "saving" : "submitting");
+
     setTimeout(() => {
+      // Persist request to localStorage so Leave History can pick it up
+      try {
+        const typeLabel = LEAVE_TYPES.find((t) => t.value === leaveType)?.label ?? leaveType;
+        const newRequest = {
+          id: Date.now().toString(36), // simple unique ID
+          typeCode: leaveType,
+          typeLabel,
+          fromDate,
+          toDate,
+          days,
+          reason,
+          handoverPerson: handoverPerson || "-",
+          status: mode === "draft" ? "draft" : "pending",
+          submittedAt: new Date().toLocaleString("vi-VN"),
+        };
+        const existing = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
+        existing.push(newRequest);
+        localStorage.setItem("hr_leave_requests", JSON.stringify(existing));
+      } catch {
+        // localStorage unavailable — silently skip
+      }
+
       setSubmitState("success");
       setAlert({
         type: "success",
@@ -147,7 +170,8 @@ export default function LeaveRequestPage() {
           : "Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.",
       });
       if (mode === "submit") {
-        setTimeout(() => router.push("/dashboard"), 1500);
+        // Redirect to leave history so user can see their new request
+        setTimeout(() => router.push("/dashboard/leave-history"), 1500);
       }
       setSubmitState("idle");
     }, 1000);

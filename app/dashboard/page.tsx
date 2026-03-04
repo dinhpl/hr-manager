@@ -12,6 +12,7 @@ import {
   Plus,
   Eye,
 } from "lucide-react";
+import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
 
 // ── Stat cards ─────────────────────────────────────────────────────────────────
 const STATS = [
@@ -104,9 +105,23 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }
   rejected: { label: "Từ chối", bg: "#fee2e2", color: "#dc2626" },
 };
 
+/** Map recent request data to the normalized modal shape */
+function toDetailData(req: (typeof RECENT_REQUESTS)[0]): LeaveDetailData {
+  return {
+    id: req.id.replace("#", ""),
+    typeCode: req.type.split(" - ")[0],
+    fromDate: req.from,
+    toDate: req.to,
+    days: req.days,
+    status: req.status,
+    reason: "—",
+  };
+}
+
 export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState(2026);
   const [currentMonth, setCurrentMonth] = useState(2);
+  const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
 
   const calendarDays = getCalendarDays(currentYear, currentMonth);
 
@@ -247,7 +262,11 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="py-3 px-3">
-                      <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90" style={{ background: "#1DB87A" }}>
+                      <button
+                        onClick={() => setSelectedDetail(toDetailData(req))}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:opacity-90"
+                        style={{ background: "#1DB87A" }}
+                      >
                         <Eye size={13} /> Xem
                       </button>
                     </td>
@@ -258,6 +277,9 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Leave detail modal */}
+      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
 
       {/* FAB */}
       <Link

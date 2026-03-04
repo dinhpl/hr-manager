@@ -1,0 +1,10 @@
+Tôi cần build Phare MVP với các chức năng sau 
+1> Login
+2> Dashboard
+3> Đăng ký nghỉ phép
+4> Lịch sử nghỉ phép
+5> Duyệt yêu cầu nghỉ phép
+6> Cấu hình hệ thống - Chính sách nghỉ phép
+7> Luồng duyệt
+
+Review hệ thống source FE, các màn hình nào không thuộc MVP hãy tạm thời ẩn khỏi màn hình, tạo file report để tôi biết các màn hình nào đã bị ẩn

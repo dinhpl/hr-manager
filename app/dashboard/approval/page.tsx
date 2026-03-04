@@ -5,6 +5,8 @@ import {
   CheckCircle2, RefreshCw, Clock, AlertTriangle, CheckCircle,
   Users, Eye, MessageSquare, Download, Search, ChevronLeft, ChevronRight,
 } from "lucide-react";
+import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
+import ConfirmDialog from "@/components/confirm-dialog";
 
 interface ApprovalRequest {
   id: string;
@@ -75,6 +77,29 @@ const CARD_HEADER: Record<string, { bg: string; text: string; icon: React.ReactN
   waiting: { bg: "#f59e0b", text: "white", icon: <Clock size={14} />, label: "Chờ duyệt" },
 };
 
+/** Map ApprovalRequest to normalized modal shape */
+function toDetailData(r: ApprovalRequest): LeaveDetailData {
+  return {
+    id: r.id,
+    typeCode: r.leaveType.code,
+    typeColor: r.leaveType.color,
+    fromDate: r.fromDate,
+    toDate: r.toDate,
+    days: r.days,
+    reason: r.reason,
+    handover: r.handover,
+    status: r.status === "hr_confirm" ? "hr_confirm" : r.status === "overdue" || r.status === "pending" || r.status === "waiting" ? "pending" : r.status,
+    submittedAt: r.submittedAt,
+    employeeName: r.employee.name,
+    employeeCode: r.employee.code,
+    employeeTeam: `${r.employee.team} | ${r.employee.dept}`,
+    leaveBalance: r.leaveBalance,
+    fileAttachment: r.fileAttachment,
+    approver: r.approvedBy,
+    approvedAt: r.approvedAt,
+  };
+}
+
 export default function ApprovalPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [hrNotes, setHrNotes] = useState<Record<string, string>>({});
@@ -87,6 +112,8 @@ export default function ApprovalPage() {
   const [priorityFilter, setPriorityFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   const handleApprove = (id: string) => {
     setApprovedIds((p) => [...p, id]);
@@ -101,6 +128,16 @@ export default function ApprovalPage() {
 
   const toggleSelect = (id: string) => {
     setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+  };
+
+  /** Bulk approve all selected requests that haven't been decided yet */
+  const executeBulkApprove = () => {
+    const pending = selectedIds.filter(
+      (id) => !approvedIds.includes(id) && !rejectedIds.includes(id)
+    );
+    setApprovedIds((p) => [...p, ...pending]);
+    setSelectedIds([]);
+    setBulkConfirmOpen(false);
   };
 
   const filtered = REQUESTS.filter((r) => {
@@ -123,9 +160,22 @@ export default function ApprovalPage() {
           <h1 className="text-xl font-bold" style={{ color: "#203430" }}>Duyệt yêu cầu nghỉ phép</h1>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
-            style={{ borderColor: "#1DB87A", color: "#1DB87A" }}>
-            <CheckCircle size={14} /> Duyệt hàng loạt
+          <button
+            onClick={() => selectedIds.length > 0 && setBulkConfirmOpen(true)}
+            disabled={selectedIds.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ borderColor: "#1DB87A", color: "#1DB87A" }}
+          >
+            <CheckCircle size={14} />
+            Duyệt hàng loạt
+            {selectedIds.length > 0 && (
+              <span
+                className="ml-1 px-1.5 py-0.5 rounded-full text-xs text-white font-bold"
+                style={{ background: "#1DB87A" }}
+              >
+                {selectedIds.length}
+              </span>
+            )}
           </button>
           <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
             style={{ borderColor: "#e2ede9", color: "#203430" }}>
@@ -352,17 +402,27 @@ export default function ApprovalPage() {
                         </button>
                       </>
                     )}
-                    <button className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
-                      style={{ borderColor: "#e2ede9" }}>
+                    <button
+                      onClick={() => setSelectedDetail(toDetailData(req))}
+                      className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
+                      style={{ borderColor: "#e2ede9" }}
+                      title="Xem chi tiết"
+                    >
                       <Eye size={15} style={{ color: "#3b82f6" }} />
                     </button>
-                    <button className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
-                      style={{ borderColor: "#e2ede9" }}>
+                    <button
+                      className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
+                      style={{ borderColor: "#e2ede9" }}
+                      title="Ghi chú"
+                    >
                       <MessageSquare size={15} style={{ color: "#6b7f78" }} />
                     </button>
                     {req.fileAttachment && (
-                      <button className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-emerald-50 transition-colors flex-shrink-0"
-                        style={{ borderColor: "#e2ede9" }}>
+                      <button
+                        className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-emerald-50 transition-colors flex-shrink-0"
+                        style={{ borderColor: "#e2ede9" }}
+                        title="Tải file đính kèm"
+                      >
                         <Download size={15} style={{ color: "#1DB87A" }} />
                       </button>
                     )}
@@ -373,6 +433,19 @@ export default function ApprovalPage() {
           );
         })}
       </div>
+
+      {/* Leave detail modal */}
+      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+
+      {/* Bulk approve confirm */}
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title="Duyệt hàng loạt"
+        message={`Bạn có chắc muốn duyệt ${selectedIds.length} yêu cầu đã chọn?`}
+        confirmLabel="Duyệt tất cả"
+        onConfirm={executeBulkApprove}
+        onCancel={() => setBulkConfirmOpen(false)}
+      />
 
       {/* Pagination */}
       <div className="flex items-center justify-center gap-1">

@@ -41,36 +41,20 @@ const NAV_ITEMS = [
     icon: History,
     key: "leave-history",
   },
-  {
-    href: "/dashboard/overtime",
-    label: "Quản lý Overtime",
-    icon: Clock,
-    key: "overtime",
-  },
-  {
-    href: "/dashboard/compoff",
-    label: "Nghỉ bù (Comp-off)",
-    icon: BedDouble,
-    key: "compoff",
-  },
+  // [MVP-HIDDEN] Quản lý Overtime - not in MVP scope
+  // { href: "/dashboard/overtime", label: "Quản lý Overtime", icon: Clock, key: "overtime" },
+  // [MVP-HIDDEN] Nghỉ bù (Comp-off) - not in MVP scope
+  // { href: "/dashboard/compoff", label: "Nghỉ bù (Comp-off)", icon: BedDouble, key: "compoff" },
   {
     href: "/dashboard/approval",
     label: "Duyệt yêu cầu",
     icon: CheckCircle2,
     key: "approval",
   },
-  {
-    href: "/dashboard/employees",
-    label: "Quản lý nhân viên",
-    icon: Users,
-    key: "employees",
-  },
-  {
-    href: "/dashboard/reports",
-    label: "Báo cáo",
-    icon: BarChart3,
-    key: "reports",
-  },
+  // [MVP-HIDDEN] Quản lý nhân viên - not in MVP scope
+  // { href: "/dashboard/employees", label: "Quản lý nhân viên", icon: Users, key: "employees" },
+  // [MVP-HIDDEN] Báo cáo - not in MVP scope
+  // { href: "/dashboard/reports", label: "Báo cáo", icon: BarChart3, key: "reports" },
   {
     href: "/dashboard/settings",
     label: "Cài đặt",

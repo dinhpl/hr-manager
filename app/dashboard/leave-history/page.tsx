@@ -1,12 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   History, PlusCircle, FileDown, Printer, Filter,
   ChevronUp, ChevronDown, Eye, Pencil, X, Download,
   CheckCircle, Clock, XCircle, List, ChevronLeft, ChevronRight, RotateCcw, Send,
 } from "lucide-react";
+import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
+import ConfirmDialog from "@/components/confirm-dialog";
+
+/** Leave type code → color mapping (used for localStorage-sourced records) */
+const TYPE_COLORS: Record<string, string> = {
+  AL: "#3b82f6", SL: "#10b981", ML: "#f97316",
+  WFH: "#8b5cf6", CO: "#1DB87A", PL: "#6b7280",
+  CSL: "#ec4899", UL: "#f59e0b", BT: "#0ea5e9",
+};
 
 interface LeaveRecord {
   id: string;
@@ -67,7 +77,37 @@ const ROW_BG: Record<string, string> = {
   hr_confirm: "#eff6ff",
 };
 
+/** Map a LeaveRecord to the normalized modal shape */
+function toDetailData(r: LeaveRecord): LeaveDetailData {
+  return {
+    id: r.id,
+    typeCode: r.type.code,
+    typeColor: r.type.color,
+    fromDate: r.fromDate,
+    toDate: r.toDate,
+    days: r.days,
+    reason: r.reason,
+    handover: r.handover,
+    status: r.status,
+    submittedAt: r.submittedAt,
+    approver: r.approver,
+    approverRole: r.approverRole,
+    approvedAt: r.approvedAt,
+  };
+}
+
 export default function LeaveHistoryPage() {
+  const router = useRouter();
+
+  // ── State ───────────────────────────────────────────────────────────────────
+  const [records, setRecords] = useState<LeaveRecord[]>(RECORDS);
+  const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "cancel" | "submit_draft" | "resubmit";
+    id: string;
+    label: string;
+  } | null>(null);
+
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -81,7 +121,103 @@ export default function LeaveHistoryPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const filtered = RECORDS.filter((r) => {
+  // On mount: load any requests saved from the Leave Request page
+  useEffect(() => {
+    try {
+      const stored: Array<{
+        id: string; typeCode: string; fromDate: string; toDate: string;
+        days: number; reason: string; handoverPerson: string;
+        status: "draft" | "pending"; submittedAt: string;
+      }> = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
+
+      if (stored.length > 0) {
+        const existingIds = new Set(RECORDS.map((r) => r.id));
+        const newRecords: LeaveRecord[] = stored
+          .filter((r) => !existingIds.has(r.id))
+          .map((r) => ({
+            id: r.id,
+            type: { code: r.typeCode, color: TYPE_COLORS[r.typeCode] ?? "#6b7280" },
+            fromDate: r.fromDate,
+            toDate: r.toDate,
+            days: r.days,
+            reason: r.reason,
+            handover: r.handoverPerson || "-",
+            status: r.status,
+            submittedAt: r.submittedAt,
+            approver: "-",
+            approverRole: "",
+            approvedAt: "-",
+            actions: r.status === "draft" ? ["edit", "submit", "delete"] : ["view", "cancel"],
+          }));
+        if (newRecords.length > 0) {
+          setRecords((prev) => [...newRecords, ...prev]);
+        }
+      }
+    } catch {
+      // localStorage unavailable or invalid JSON — skip
+    }
+  }, []);
+
+  // ── Row action handlers ──────────────────────────────────────────────────────
+
+  /** Open detail modal */
+  const handleView = (r: LeaveRecord) => setSelectedDetail(toDetailData(r));
+
+  /** Navigate to leave request page for re-editing a draft */
+  const handleEdit = (r: LeaveRecord) => {
+    router.push(`/dashboard/leave-request`);
+  };
+
+  /** Ask confirmation then remove the record (cancel or delete draft) */
+  const handleCancelOrDelete = (r: LeaveRecord) => {
+    setConfirmAction({
+      type: "cancel",
+      id: r.id,
+      label: r.status === "draft" ? "xóa nháp" : "hủy yêu cầu",
+    });
+  };
+
+  /** Ask confirmation then change draft → pending */
+  const handleSubmitDraft = (r: LeaveRecord) => {
+    setConfirmAction({ type: "submit_draft", id: r.id, label: "gửi yêu cầu" });
+  };
+
+  /** Ask confirmation then change rejected → pending */
+  const handleResubmit = (r: LeaveRecord) => {
+    setConfirmAction({ type: "resubmit", id: r.id, label: "gửi lại yêu cầu" });
+  };
+
+  /** Execute the confirmed action */
+  const executeConfirm = () => {
+    if (!confirmAction) return;
+    const { type, id } = confirmAction;
+
+    if (type === "cancel") {
+      // Remove from visible list
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+      setSelectedIds((prev) => prev.filter((x) => x !== id));
+    } else if (type === "submit_draft") {
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === id
+            ? { ...r, status: "pending" as const, actions: ["view", "cancel"] }
+            : r
+        )
+      );
+    } else if (type === "resubmit") {
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === id
+            ? { ...r, status: "pending" as const, actions: ["view", "cancel"] }
+            : r
+        )
+      );
+    }
+
+    setConfirmAction(null);
+  };
+
+  const filtered = records.filter((r) => {
     if (statusFilter && r.status !== statusFilter) return false;
     if (typeFilter && r.type.code !== typeFilter) return false;
     if (searchInput && !r.id.includes(searchInput) && !r.reason.toLowerCase().includes(searchInput.toLowerCase())) return false;
@@ -330,37 +466,73 @@ export default function LeaveHistoryPage() {
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                       {row.actions.includes("view") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-50" title="Xem">
+                        <button
+                          onClick={() => handleView(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-50"
+                          title="Xem"
+                        >
                           <Eye size={13} style={{ color: "#3b82f6" }} />
                         </button>
                       )}
                       {row.actions.includes("edit") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50" title="Sửa">
+                        <button
+                          onClick={() => handleEdit(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                          title="Sửa"
+                        >
                           <Pencil size={13} style={{ color: "#f59e0b" }} />
                         </button>
                       )}
                       {row.actions.includes("submit") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50" title="Gửi">
+                        <button
+                          onClick={() => handleSubmitDraft(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50"
+                          title="Gửi"
+                        >
                           <Send size={13} style={{ color: "#1DB87A" }} />
                         </button>
                       )}
                       {row.actions.includes("cancel") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50" title="Hủy">
+                        <button
+                          onClick={() => handleCancelOrDelete(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                          title="Hủy"
+                        >
+                          <X size={13} style={{ color: "#ef4444" }} />
+                        </button>
+                      )}
+                      {row.actions.includes("delete") && (
+                        <button
+                          onClick={() => handleCancelOrDelete(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                          title="Xóa nháp"
+                        >
                           <X size={13} style={{ color: "#ef4444" }} />
                         </button>
                       )}
                       {row.actions.includes("download") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50" title="Tải xuống">
+                        <button
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50"
+                          title="Tải xuống"
+                        >
                           <Download size={13} style={{ color: "#1DB87A" }} />
                         </button>
                       )}
                       {row.actions.includes("resubmit") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50" title="Gửi lại">
+                        <button
+                          onClick={() => handleResubmit(row)}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                          title="Gửi lại"
+                        >
                           <RotateCcw size={13} style={{ color: "#f59e0b" }} />
                         </button>
                       )}
                       {row.actions.includes("print") && (
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-gray-100" title="In">
+                        <button
+                          onClick={() => window.print()}
+                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-gray-100"
+                          title="In"
+                        >
                           <Printer size={13} style={{ color: "#6b7280" }} />
                         </button>
                       )}
@@ -393,6 +565,38 @@ export default function LeaveHistoryPage() {
           </div>
         </div>
       </div>
+
+      {/* Leave detail modal */}
+      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+
+      {/* Confirm dialog for row actions */}
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={
+          confirmAction?.type === "cancel"
+            ? "Xác nhận hủy"
+            : confirmAction?.type === "submit_draft"
+            ? "Xác nhận gửi yêu cầu"
+            : "Xác nhận gửi lại"
+        }
+        message={
+          confirmAction?.type === "cancel"
+            ? `Bạn có chắc muốn ${confirmAction.label} này? Hành động không thể hoàn tác.`
+            : confirmAction?.type === "submit_draft"
+            ? "Yêu cầu sẽ được gửi đến người duyệt. Bạn có chắc muốn gửi?"
+            : "Yêu cầu sẽ được gửi lại để chờ duyệt. Bạn có chắc?"
+        }
+        danger={confirmAction?.type === "cancel"}
+        confirmLabel={
+          confirmAction?.type === "cancel"
+            ? "Hủy yêu cầu"
+            : confirmAction?.type === "submit_draft"
+            ? "Gửi ngay"
+            : "Gửi lại"
+        }
+        onConfirm={executeConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
 
       {/* Bottom summary: two columns */}
       <div className="grid lg:grid-cols-2 gap-5">

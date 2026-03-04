@@ -34,10 +34,13 @@ interface NotificationTemplate {
 
 const TAB_ITEMS = [
   { id: "leave", label: "Chính sách nghỉ phép", icon: Calendar },
-  { id: "overtime", label: "Chính sách Overtime", icon: Clock },
+  // [MVP-HIDDEN] Chính sách Overtime - not in MVP scope
+  // { id: "overtime", label: "Chính sách Overtime", icon: Clock },
   { id: "approval", label: "Luồng duyệt", icon: RotateCcw },
-  { id: "notification", label: "Thông báo", icon: Bell },
-  { id: "system", label: "Hệ thống", icon: Server },
+  // [MVP-HIDDEN] Thông báo - not in MVP scope
+  // { id: "notification", label: "Thông báo", icon: Bell },
+  // [MVP-HIDDEN] Hệ thống - not in MVP scope
+  // { id: "system", label: "Hệ thống", icon: Server },
 ];
 
 const LEAVE_RULES: AnnualLeaveRule[] = [
