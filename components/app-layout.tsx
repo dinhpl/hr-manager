@@ -87,6 +87,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const notifications = [
+    "Bạn có 2 yêu cầu nghỉ phép chờ duyệt",
+    "01 yêu cầu đã được HR xác nhận",
+    "Nhắc nhở: cập nhật kế hoạch nghỉ tháng này",
+  ];
 
   useEffect(() => {
     const stored =
@@ -225,26 +233,84 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-2">
             {/* Notification */}
-            <button className="relative w-9 h-9 rounded-lg flex items-center justify-center hover:bg-accent transition-colors">
-              <Bell size={17} style={{ color: "#6b7f78" }} />
-              <span
-                className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-white text-[10px] flex items-center justify-center font-bold"
-                style={{ background: "#ef4444" }}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setNotifOpen((p) => !p);
+                  setProfileOpen(false);
+                }}
+                className="relative w-9 h-9 rounded-lg flex items-center justify-center hover:bg-accent transition-colors"
               >
-                3
-              </span>
-            </button>
+                <Bell size={17} style={{ color: "#6b7f78" }} />
+                <span
+                  className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full text-white text-[10px] flex items-center justify-center font-bold"
+                  style={{ background: "#ef4444" }}
+                >
+                  {notifications.length}
+                </span>
+              </button>
+              {notifOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-80 bg-white rounded-xl border shadow-lg z-20"
+                  style={{ borderColor: "#e2ede9" }}
+                >
+                  <div className="px-3 py-2 border-b" style={{ borderColor: "#e2ede9" }}>
+                    <p className="text-sm font-semibold" style={{ color: "#203430" }}>Thông báo</p>
+                  </div>
+                  <div className="py-1">
+                    {notifications.map((item, idx) => (
+                      <div key={idx} className="px-3 py-2 text-sm" style={{ color: "#6b7f78" }}>
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Avatar + name */}
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent transition-colors">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: "#1DB87A" }}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setProfileOpen((p) => !p);
+                  setNotifOpen(false);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent transition-colors"
               >
-                {displayName.charAt(0)}
-              </div>
-              <ChevronDown size={14} className="text-muted-foreground" />
-            </button>
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                  style={{ background: "#1DB87A" }}
+                >
+                  {displayName.charAt(0)}
+                </div>
+                <ChevronDown size={14} className="text-muted-foreground" />
+              </button>
+              {profileOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-56 bg-white rounded-xl border shadow-lg z-20 overflow-hidden"
+                  style={{ borderColor: "#e2ede9" }}
+                >
+                  <div className="px-3 py-2 border-b" style={{ borderColor: "#e2ede9" }}>
+                    <p className="text-sm font-semibold" style={{ color: "#203430" }}>{displayName}</p>
+                    <p className="text-xs" style={{ color: "#6b7f78" }}>{roleTitle}</p>
+                  </div>
+                  <button
+                    onClick={() => setProfileOpen(false)}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                    style={{ color: "#203430" }}
+                  >
+                    Thông tin cá nhân
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-red-50"
+                    style={{ color: "#dc2626" }}
+                  >
+                    Đăng xuất
+                  </button>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleLogout}

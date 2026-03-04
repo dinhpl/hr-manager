@@ -121,6 +121,8 @@ export default function LeaveHistoryPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
+  const pageSizeNum = Number(pageSize);
+
   // On mount: load any requests saved from the Leave Request page
   useEffect(() => {
     try {
@@ -220,15 +222,71 @@ export default function LeaveHistoryPage() {
   const filtered = records.filter((r) => {
     if (statusFilter && r.status !== statusFilter) return false;
     if (typeFilter && r.type.code !== typeFilter) return false;
+    if (approverFilter === "TRUONGDAT" && r.approver !== "Trương Hữu Đạt") return false;
+    if (approverFilter === "LETHIBINH" && r.approver !== "Lê Thị Bình") return false;
     if (searchInput && !r.id.includes(searchInput) && !r.reason.toLowerCase().includes(searchInput.toLowerCase())) return false;
     return true;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "status") return a.status.localeCompare(b.status);
+    const aDate = a.submittedAt;
+    const bDate = b.submittedAt;
+    return sortBy === "date_asc" ? aDate.localeCompare(bDate) : bDate.localeCompare(aDate);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSizeNum));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSizeNum;
+  const pagedRows = sorted.slice(startIndex, startIndex + pageSizeNum);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, typeFilter, approverFilter, searchInput, sortBy, pageSize]);
+
+  const exportCsv = () => {
+    const csvEscape = (value: string | number) => {
+      const raw = String(value ?? "");
+      const escaped = raw.replace(/"/g, '""');
+      return `"${escaped}"`;
+    };
+
+    const headers = [
+      "ID", "Loai", "Tu ngay", "Den ngay", "So ngay", "Ly do", "Ban giao",
+      "Trang thai", "Ngay gui", "Nguoi duyet", "Vai tro", "Ngay duyet",
+    ];
+    const lines = sorted.map((r) => [
+      r.id,
+      r.type.code,
+      r.fromDate,
+      r.toDate,
+      r.days,
+      r.reason,
+      r.handover,
+      STATUS_CONFIG[r.status].label,
+      r.submittedAt,
+      r.approver,
+      r.approverRole,
+      r.approvedAt,
+    ].map(csvEscape).join(","));
+
+    const content = [headers.join(","), ...lines].join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `leave-history-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
   const toggleAll = () => {
-    setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map((r) => r.id));
+    setSelectedIds(selectedIds.length === pagedRows.length ? [] : pagedRows.map((r) => r.id));
   };
 
   return (
@@ -246,10 +304,12 @@ export default function LeaveHistoryPage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#1DB87A" }}>
             <PlusCircle size={14} /> Đăng ký mới
           </Link>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button onClick={exportCsv}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <FileDown size={14} /> Export Excel
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <Printer size={14} /> In báo cáo
           </button>
         </div>
@@ -381,10 +441,10 @@ export default function LeaveHistoryPage() {
                   <option value="50">50 dòng</option>
                 </select>
               </div>
-              <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#1DB87A" }}>
-                Lọc
-              </button>
-              <button onClick={() => { setStatusFilter(""); setTypeFilter(""); setSearchInput(""); }}
+              <span className="text-xs" style={{ color: "#6b7f78" }}>
+                Bộ lọc áp dụng theo thời gian thực
+              </span>
+              <button onClick={() => { setStatusFilter(""); setTypeFilter(""); setApproverFilter(""); setSearchInput(""); setSortBy("date_desc"); }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
                 <X size={13} /> Xóa lọc
               </button>
@@ -418,7 +478,7 @@ export default function LeaveHistoryPage() {
             <thead>
               <tr style={{ background: "#203430" }}>
                 <th className="px-3 py-3 text-left">
-                  <input type="checkbox" checked={selectedIds.length === filtered.length && filtered.length > 0}
+                  <input type="checkbox" checked={selectedIds.length === pagedRows.length && pagedRows.length > 0}
                     onChange={toggleAll} className="accent-[#1DB87A]" />
                 </th>
                 {["ID", "Loại", "Từ ngày", "Đến ngày", "Số ngày", "Lý do", "Người bàn giao", "Trạng thái", "Ngày gửi", "Người duyệt", "Ngày duyệt", "Thao tác"].map((h) => (
@@ -427,7 +487,7 @@ export default function LeaveHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => (
+              {pagedRows.map((row) => (
                 <tr key={row.id} style={{ background: ROW_BG[row.status] }}
                   className="border-b last:border-0 hover:brightness-95 transition-all" onClick={() => toggleSelect(row.id)}>
                   <td className="px-3 py-3">
@@ -546,20 +606,28 @@ export default function LeaveHistoryPage() {
         {/* Pagination */}
         <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: "#e2ede9" }}>
           <p className="text-xs" style={{ color: "#6b7f78" }}>
-            Hiện thị 1-{filtered.length} trong tổng số <strong>28 yêu cầu</strong> &nbsp;|&nbsp; Tổng: <strong>45.5 ngày</strong> nghỉ trong năm 2026
+            Hiển thị {sorted.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + pageSizeNum, sorted.length)} trong tổng số <strong>{sorted.length} yêu cầu</strong>
           </p>
           <div className="flex items-center gap-1">
-            <button className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50" style={{ borderColor: "#e2ede9" }}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ borderColor: "#e2ede9" }}>
               <ChevronLeft size={14} style={{ color: "#6b7f78" }} />
             </button>
-            {[1, 2, 3, "...", 5].map((p, i) => (
-              <button key={i} onClick={() => typeof p === "number" && setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium border transition-colors ${p === currentPage ? "text-white" : "hover:bg-gray-50"}`}
-                style={{ borderColor: p === currentPage ? "#1DB87A" : "#e2ede9", background: p === currentPage ? "#1DB87A" : undefined, color: p === currentPage ? "white" : "#6b7f78" }}>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
+              <button key={p} onClick={() => setCurrentPage(p)}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium border transition-colors ${p === safePage ? "text-white" : "hover:bg-gray-50"}`}
+                style={{ borderColor: p === safePage ? "#1DB87A" : "#e2ede9", background: p === safePage ? "#1DB87A" : undefined, color: p === safePage ? "white" : "#6b7f78" }}>
                 {p}
               </button>
             ))}
-            <button className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50" style={{ borderColor: "#e2ede9" }}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ borderColor: "#e2ede9" }}>
               <ChevronRight size={14} style={{ color: "#6b7f78" }} />
             </button>
           </div>

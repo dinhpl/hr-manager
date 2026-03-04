@@ -140,6 +140,22 @@ export default function ApprovalPage() {
     setBulkConfirmOpen(false);
   };
 
+  const handleRefresh = () => {
+    setNotes({});
+    setHrNotes({});
+    setApprovedIds([]);
+    setRejectedIds([]);
+    setSelectedIds([]);
+    setStatusFilter("");
+    setDeptFilter("");
+    setTypeFilter("");
+    setPriorityFilter("");
+    setSearchInput("");
+    setCurrentPage(1);
+    setSelectedDetail(null);
+    setBulkConfirmOpen(false);
+  };
+
   const filtered = REQUESTS.filter((r) => {
     if (statusFilter === "overdue" && r.status !== "overdue") return false;
     if (statusFilter === "hr" && r.status !== "hr_confirm") return false;
@@ -177,7 +193,8 @@ export default function ApprovalPage() {
               </span>
             )}
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
+          <button onClick={handleRefresh}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
             style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <RefreshCw size={14} /> Làm mới
           </button>

@@ -59,6 +59,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   const handleDemoClick = (account: (typeof DEMO_ACCOUNTS)[0], idx: number) => {
     setUsername(account.username);
@@ -261,6 +262,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
+                  onClick={() => setForgotOpen(true)}
                   className="text-sm font-semibold hover:underline"
                   style={{ color: "#1DB87A" }}
                 >
@@ -354,6 +356,35 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {forgotOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(14,71,78,0.45)" }}
+          onClick={() => setForgotOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-bold text-lg mb-2" style={{ color: "#203430" }}>
+              Quên mật khẩu
+            </h3>
+            <p className="text-sm mb-5" style={{ color: "#6b7f78" }}>
+              Vui lòng liên hệ Admin/HR để được hỗ trợ đặt lại mật khẩu.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setForgotOpen(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
+                style={{ borderColor: "#e2ede9", color: "#203430" }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

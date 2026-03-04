@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Settings, Save, RotateCcw, Download,
   Calendar, Clock, Route, Bell, Server,
@@ -64,14 +64,145 @@ const NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
   { event: "Sinh nhật nhân viên", email: true, sms: false, inApp: false, recipients: "Nhân viên, Manager", template: "Sửa", enabled: true },
 ];
 
+const SETTINGS_STORAGE_KEY = "hr_settings";
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("leave");
   const [showPassword, setShowPassword] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [leaveRules, setLeaveRules] = useState<AnnualLeaveRule[]>(LEAVE_RULES);
+  const [escalationRules, setEscalationRules] = useState<EscalationRule[]>(ESCALATION_RULES);
+  const [editingLeaveIndex, setEditingLeaveIndex] = useState<number | null>(null);
+  const [editingEscalationIndex, setEditingEscalationIndex] = useState<number | null>(null);
+  const [leaveDraft, setLeaveDraft] = useState<AnnualLeaveRule>({ fromYear: 0, toYear: 0, days: 0 });
+  const [escalationDraft, setEscalationDraft] = useState<EscalationRule>({
+    condition: "",
+    timeLimit: 0,
+    escalateTo: "Manager",
+    status: "active",
+  });
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "null") as {
+        leaveRules?: AnnualLeaveRule[];
+        escalationRules?: EscalationRule[];
+      } | null;
+
+      if (stored?.leaveRules?.length) setLeaveRules(stored.leaveRules);
+      if (stored?.escalationRules?.length) setEscalationRules(stored.escalationRules);
+    } catch {
+      // skip invalid localStorage payload
+    }
+  }, []);
 
   const handleSave = () => {
+    try {
+      localStorage.setItem(
+        SETTINGS_STORAGE_KEY,
+        JSON.stringify({ leaveRules, escalationRules })
+      );
+    } catch {
+      // skip when localStorage unavailable
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleReset = () => {
+    setLeaveRules(LEAVE_RULES);
+    setEscalationRules(ESCALATION_RULES);
+    setEditingLeaveIndex(null);
+    setEditingEscalationIndex(null);
+    try {
+      localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleExportConfig = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      leaveRules,
+      escalationRules,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `hr-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleAddLeaveRule = () => {
+    const next = [...leaveRules, { fromYear: 0, toYear: 0, days: 0 }];
+    setLeaveRules(next);
+    setEditingLeaveIndex(next.length - 1);
+    setLeaveDraft(next[next.length - 1]);
+  };
+
+  const handleEditLeaveRule = (index: number) => {
+    setEditingLeaveIndex(index);
+    setLeaveDraft(leaveRules[index]);
+  };
+
+  const handleSaveLeaveRule = (index: number) => {
+    setLeaveRules((prev) => prev.map((r, i) => (i === index ? leaveDraft : r)));
+    setEditingLeaveIndex(null);
+  };
+
+  const handleCancelLeaveRule = (index: number) => {
+    const isNewRow =
+      leaveRules[index]?.fromYear === 0 && leaveRules[index]?.toYear === 0 && leaveRules[index]?.days === 0;
+    if (isNewRow) {
+      setLeaveRules((prev) => prev.filter((_, i) => i !== index));
+    }
+    setEditingLeaveIndex(null);
+  };
+
+  const handleDeleteLeaveRule = (index: number) => {
+    setLeaveRules((prev) => prev.filter((_, i) => i !== index));
+    if (editingLeaveIndex === index) setEditingLeaveIndex(null);
+  };
+
+  const handleAddEscalationRule = () => {
+    const next = [
+      ...escalationRules,
+      { condition: "", timeLimit: 24, escalateTo: "Manager", status: "active" as const },
+    ];
+    setEscalationRules(next);
+    setEditingEscalationIndex(next.length - 1);
+    setEscalationDraft(next[next.length - 1]);
+  };
+
+  const handleEditEscalationRule = (index: number) => {
+    setEditingEscalationIndex(index);
+    setEscalationDraft(escalationRules[index]);
+  };
+
+  const handleSaveEscalationRule = (index: number) => {
+    setEscalationRules((prev) => prev.map((r, i) => (i === index ? escalationDraft : r)));
+    setEditingEscalationIndex(null);
+  };
+
+  const handleCancelEscalationRule = (index: number) => {
+    const rule = escalationRules[index];
+    const isNewRow = rule?.condition === "";
+    if (isNewRow) {
+      setEscalationRules((prev) => prev.filter((_, i) => i !== index));
+    }
+    setEditingEscalationIndex(null);
+  };
+
+  const handleDeleteEscalationRule = (index: number) => {
+    setEscalationRules((prev) => prev.filter((_, i) => i !== index));
+    if (editingEscalationIndex === index) setEditingEscalationIndex(null);
   };
 
   return (
@@ -90,11 +221,13 @@ export default function SettingsPage() {
             style={{ background: "#1DB87A" }}>
             <Save size={14} /> Lưu tất cả
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
+          <button onClick={handleReset}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
             style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <RotateCcw size={14} /> Reset
           </button>
-          <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
+          <button onClick={handleExportConfig}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
             style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <Download size={14} /> Export cấu hình
           </button>
@@ -178,22 +311,89 @@ export default function SettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {LEAVE_RULES.map((rule, i) => (
+                      {leaveRules.map((rule, i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "#f0f4f2" }}>
-                          <td className="px-3 py-3"><input type="number" defaultValue={rule.fromYear} className="w-full px-2 py-1 rounded border text-sm" style={{ borderColor: "#e2ede9" }} /></td>
-                          <td className="px-3 py-3"><input type="number" defaultValue={rule.toYear} className="w-full px-2 py-1 rounded border text-sm" style={{ borderColor: "#e2ede9" }} /></td>
-                          <td className="px-3 py-3"><input type="number" defaultValue={rule.days} className="w-full px-2 py-1 rounded border text-sm" style={{ borderColor: "#e2ede9" }} /></td>
                           <td className="px-3 py-3">
-                            <button className="w-7 h-7 rounded flex items-center justify-center hover:bg-red-50" style={{ color: "#ef4444" }}>
-                              <Trash2 size={14} />
-                            </button>
+                            {editingLeaveIndex === i ? (
+                              <input
+                                type="number"
+                                value={leaveDraft.fromYear}
+                                onChange={(e) => setLeaveDraft((p) => ({ ...p, fromYear: Number(e.target.value) }))}
+                                className="w-full px-2 py-1 rounded border text-sm"
+                                style={{ borderColor: "#e2ede9" }}
+                              />
+                            ) : (
+                              <span style={{ color: "#203430" }}>{rule.fromYear}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {editingLeaveIndex === i ? (
+                              <input
+                                type="number"
+                                value={leaveDraft.toYear}
+                                onChange={(e) => setLeaveDraft((p) => ({ ...p, toYear: Number(e.target.value) }))}
+                                className="w-full px-2 py-1 rounded border text-sm"
+                                style={{ borderColor: "#e2ede9" }}
+                              />
+                            ) : (
+                              <span style={{ color: "#203430" }}>{rule.toYear}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            {editingLeaveIndex === i ? (
+                              <input
+                                type="number"
+                                value={leaveDraft.days}
+                                onChange={(e) => setLeaveDraft((p) => ({ ...p, days: Number(e.target.value) }))}
+                                className="w-full px-2 py-1 rounded border text-sm"
+                                style={{ borderColor: "#e2ede9" }}
+                              />
+                            ) : (
+                              <span style={{ color: "#203430" }}>{rule.days}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-1">
+                              {editingLeaveIndex === i ? (
+                                <>
+                                  <button
+                                    onClick={() => handleSaveLeaveRule(i)}
+                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-emerald-50"
+                                  >
+                                    <Check size={14} style={{ color: "#1DB87A" }} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelLeaveRule(i)}
+                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-gray-100"
+                                  >
+                                    <X size={14} style={{ color: "#6b7f78" }} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleEditLeaveRule(i)}
+                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-amber-50"
+                                  >
+                                    <Edit2 size={14} style={{ color: "#f59e0b" }} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteLeaveRule(i)}
+                                    className="w-7 h-7 rounded flex items-center justify-center hover:bg-red-50"
+                                  >
+                                    <Trash2 size={14} style={{ color: "#ef4444" }} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <button className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border"
+                <button onClick={handleAddLeaveRule}
+                  className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border"
                   style={{ borderColor: "#1DB87A", color: "#1DB87A" }}>
                   <Plus size={14} /> Thêm quy tắc
                 </button>
@@ -378,27 +578,101 @@ export default function SettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ESCALATION_RULES.map((rule, i) => (
+                      {escalationRules.map((rule, i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "#f0f4f2" }}>
-                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>{rule.condition}</td>
-                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>{rule.timeLimit > 0 ? `${rule.timeLimit}h` : "Tự động"}</td>
-                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>{rule.escalateTo}</td>
+                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>
+                            {editingEscalationIndex === i ? (
+                              <input
+                                type="text"
+                                value={escalationDraft.condition}
+                                onChange={(e) => setEscalationDraft((p) => ({ ...p, condition: e.target.value }))}
+                                className="w-full px-2 py-1 rounded border text-xs"
+                                style={{ borderColor: "#e2ede9" }}
+                              />
+                            ) : (
+                              rule.condition
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>
+                            {editingEscalationIndex === i ? (
+                              <input
+                                type="number"
+                                value={escalationDraft.timeLimit}
+                                onChange={(e) => setEscalationDraft((p) => ({ ...p, timeLimit: Number(e.target.value) }))}
+                                className="w-20 px-2 py-1 rounded border text-xs"
+                                style={{ borderColor: "#e2ede9" }}
+                              />
+                            ) : rule.timeLimit > 0 ? (
+                              `${rule.timeLimit}h`
+                            ) : (
+                              "Tự động"
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>
+                            {editingEscalationIndex === i ? (
+                              <select
+                                value={escalationDraft.escalateTo}
+                                onChange={(e) => setEscalationDraft((p) => ({ ...p, escalateTo: e.target.value }))}
+                                className="px-2 py-1 rounded border text-xs"
+                                style={{ borderColor: "#e2ede9" }}
+                              >
+                                <option value="Tự động">Tự động</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Manager + HR">Manager + HR</option>
+                                <option value="HR">HR</option>
+                              </select>
+                            ) : (
+                              rule.escalateTo
+                            )}
+                          </td>
                           <td className="px-3 py-3">
-                            <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: "#D3F2E7", color: "#0E474E" }}>
-                              Hoạt động
+                            <span
+                              className="px-2 py-0.5 rounded text-xs font-medium"
+                              style={{
+                                background: rule.status === "active" ? "#D3F2E7" : "#f3f4f6",
+                                color: rule.status === "active" ? "#0E474E" : "#6b7280",
+                              }}
+                            >
+                              {rule.status === "active" ? "Hoạt động" : "Tạm tắt"}
                             </span>
                           </td>
                           <td className="px-3 py-3">
-                            <input type="checkbox" defaultChecked className="w-4 h-4 accent-blue-500" />
+                            <input
+                              type="checkbox"
+                              checked={rule.status === "active"}
+                              onChange={(e) =>
+                                setEscalationRules((prev) =>
+                                  prev.map((item, idx) =>
+                                    idx === i
+                                      ? { ...item, status: e.target.checked ? "active" : "inactive" }
+                                      : item
+                                  )
+                                )
+                              }
+                              className="w-4 h-4 accent-blue-500"
+                            />
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex gap-1">
-                              <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50">
-                                <Edit2 size={13} style={{ color: "#f59e0b" }} />
-                              </button>
-                              <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50">
-                                <Trash2 size={13} style={{ color: "#ef4444" }} />
-                              </button>
+                              {editingEscalationIndex === i ? (
+                                <>
+                                  <button onClick={() => handleSaveEscalationRule(i)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50">
+                                    <Check size={13} style={{ color: "#1DB87A" }} />
+                                  </button>
+                                  <button onClick={() => handleCancelEscalationRule(i)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-gray-100">
+                                    <X size={13} style={{ color: "#6b7f78" }} />
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => handleEditEscalationRule(i)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50">
+                                    <Edit2 size={13} style={{ color: "#f59e0b" }} />
+                                  </button>
+                                  <button onClick={() => handleDeleteEscalationRule(i)} className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50">
+                                    <Trash2 size={13} style={{ color: "#ef4444" }} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -406,7 +680,8 @@ export default function SettingsPage() {
                     </tbody>
                   </table>
                 </div>
-                <button className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border"
+                <button onClick={handleAddEscalationRule}
+                  className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border"
                   style={{ borderColor: "#1DB87A", color: "#1DB87A" }}>
                   <Plus size={14} /> Thêm quy tắc escalation
                 </button>
