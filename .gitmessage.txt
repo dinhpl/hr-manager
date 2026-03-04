@@ -1,0 +1,26 @@
+# <type>(<scope>): <short summary>
+
+# Body (optional): explain why this change is needed.
+# - Keep lines concise and focused on intent.
+# - Reference user impact or technical reason.
+
+# Footer (optional): issue refs, breaking changes.
+# - BREAKING CHANGE: <description>
+# - Refs: #123
+
+# Allowed types:
+# feat     New feature
+# fix      Bug fix
+# refactor Code change without behavior change
+# chore    Maintenance, tooling, housekeeping
+# docs     Documentation only
+# test     Tests added/updated
+# perf     Performance improvement
+# build    Build/dependency changes
+# ci       CI/CD pipeline changes
+# style    Formatting-only changes
+
+# Examples:
+# feat(auth): add remember-me option on login page
+# fix(leave-history): handle empty filter result pagination
+# chore(repo): add .gitignore and commit message template
