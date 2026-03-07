@@ -544,15 +544,6 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
     </form>
   );
 }
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
-            {filtered.map((emp) => (
-              <div key={emp.id} className="rounded-xl border p-4 hover:shadow-md transition-all"
-                style={{ borderColor: "#e2ede9", borderLeft: `4px solid ${emp.dept.color}` }}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}>
-                    {emp.initials}
-                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm truncate" style={{ color: "#203430" }}>{emp.name}</p>
                     <p className="text-xs" style={{ color: "#6b7f78" }}>{emp.title}</p>
