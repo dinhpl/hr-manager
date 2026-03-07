@@ -318,10 +318,10 @@ volumes:
 
 ## Checklist Phase 1
 
-- [ ] `backend/` directory tạo xong
-- [ ] pnpm install thành công
-- [ ] TypeScript compile không lỗi
-- [ ] Prisma schema sync với DB
-- [ ] `GET /health` trả về `{ status: "ok" }`
-- [ ] Docker compose chạy được DB
-- [ ] `.env.example` đầy đủ
+- [x] `backend/` directory tạo xong
+- [x] pnpm install thành công
+- [x] TypeScript compile không lỗi
+- [x] Prisma schema sync với DB
+- [x] `GET /health` trả về `{ status: "ok" }`
+- [x] Docker compose chạy được DB
+- [x] `.env.example` đầy đủ

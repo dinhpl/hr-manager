@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hr_leave_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./hr_leave_db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend:
+    build: ./backend
+    ports:
+      - "4000:4000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:secret@db:5432/hr_leave_db
+      JWT_ACCESS_SECRET: change-me-in-production-at-least-32-chars
+      JWT_REFRESH_SECRET: change-me-in-production-too-at-least-32
+      FRONTEND_URL: http://localhost:3000
+      NODE_ENV: production
+    volumes:
+      - ./backend/uploads:/app/uploads
+
+volumes:
+  pgdata:

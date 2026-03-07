@@ -312,10 +312,10 @@ if (data.success) {
 
 ## Checklist Phase 2
 
-- [ ] `POST /api/auth/login` — đăng nhập thành công trả access + refresh token
-- [ ] `POST /api/auth/refresh-token` — làm mới access token từ cookie
-- [ ] `POST /api/auth/logout` — xóa cookie
-- [ ] `GET /api/auth/me` — lấy info user hiện tại
-- [ ] `authMiddleware` chặn request không có token
-- [ ] `requireRole()` chặn sai role
-- [ ] Test: login với admin@company.com từ seed data
+- [x] `POST /api/auth/login` — đăng nhập thành công trả access + refresh token
+- [x] `POST /api/auth/refresh-token` — làm mới access token từ cookie
+- [x] `POST /api/auth/logout` — xóa cookie
+- [x] `GET /api/auth/me` — lấy info user hiện tại
+- [x] `authMiddleware` chặn request không có token
+- [x] `requireRole()` chặn sai role
+- [x] Test: login với admin@company.com từ seed data
