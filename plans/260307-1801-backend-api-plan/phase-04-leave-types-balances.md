@@ -178,12 +178,12 @@ const res = await fetch(`${API_URL}/api/leave-types?activeOnly=false`);
 
 ## Checklist Phase 4
 
-- [ ] `GET /api/leave-types` — list all active leave types
-- [ ] `POST /api/leave-types` — tạo loại nghỉ mới
-- [ ] `PATCH /api/leave-types/:id` — cập nhật
-- [ ] `DELETE /api/leave-types/:id` — soft delete (check nếu đang dùng)
-- [ ] `GET /api/leave-balances` — balance năm hiện tại của user đang login
-- [ ] `GET /api/leave-balances/:userId` — balance của user cụ thể (MANAGER+)
-- [ ] `POST /api/leave-balances/initialize` — khởi tạo balance năm mới
-- [ ] `PATCH /api/leave-balances/:id` — điều chỉnh balance
-- [ ] `deductBalance` / `restoreBalance` utilities sẵn sàng cho Phase 5
+- [x] `GET /api/leave-types` — list all active leave types
+- [x] `POST /api/leave-types` — tạo loại nghỉ mới
+- [x] `PATCH /api/leave-types/:id` — cập nhật
+- [x] `DELETE /api/leave-types/:id` — soft delete (check nếu đang dùng)
+- [x] `GET /api/leave-balances` — balance năm hiện tại của user đang login
+- [x] `GET /api/leave-balances/:userId` — balance của user cụ thể (MANAGER+)
+- [x] `POST /api/leave-balances/initialize` — khởi tạo balance năm mới
+- [x] `PATCH /api/leave-balances/:id` — điều chỉnh balance
+- [x] `deductBalance` / `restoreBalance` utilities sẵn sàng cho Phase 5

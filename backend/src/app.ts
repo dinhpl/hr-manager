@@ -8,20 +8,24 @@ import path from "path";
 import { env } from "./config/env";
 import { errorMiddleware } from "./middlewares/error.middleware";
 import { authRouter } from "./modules/auth/auth.router";
+import { usersRouter } from "./modules/users/users.router";
+import { leaveTypesRouter } from "./modules/leave-types/leave-types.router";
+import { leaveBalancesRouter } from "./modules/leave-balances/leave-balances.router";
+import { leaveRequestsRouter } from "./modules/leave-requests/leave-requests.router";
 
 export function createApp(): Application {
   const app = express();
+
+  // Serialize BigInt values as strings in all JSON responses
+  app.set("json replacer", (_key: string, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value
+  );
 
   // Security headers
   app.use(helmet());
 
   // CORS — allow frontend origin with credentials for httpOnly cookies
-  app.use(
-    cors({
-      origin: env.FRONTEND_URL,
-      credentials: true,
-    })
-  );
+  app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 
   // Rate limiting: 200 requests per 15 minutes per IP
   app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
@@ -37,14 +41,17 @@ export function createApp(): Application {
   app.use(pinoHttp());
 
   // Serve uploaded files (leave attachments)
-  app.use("/uploads", express.static(path.join(process.cwd(), env.UPLOAD_DIR, "..")));
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-  // Health check endpoint
+  // Health check
   app.get("/health", (_req, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
   // API routes
   app.use("/api/auth", authRouter);
-  // Phase 3+: thêm routers tiếp theo ở đây
+  app.use("/api/users", usersRouter);
+  app.use("/api/leave-types", leaveTypesRouter);
+  app.use("/api/leave-balances", leaveBalancesRouter);
+  app.use("/api/leave-requests", leaveRequestsRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === "development") {

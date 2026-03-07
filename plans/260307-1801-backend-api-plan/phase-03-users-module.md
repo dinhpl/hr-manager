@@ -218,10 +218,10 @@ const handoverOptions = await res.json();
 
 ## Checklist Phase 3
 
-- [ ] `GET /api/users` — list với filter search/dept/role/status + paginate
-- [ ] `GET /api/users/dropdown` — list rút gọn (id, fullName, username)
-- [ ] `GET /api/users/:id` — detail + leave balances năm nay
-- [ ] `POST /api/users` — tạo user, hash password
-- [ ] `PATCH /api/users/:id` — cập nhật
-- [ ] `DELETE /api/users/:id` — soft delete
-- [ ] Không trả `password` field trong bất kỳ response nào
+- [x] `GET /api/users` — list với filter search/dept/role/status + paginate
+- [x] `GET /api/users/dropdown` — list rút gọn (id, fullName, username)
+- [x] `GET /api/users/:id` — detail + leave balances năm nay
+- [x] `POST /api/users` — tạo user, hash password
+- [x] `PATCH /api/users/:id` — cập nhật
+- [x] `DELETE /api/users/:id` — soft delete
+- [x] Không trả `password` field trong bất kỳ response nào

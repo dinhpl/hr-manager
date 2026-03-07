@@ -367,13 +367,13 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 ## Checklist Phase 5
 
-- [ ] `GET /api/leave-requests` — scope by role (employee own, manager team, hr all)
-- [ ] `GET /api/leave-requests/:id` — detail
-- [ ] `POST /api/leave-requests` — tạo PENDING (không có DRAFT), upload file nếu có
-- [ ] `PATCH /api/leave-requests/:id/approve` — duyệt + deduct balance (transaction)
-- [ ] `PATCH /api/leave-requests/:id/reject` — từ chối
-- [ ] `PATCH /api/leave-requests/:id/cancel` — hủy (chỉ PENDING)
-- [ ] `POST /api/leave-requests/bulk-approve` — duyệt hàng loạt
-- [ ] `uploads/leave-attachments/` directory tạo sẵn (gitignore nội dung)
-- [ ] Migration `attachment_url` column
-- [ ] Static serve `/uploads/` endpoint
+- [x] `GET /api/leave-requests` — scope by role (employee own, manager team, hr all)
+- [x] `GET /api/leave-requests/:id` — detail
+- [x] `POST /api/leave-requests` — tạo PENDING (không có DRAFT), upload file nếu có
+- [x] `PATCH /api/leave-requests/:id/approve` — duyệt + deduct balance (transaction)
+- [x] `PATCH /api/leave-requests/:id/reject` — từ chối
+- [x] `PATCH /api/leave-requests/:id/cancel` — hủy (chỉ PENDING)
+- [x] `POST /api/leave-requests/bulk-approve` — duyệt hàng loạt
+- [x] `uploads/leave-attachments/` directory tạo sẵn (gitignore nội dung)
+- [x] Migration `attachment_url` column
+- [x] Static serve `/uploads/` endpoint
