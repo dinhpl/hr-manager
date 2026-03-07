@@ -227,10 +227,10 @@ const stats = await fetch(`${API_URL}/api/overtime/summary`, {
 
 ## Checklist Phase 6
 
-- [ ] `GET /api/overtime` — scope by role
-- [ ] `GET /api/overtime/:id` — detail
-- [ ] `POST /api/overtime` — đăng ký OT
-- [ ] `PATCH /api/overtime/:id/approve` — duyệt + tự động tạo comp-off record
-- [ ] `PATCH /api/overtime/:id/reject` — từ chối
-- [ ] Detect weekend từ date (Sat/Sun = weekend)
-- [ ] CompOff auto-created khi approve OT
+- [x] `GET /api/overtime` — scope by role
+- [x] `GET /api/overtime/:id` — detail
+- [x] `POST /api/overtime` — đăng ký OT
+- [x] `PATCH /api/overtime/:id/approve` — duyệt + tự động tạo comp-off record
+- [x] `PATCH /api/overtime/:id/reject` — từ chối
+- [x] Detect weekend từ date (Sat/Sun = weekend)
+- [x] CompOff auto-created khi approve OT

@@ -12,6 +12,11 @@ import { usersRouter } from "./modules/users/users.router";
 import { leaveTypesRouter } from "./modules/leave-types/leave-types.router";
 import { leaveBalancesRouter } from "./modules/leave-balances/leave-balances.router";
 import { leaveRequestsRouter } from "./modules/leave-requests/leave-requests.router";
+import { overtimeRouter } from "./modules/overtime/overtime.router";
+import { compOffRouter } from "./modules/comp-off/comp-off.router";
+import { dashboardRouter } from "./modules/dashboard/dashboard.router";
+import { reportsRouter } from "./modules/reports/reports.router";
+import { settingsRouter } from "./modules/settings/settings.router";
 
 export function createApp(): Application {
   const app = express();
@@ -52,6 +57,11 @@ export function createApp(): Application {
   app.use("/api/leave-types", leaveTypesRouter);
   app.use("/api/leave-balances", leaveBalancesRouter);
   app.use("/api/leave-requests", leaveRequestsRouter);
+  app.use("/api/overtime", overtimeRouter);
+  app.use("/api/comp-off", compOffRouter);
+  app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/reports", reportsRouter);
+  app.use("/api/settings", settingsRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === "development") {

@@ -1,0 +1,13 @@
+import { Router, IRouter } from "express";
+import { authMiddleware } from "../../middlewares/auth.middleware";
+import { requireRoles } from "../../middlewares/role.middleware";
+import * as ctrl from "./settings.controller";
+
+export const settingsRouter: IRouter = Router();
+
+settingsRouter.use(authMiddleware, requireRoles("HR", "ADMIN"));
+
+settingsRouter.get("/leave-policy", ctrl.getLeavePolicy);
+settingsRouter.patch("/leave-policy", requireRoles("ADMIN"), ctrl.updateLeavePolicy);
+settingsRouter.get("/approval-flow", ctrl.getApprovalFlow);
+settingsRouter.patch("/approval-flow", requireRoles("ADMIN"), ctrl.updateApprovalFlow);

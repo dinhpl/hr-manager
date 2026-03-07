@@ -1,9 +1,11 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
+import { startExpireCompOffJob } from "./jobs/expire-compoff.job";
 
 const app = createApp();
 
 const server = app.listen(env.PORT, () => {
+  startExpireCompOffJob();
   console.log(`[server] Running at http://localhost:${env.PORT}`);
   console.log(`[server] Environment: ${env.NODE_ENV}`);
   if (env.NODE_ENV === "development") {

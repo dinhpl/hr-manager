@@ -165,9 +165,9 @@ const flowRes = await fetch(`${API_URL}/api/settings/approval-flow`, headers);
 
 ## Checklist Phase 9
 
-- [ ] Bảng `settings` migration tạo xong
-- [ ] `GET /api/settings/leave-policy` — trả policy (kèm default nếu chưa có)
-- [ ] `PATCH /api/settings/leave-policy` — cập nhật (chỉ ADMIN)
-- [ ] `GET /api/settings/approval-flow` — trả approval flow
-- [ ] `PATCH /api/settings/approval-flow` — cập nhật (chỉ ADMIN)
-- [ ] Default values có sẵn khi DB trống
+- [x] Bảng `settings` migration tạo xong
+- [x] `GET /api/settings/leave-policy` — trả policy (kèm default nếu chưa có)
+- [x] `PATCH /api/settings/leave-policy` — cập nhật (chỉ ADMIN)
+- [x] `GET /api/settings/approval-flow` — trả approval flow
+- [x] `PATCH /api/settings/approval-flow` — cập nhật (chỉ ADMIN)
+- [x] Default values có sẵn khi DB trống

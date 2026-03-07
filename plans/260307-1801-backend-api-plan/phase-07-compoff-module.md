@@ -254,12 +254,12 @@ app.listen(env.PORT, () => {
 
 ## Checklist Phase 7
 
-- [ ] `GET /api/comp-off` — scope by role, filter by status
-- [ ] `GET /api/comp-off/summary` — tổng hợp giờ
-- [ ] `GET /api/comp-off/:id` — detail + overtime gốc
-- [ ] `POST /api/comp-off` — đăng ký nghỉ bù
-- [ ] `PATCH /api/comp-off/:id/approve` — duyệt
-- [ ] `PATCH /api/comp-off/:id/reject` — từ chối
-- [ ] `derivedStatus` tính từ `toDate` (expired/expiring/available)
-- [ ] Cron job `expire-compoff.job.ts` chạy 00:05 hàng ngày
-- [ ] Cron log số records expired mỗi lần chạy
+- [x] `GET /api/comp-off` — scope by role, filter by status
+- [x] `GET /api/comp-off/summary` — tổng hợp giờ
+- [x] `GET /api/comp-off/:id` — detail + overtime gốc
+- [x] `POST /api/comp-off` — đăng ký nghỉ bù
+- [x] `PATCH /api/comp-off/:id/approve` — duyệt
+- [x] `PATCH /api/comp-off/:id/reject` — từ chối
+- [x] `derivedStatus` tính từ `toDate` (expired/expiring/available)
+- [x] Cron job `expire-compoff.job.ts` chạy 00:05 hàng ngày
+- [x] Cron log số records expired mỗi lần chạy

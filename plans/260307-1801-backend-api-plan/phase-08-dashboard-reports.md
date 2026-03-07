@@ -302,10 +302,10 @@ const topRes = await fetch(`${API_URL}/api/reports/top-users?year=2026`, headers
 
 ## Checklist Phase 8
 
-- [ ] `GET /api/dashboard/summary` — role-based stats (employee vs admin/hr)
-- [ ] `GET /api/dashboard/calendar` — map ngày → trạng thái nghỉ
-- [ ] `GET /api/dashboard/recent-requests` — 5-10 request gần nhất
-- [ ] `GET /api/reports/leave` — trend data 12 tháng (annual/sick/wfh)
-- [ ] `GET /api/reports/department` — stats theo phòng ban
-- [ ] `GET /api/reports/top-users` — top nhân viên dùng phép nhiều nhất
-- [ ] `GET /api/reports/export` — export CSV (MVP: chỉ cần CSV đơn giản)
+- [x] `GET /api/dashboard/summary` — role-based stats (employee vs admin/hr)
+- [x] `GET /api/dashboard/calendar` — map ngày → trạng thái nghỉ
+- [x] `GET /api/dashboard/recent-requests` — 5-10 request gần nhất
+- [x] `GET /api/reports/leave` — trend data 12 tháng (annual/sick/wfh)
+- [x] `GET /api/reports/department` — stats theo phòng ban
+- [x] `GET /api/reports/top-users` — top nhân viên dùng phép nhiều nhất
+- [x] `GET /api/reports/export` — export CSV (MVP: chỉ cần CSV đơn giản)
