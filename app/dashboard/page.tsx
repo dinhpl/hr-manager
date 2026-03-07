@@ -17,6 +17,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
+import LeaveRequestModal from "@/components/leave-request-modal";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 type UserRole = "admin" | "hr" | "employee";
@@ -95,6 +96,7 @@ function AdminHRDashboard({ userRole }: { userRole: UserRole }) {
   const [currentYear, setCurrentYear] = useState(2026);
   const [currentMonth, setCurrentMonth] = useState(2);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
 
   const calendarDays = getCalendarDays(currentYear, currentMonth);
 
@@ -331,6 +333,25 @@ function AdminHRDashboard({ userRole }: { userRole: UserRole }) {
 
       {/* Leave detail modal */}
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+
+      {/* Leave request modal */}
+      <LeaveRequestModal
+        isOpen={isLeaveRequestModalOpen}
+        onClose={() => setIsLeaveRequestModalOpen(false)}
+        onSubmitSuccess={() => {
+          // Optionally refresh data here
+        }}
+      />
+
+      {/* FAB */}
+      <button
+        onClick={() => setIsLeaveRequestModalOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110 z-10"
+        style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
+        aria-label="Đăng ký nghỉ phép mới"
+      >
+        <Plus size={24} />
+      </button>
     </div>
   );
 }
@@ -340,6 +361,7 @@ function EmployeeDashboard() {
   const [currentYear, setCurrentYear] = useState(2026);
   const [currentMonth, setCurrentMonth] = useState(2);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
 
   const calendarDays = getCalendarDays(currentYear, currentMonth);
 
@@ -492,9 +514,9 @@ function EmployeeDashboard() {
           <div className="bg-gradient-to-br rounded-xl shadow-sm p-5 sm:p-6 text-white" style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}>
             <h3 className="font-bold text-base mb-2">Đăng ký nghỉ phép</h3>
             <p className="text-sm mb-4 opacity-90">Tạo yêu cầu nghỉ phép mới cho bạn</p>
-            <Link href="/dashboard/leave-request" className="inline-block text-xs font-semibold px-4 py-2 rounded-lg bg-white transition-all hover:shadow-lg" style={{ color: "#1DB87A" }}>
+            <button onClick={() => setIsLeaveRequestModalOpen(true)} className="inline-block text-xs font-semibold px-4 py-2 rounded-lg bg-white transition-all hover:shadow-lg" style={{ color: "#1DB87A" }}>
               Tạo yêu cầu →
-            </Link>
+            </button>
           </div>
 
           {/* Balance info */}
@@ -570,15 +592,24 @@ function EmployeeDashboard() {
       {/* Leave detail modal */}
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
 
+      {/* Leave request modal */}
+      <LeaveRequestModal
+        isOpen={isLeaveRequestModalOpen}
+        onClose={() => setIsLeaveRequestModalOpen(false)}
+        onSubmitSuccess={() => {
+          // Optionally refresh data here
+        }}
+      />
+
       {/* FAB */}
-      <Link
-        href="/dashboard/leave-request"
+      <button
+        onClick={() => setIsLeaveRequestModalOpen(true)}
         className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-lg transition-all hover:scale-110 z-10"
         style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
         aria-label="Đăng ký nghỉ phép mới"
       >
         <Plus size={24} />
-      </Link>
+      </button>
     </div>
   );
 }
