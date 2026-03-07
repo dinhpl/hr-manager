@@ -29,12 +29,13 @@ const NAV_ITEMS = [
     icon: LayoutDashboard,
     key: "dashboard",
   },
-  {
-    href: "/dashboard/leave-request",
-    label: "Đăng ký nghỉ phép",
-    icon: PlusCircle,
-    key: "leave-request",
-  },
+  // [MVP-HIDDEN] Đăng ký nghỉ phép - now accessible via modal in leave-history and dashboard
+  // {
+  //   href: "/dashboard/leave-request",
+  //   label: "Đăng ký nghỉ phép",
+  //   icon: PlusCircle,
+  //   key: "leave-request",
+  // },
   {
     href: "/dashboard/leave-history",
     label: "Lịch sử nghỉ phép",

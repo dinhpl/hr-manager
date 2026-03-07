@@ -9,6 +9,7 @@ import {
   CheckCircle, Clock, XCircle, List, ChevronLeft, ChevronRight, RotateCcw, Send,
 } from "lucide-react";
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
+import LeaveRequestModal, { LeaveRequestData } from "@/components/leave-request-modal";
 import ConfirmDialog from "@/components/confirm-dialog";
 
 /** Leave type code → color mapping (used for localStorage-sourced records) */
@@ -102,6 +103,8 @@ export default function LeaveHistoryPage() {
   // ── State ───────────────────────────────────────────────────────────────────
   const [records, setRecords] = useState<LeaveRecord[]>(RECORDS);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
+  const [selectedEditData, setSelectedEditData] = useState<LeaveRequestData | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
     type: "cancel" | "submit_draft" | "resubmit";
     id: string;
@@ -165,9 +168,20 @@ export default function LeaveHistoryPage() {
   /** Open detail modal */
   const handleView = (r: LeaveRecord) => setSelectedDetail(toDetailData(r));
 
-  /** Navigate to leave request page for re-editing a draft */
+  /** Open modal for re-editing a draft */
   const handleEdit = (r: LeaveRecord) => {
-    router.push(`/dashboard/leave-request`);
+    setSelectedEditData({
+      id: r.id,
+      typeCode: r.type.code,
+      fromDate: r.fromDate,
+      toDate: r.toDate,
+      durationMode: "FULL_DAY",
+      fromTime: "08:00",
+      toTime: "17:00",
+      reason: r.reason,
+      handoverPerson: r.handover !== "-" ? r.handover : "",
+    });
+    setIsLeaveRequestModalOpen(true);
   };
 
   /** Ask confirmation then remove the record (cancel or delete draft) */
@@ -300,10 +314,13 @@ export default function LeaveHistoryPage() {
           <h1 className="text-xl font-bold" style={{ color: "#203430" }}>Lịch sử nghỉ phép</h1>
         </div>
         <div className="flex gap-2">
-          <Link href="/dashboard/leave-request"
+          <button onClick={() => {
+            setSelectedEditData(null);
+            setIsLeaveRequestModalOpen(true);
+          }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#1DB87A" }}>
             <PlusCircle size={14} /> Đăng ký mới
-          </Link>
+          </button>
           <button onClick={exportCsv}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
             <FileDown size={14} /> Export Excel
@@ -727,6 +744,57 @@ export default function LeaveHistoryPage() {
           </p>
         </div>
       </div>
+
+      {/* Leave Request Modal for editing drafts */}
+      <LeaveRequestModal
+        isOpen={isLeaveRequestModalOpen}
+        onClose={() => {
+          setIsLeaveRequestModalOpen(false);
+          setSelectedEditData(null);
+        }}
+        editData={selectedEditData}
+        onSubmitSuccess={() => {
+          const updated = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
+          const existingIds = new Set(RECORDS.map((r) => r.id));
+          const newRecords: LeaveRecord[] = updated
+            .filter((r: any) => !existingIds.has(r.id))
+            .map((r: any) => ({
+              id: r.id,
+              type: { code: r.typeCode, color: TYPE_COLORS[r.typeCode] ?? "#6b7280" },
+              fromDate: r.fromDate,
+              toDate: r.toDate,
+              days: r.days,
+              reason: r.reason,
+              handover: r.handoverPerson || "-",
+              status: r.status,
+              submittedAt: r.submittedAt,
+              approver: "-",
+              approverRole: "",
+              approvedAt: "-",
+              actions: r.status === "draft" ? ["edit", "submit", "delete"] : ["view", "cancel"],
+            }));
+          if (newRecords.length > 0) {
+            setRecords((prev) => [...newRecords.filter((n) => !prev.some((p) => p.id === n.id)), ...prev]);
+          }
+        }}
+      />
+
+      {/* Leave Detail Modal */}
+      <LeaveDetailModal
+        data={selectedDetail}
+        onClose={() => setSelectedDetail(null)}
+      />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={!!confirmAction}
+        title={`Xác nhận ${confirmAction?.label || ""}`}
+        message={`Bạn có chắc chắn muốn ${confirmAction?.label || ""}?`}
+        confirmText="Xác nhận"
+        cancelText="Hủy"
+        onConfirm={executeConfirm}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

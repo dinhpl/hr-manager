@@ -57,24 +57,39 @@ function countWorkingDays(fromDate: string, toDate: string): number {
   return count;
 }
 
+export interface LeaveRequestData {
+  id?: string;
+  typeCode?: string;
+  fromDate?: string;
+  toDate?: string;
+  durationMode?: DurationMode;
+  fromTime?: string;
+  toTime?: string;
+  reason?: string;
+  handoverPerson?: string;
+}
+
 interface LeaveRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmitSuccess?: () => void;
+  editData?: LeaveRequestData | null;
 }
 
-export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess }: LeaveRequestModalProps) {
+export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, editData }: LeaveRequestModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const [leaveType, setLeaveType] = useState("");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [durationMode, setDurationMode] = useState<DurationMode>("FULL_DAY");
-  const [fromTime, setFromTime] = useState("08:00");
-  const [toTime, setToTime] = useState("17:00");
-  const [reason, setReason] = useState("");
-  const [handoverPerson, setHandoverPerson] = useState("");
+  const isEditMode = !!editData?.id;
+  
+  const [leaveType, setLeaveType] = useState(editData?.typeCode || "");
+  const [fromDate, setFromDate] = useState(editData?.fromDate || "");
+  const [toDate, setToDate] = useState(editData?.toDate || "");
+  const [durationMode, setDurationMode] = useState<DurationMode>(editData?.durationMode || "FULL_DAY");
+  const [fromTime, setFromTime] = useState(editData?.fromTime || "08:00");
+  const [toTime, setToTime] = useState(editData?.toTime || "17:00");
+  const [reason, setReason] = useState(editData?.reason || "");
+  const [handoverPerson, setHandoverPerson] = useState(editData?.handoverPerson || "");
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "saving" | "submitting" | "success">("idle");
   const [alert, setAlert] = useState<{ type: "warning" | "info" | "success"; message: string } | null>(null);
@@ -226,8 +241,12 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess }: 
               <Tag size={20} style={{ color: "#1DB87A" }} />
             </div>
             <div>
-              <h2 className="font-bold text-base" style={{ color: "#203430" }}>Đăng ký nghỉ phép mới</h2>
-              <p className="text-xs text-muted-foreground">Điền đầy đủ thông tin để gửi yêu cầu</p>
+              <h2 className="font-bold text-base" style={{ color: "#203430" }}>
+                {isEditMode ? "Chỉnh sửa yêu cầu nghỉ phép" : "Đăng ký nghỉ phép mới"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {isEditMode ? "Cập nhật thông tin yêu cầu của bạn" : "Điền đầy đủ thông tin để gửi yêu cầu"}
+              </p>
             </div>
           </div>
           <button
