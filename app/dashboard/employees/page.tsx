@@ -110,7 +110,19 @@ const TEAM_COLORS: Record<number, { color: string; bg: string }> = {
   4: { color: "#06b6d4", bg: "#ecfeff" },
   5: { color: "#8b5cf6", bg: "#f5f3ff" },
 };
+const DEPT_DIST = [
+  { label: "Công nghệ thông tin", code: "IT", count: 45, pct: 29, color: "#3b82f6" },
+  { label: "Marketing", code: "Marketing", count: 32, pct: 21, color: "#f59e0b" },
+  { label: "Kinh doanh", code: "Sales", count: 28, pct: 18, color: "#1DB87A" },
+  { label: "Nhân sự", code: "HR", count: 15, pct: 10, color: "#06b6d4" },
+];
 
+const ACTIVITIES = [
+  { icon: UserPlus, color: "#1DB87A", time: "Hôm nay, 09:30", text: "Nguyễn Văn Newbie đã được thêm vào hệ thống" },
+  { icon: Cake, color: "#f59e0b", time: "Hôm nay", text: "Sinh nhật Trần Văn Đăng" },
+  { icon: CalendarOff, color: "#06b6d4", time: "Hôm qua, 14:20", text: "Nguyễn Thị Anh bắt đầu nghỉ thai sản" },
+  { icon: Pencil, color: "#6b7f78", time: "2 ngày trước", text: "Cập nhật thông tin Phạm Long Đĩnh" },
+];
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>(MOCK_EMPLOYEES);
   const [statusFilter, setStatusFilter] = useState("");
@@ -246,7 +258,7 @@ export default function EmployeesPage() {
             <h2 className="font-semibold text-sm" style={{ color: "#203430" }}>Danh sách nhân viên ({filtered.length})</h2>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => {}} className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50"
+            <button onClick={() => { }} className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50"
               style={{ borderColor: "#e2ede9" }}>
               <RefreshCw size={13} style={{ color: "#6b7f78" }} />
             </button>
@@ -272,7 +284,7 @@ export default function EmployeesPage() {
                 const isSelected = selectedIds.includes(emp.id);
                 const initials = (emp.first_name.charAt(0) + emp.last_name.charAt(0)).toUpperCase();
                 const teamColor = TEAM_COLORS[emp.team_id] || { color: "#6b7f78", bg: "#f3f4f6" };
-                
+
                 return (
                   <tr key={emp.id}
                     className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
@@ -382,6 +394,54 @@ export default function EmployeesPage() {
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+      {/* Bottom: department distribution + activity feed */}
+      <div className="grid lg:grid-cols-2 gap-5">
+        {/* Department distribution */}
+        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Building2 size={15} style={{ color: "#1DB87A" }} />
+            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Phân bố theo phòng ban</h3>
+          </div>
+          <div className="space-y-3">
+            {DEPT_DIST.map((d) => (
+              <div key={d.code} className="flex items-center gap-3">
+                <span className="text-xs font-bold text-white px-2 py-0.5 rounded w-20 text-center flex-shrink-0"
+                  style={{ background: d.color }}>
+                  {d.code}
+                </span>
+                <div className="flex-1">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span style={{ color: "#203430" }}>{d.label}</span>
+                    <span className="font-semibold" style={{ color: "#6b7f78" }}>{d.count} người ({d.pct}%)</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#f0f4f2" }}>
+                    <div className="h-full rounded-full" style={{ width: `${d.pct * 3}%`, background: d.color }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={15} style={{ color: "#1DB87A" }} />
+            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Hoạt động gần đây</h3>
+          </div>
+          <div className="relative pl-5">
+            <div className="absolute left-2 top-0 bottom-0 w-0.5" style={{ background: "#e2ede9" }} />
+            {ACTIVITIES.map((a, i) => (
+              <div key={i} className="relative mb-4 last:mb-0">
+                <div className="absolute -left-3.5 top-1 w-3 h-3 rounded-full border-2 border-white"
+                  style={{ background: a.color }} />
+                <p className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{a.time}</p>
+                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#203430" }}>{a.text}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -542,101 +602,6 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
         </button>
       </div>
     </form>
-  );
-}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate" style={{ color: "#203430" }}>{emp.name}</p>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>{emp.title}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CONFIG[emp.status].badge}`}>
-                    {STATUS_CONFIG[emp.status].label}
-                  </span>
-                </div>
-                <div className="space-y-1 text-xs" style={{ color: "#6b7f78" }}>
-                  <p>{emp.email}</p>
-                  <p>Phòng ban: <span className="font-medium" style={{ color: emp.dept.color }}>{emp.dept.label}</span></p>
-                  <p>Manager: <span style={{ color: "#203430" }}>{emp.manager}</span></p>
-                  <p>Phép còn lại: <span className="font-bold" style={{ color: "#1DB87A" }}>{emp.leaveBalance}</span></p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: "#e2ede9" }}>
-          <p className="text-xs" style={{ color: "#6b7f78" }}>
-            Hiện thị 1-{filtered.length} trong tổng số <strong>156 nhân viên</strong>
-          </p>
-          <div className="flex items-center gap-1">
-            <button className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50"
-              style={{ borderColor: "#e2ede9" }}>
-              <ChevronLeft size={14} style={{ color: "#6b7f78" }} />
-            </button>
-            {[1, 2, 3].map((p) => (
-              <button key={p} onClick={() => setCurrentPage(p)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium border transition-colors"
-                style={{ borderColor: p === currentPage ? "#1DB87A" : "#e2ede9", background: p === currentPage ? "#1DB87A" : undefined, color: p === currentPage ? "white" : "#6b7f78" }}>
-                {p}
-              </button>
-            ))}
-            <button className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50"
-              style={{ borderColor: "#e2ede9" }}>
-              <ChevronRight size={14} style={{ color: "#6b7f78" }} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom: department distribution + activity feed */}
-      <div className="grid lg:grid-cols-2 gap-5">
-        {/* Department distribution */}
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Phân bố theo phòng ban</h3>
-          </div>
-          <div className="space-y-3">
-            {DEPT_DIST.map((d) => (
-              <div key={d.code} className="flex items-center gap-3">
-                <span className="text-xs font-bold text-white px-2 py-0.5 rounded w-20 text-center flex-shrink-0"
-                  style={{ background: d.color }}>
-                  {d.code}
-                </span>
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: "#203430" }}>{d.label}</span>
-                    <span className="font-semibold" style={{ color: "#6b7f78" }}>{d.count} người ({d.pct}%)</span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#f0f4f2" }}>
-                    <div className="h-full rounded-full" style={{ width: `${d.pct * 3}%`, background: d.color }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent activity */}
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Hoạt động gần đây</h3>
-          </div>
-          <div className="relative pl-5">
-            <div className="absolute left-2 top-0 bottom-0 w-0.5" style={{ background: "#e2ede9" }} />
-            {ACTIVITIES.map((a, i) => (
-              <div key={i} className="relative mb-4 last:mb-0">
-                <div className="absolute -left-3.5 top-1 w-3 h-3 rounded-full border-2 border-white"
-                  style={{ background: a.color }} />
-                <p className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{a.time}</p>
-                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#203430" }}>{a.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
