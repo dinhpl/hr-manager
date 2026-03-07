@@ -189,11 +189,12 @@ export default function EmployeesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Tổng nhân viên", value: employees.length.toString(), icon: Users, color: "#3b82f6", bg: "#eff6ff" },
           { label: "Đang làm việc", value: employees.filter((e) => e.status === "active").length.toString(), icon: UserCheck, color: "#1DB87A", bg: "#f0fdf9" },
-          { label: "Đã nghỉ việc", value: employees.filter((e) => e.status === "terminated").length.toString(), icon: Clock, color: "#f59e0b", bg: "#fffbeb" },
+          { label: "Nghỉ phép hôm nay", value: 2, icon: CalendarOff, color: "#f59e0b", bg: "#fffbeb" },
+          { label: "Sinh nhật tháng này", value: '12', icon: Cake, color: "#06b6d4", bg: "#ecfeff" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl p-4 border flex items-center gap-4"
             style={{ borderColor: "#e2ede9" }}>
