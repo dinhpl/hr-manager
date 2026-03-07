@@ -1,4 +1,3 @@
-Dựa vào source frontend hiện tại, tạo thêm thư mục backend và lên plan các api để tích hợp vào toàn bộ hệ thống Frontend hiện tại,
-Techstack tôi muốn: Nestjs, Postgres, Prisma, Pawword sử dụng bcrypt
-Lên plan code api,
-Plan tích hợp api
+Dựa vào source frontend hiện tại, và file mô tả Techstack techstack.md
+tạo thêm thư mục backend và lên plan các api để tích hợp vào toàn bộ hệ thống Frontend hiện tại,
+Lên plan code api, và plan tích hợp api.

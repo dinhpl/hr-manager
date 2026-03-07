@@ -48,3 +48,4 @@ coverage
 
 # OS
 Thumbs.db
+backend/node_modules
