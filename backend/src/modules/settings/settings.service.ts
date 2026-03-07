@@ -1,8 +1,8 @@
-import prisma from "../../config/prisma";
+import prisma from '../../config/prisma';
 
 const SETTINGS_KEYS = {
-  LEAVE_POLICY: "leave_policy",
-  APPROVAL_FLOW: "approval_flow",
+  LEAVE_POLICY: 'leave_policy',
+  APPROVAL_FLOW: 'approval_flow',
 } as const;
 
 const DEFAULTS: Record<string, unknown> = {
@@ -18,11 +18,11 @@ const DEFAULTS: Record<string, unknown> = {
   },
   approval_flow: {
     levels: [
-      { level: 1, approverRole: "MANAGER", timeLimit: 48 },
-      { level: 2, approverRole: "HR", timeLimit: 24 },
+      { level: 1, approverRole: 'MANAGER', timeLimit: 48 },
+      { level: 2, approverRole: 'HR', timeLimit: 24 },
     ],
     autoApproveWFH: false,
-    requireDocumentTypes: ["SL", "ML"],
+    requireDocumentTypes: ['SL', 'ML'],
   },
 };
 

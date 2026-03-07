@@ -1,11 +1,7 @@
-import { Request, Response, NextFunction } from "express";
-import * as usersService from "./users.service";
-import {
-  getUsersQuerySchema,
-  createUserSchema,
-  updateUserSchema,
-} from "./users.validation";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import * as usersService from './users.service';
+import { getUsersQuerySchema, createUserSchema, updateUserSchema } from './users.validation';
+import { sendSuccess } from '../../utils/response';
 
 export async function getUsers(req: Request, res: Response, next: NextFunction) {
   try {
@@ -58,7 +54,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
 export async function deleteUser(req: Request, res: Response, next: NextFunction) {
   try {
     await usersService.deleteUser(BigInt(String(req.params.id)));
-    sendSuccess(res, { message: "User deactivated" });
+    sendSuccess(res, { message: 'User deactivated' });
   } catch (err) {
     next(err);
   }

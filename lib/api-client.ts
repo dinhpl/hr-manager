@@ -1,13 +1,9 @@
-import axios, {
-  AxiosError,
-  AxiosRequestConfig,
-  InternalAxiosRequestConfig,
-} from "axios";
+import axios, { AxiosError, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
-export const ACCESS_TOKEN_KEY = "accessToken";
-export const USER_INFO_KEY = "userInfo";
+export const ACCESS_TOKEN_KEY = 'accessToken';
+export const USER_INFO_KEY = 'userInfo';
 
 export type ApiResponse<T> = {
   success: boolean;
@@ -33,7 +29,7 @@ type RetriableRequestConfig = InternalAxiosRequestConfig & {
 };
 
 function isBrowser() {
-  return typeof window !== "undefined";
+  return typeof window !== 'undefined';
 }
 
 function getPreferredStorage() {
@@ -43,17 +39,13 @@ function getPreferredStorage() {
 
 export function getStoredToken(): string | null {
   if (!isBrowser()) return null;
-  return (
-    localStorage.getItem(ACCESS_TOKEN_KEY) ??
-    sessionStorage.getItem(ACCESS_TOKEN_KEY)
-  );
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? sessionStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
 export function getStoredUser<T>(): T | null {
   if (!isBrowser()) return null;
 
-  const raw =
-    localStorage.getItem(USER_INFO_KEY) ?? sessionStorage.getItem(USER_INFO_KEY);
+  const raw = localStorage.getItem(USER_INFO_KEY) ?? sessionStorage.getItem(USER_INFO_KEY);
 
   if (!raw) return null;
 
@@ -64,10 +56,7 @@ export function getStoredUser<T>(): T | null {
   }
 }
 
-export function setAuthSession<T>(
-  payload: { accessToken: string; user: T },
-  rememberMe: boolean
-) {
+export function setAuthSession<T>(payload: { accessToken: string; user: T }, rememberMe: boolean) {
   if (!isBrowser()) return;
 
   const activeStorage = rememberMe ? localStorage : sessionStorage;
@@ -97,7 +86,7 @@ export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: {
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   },
 });
 
@@ -106,7 +95,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const response = await axios.post<ApiResponse<{ accessToken: string }>>(
       `${API_URL}/api/auth/refresh-token`,
       {},
-      { withCredentials: true }
+      { withCredentials: true },
     );
 
     const token = response.data.data?.accessToken;
@@ -139,8 +128,8 @@ api.interceptors.response.use(
       originalRequest &&
       error.response?.status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/api/auth/login") &&
-      !originalRequest.url?.includes("/api/auth/refresh-token")
+      !originalRequest.url?.includes('/api/auth/login') &&
+      !originalRequest.url?.includes('/api/auth/refresh-token')
     ) {
       originalRequest._retry = true;
 
@@ -153,36 +142,33 @@ api.interceptors.response.use(
       clearAuthSession();
 
       if (isBrowser()) {
-        window.location.href = "/";
+        window.location.href = '/';
       }
     }
 
-    const message =
-      error.response?.data?.error?.message ?? error.message ?? "API error";
+    const message = error.response?.data?.error?.message ?? error.message ?? 'API error';
 
     throw new Error(message);
-  }
+  },
 );
 
-export async function apiRequest<T>(
-  config: AxiosRequestConfig
-): Promise<ApiResponse<T>> {
+export async function apiRequest<T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
   const response = await api.request<ApiResponse<T>>(config);
   return response.data;
 }
 
 export const apiClient = {
   get: <T>(url: string, config?: AxiosRequestConfig) =>
-    apiRequest<T>({ url, method: "GET", ...config }),
+    apiRequest<T>({ url, method: 'GET', ...config }),
 
   post: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
-    apiRequest<T>({ url, method: "POST", data, ...config }),
+    apiRequest<T>({ url, method: 'POST', data, ...config }),
 
   patch: <T>(url: string, data?: unknown, config?: AxiosRequestConfig) =>
-    apiRequest<T>({ url, method: "PATCH", data, ...config }),
+    apiRequest<T>({ url, method: 'PATCH', data, ...config }),
 
   delete: <T>(url: string, config?: AxiosRequestConfig) =>
-    apiRequest<T>({ url, method: "DELETE", ...config }),
+    apiRequest<T>({ url, method: 'DELETE', ...config }),
 };
 
 export function getApiBaseUrl() {

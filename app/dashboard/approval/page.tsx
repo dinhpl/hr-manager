@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle,
@@ -13,23 +13,23 @@ import {
   RefreshCw,
   Search,
   Users,
-} from "lucide-react";
-import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
-import ConfirmDialog from "@/components/confirm-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+} from 'lucide-react';
+import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
+import ConfirmDialog from '@/components/confirm-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { apiClient, getApiBaseUrl } from "@/lib/api-client";
-import { buildQuery, formatDateTimeVN, formatDateVN, numberValue } from "@/lib/hr-utils";
+} from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { apiClient, getApiBaseUrl } from '@/lib/api-client';
+import { buildQuery, formatDateTimeVN, formatDateVN, numberValue } from '@/lib/hr-utils';
 
-type DerivedStatus = "pending" | "overdue";
+type DerivedStatus = 'pending' | 'overdue';
 
 interface LeaveTypeOption {
   id: string;
@@ -74,7 +74,7 @@ interface PaginationMeta {
 }
 
 interface DashboardSummary {
-  type: "manager" | "hr" | "admin";
+  type: 'manager' | 'hr' | 'admin';
   stats: {
     totalEmployees: number;
     pendingRequests: number;
@@ -92,40 +92,40 @@ const CARD_HEADER: Record<
   { bg: string; text: string; label: string; icon: React.ReactNode }
 > = {
   overdue: {
-    bg: "#dc2626",
-    text: "white",
+    bg: '#dc2626',
+    text: 'white',
     icon: <AlertTriangle size={14} />,
-    label: "Quá hạn duyệt",
+    label: 'Quá hạn duyệt',
   },
   pending: {
-    bg: "#06b6d4",
-    text: "white",
+    bg: '#06b6d4',
+    text: 'white',
     icon: <Clock size={14} />,
-    label: "Chờ duyệt",
+    label: 'Chờ duyệt',
   },
 };
 
 function getEmployeeInitials(name?: string | null) {
-  return (name || "ND")
-    .split(" ")
+  return (name || 'ND')
+    .split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 }
 
 function extractHandover(reason?: string | null) {
   const matched = reason?.match(/Người bàn giao:\s*(.+)$/m);
-  return matched?.[1]?.trim() || "-";
+  return matched?.[1]?.trim() || '-';
 }
 
 function getPrimaryReason(reason?: string | null) {
-  if (!reason) return "—";
+  if (!reason) return '—';
   const [firstLine] = reason
-    .split("\n")
+    .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  return firstLine || "—";
+  return firstLine || '—';
 }
 
 function isOverdue(request: LeaveRequestItem) {
@@ -133,7 +133,7 @@ function isOverdue(request: LeaveRequestItem) {
 }
 
 function getDerivedStatus(request: LeaveRequestItem): DerivedStatus {
-  return isOverdue(request) ? "overdue" : "pending";
+  return isOverdue(request) ? 'overdue' : 'pending';
 }
 
 function getOverdueDays(request: LeaveRequestItem) {
@@ -145,18 +145,18 @@ function toDetailData(request: LeaveRequestItem): LeaveDetailData {
   const department = request.user?.department?.trim();
   return {
     id: String(request.id),
-    typeCode: request.leaveType?.code || "-",
+    typeCode: request.leaveType?.code || '-',
     typeColor: request.leaveType?.color || undefined,
     fromDate: formatDateVN(request.fromDate),
     toDate: formatDateVN(request.toDate),
     days: numberValue(request.totalDays),
-    reason: request.reason || "—",
+    reason: request.reason || '—',
     handover: extractHandover(request.reason),
-    status: "pending",
+    status: 'pending',
     submittedAt: formatDateTimeVN(request.createdAt),
-    employeeName: request.user?.fullName || "Nhân viên",
+    employeeName: request.user?.fullName || 'Nhân viên',
     employeeCode: request.user?.username || undefined,
-    employeeTeam: department || "Chưa có phòng ban",
+    employeeTeam: department || 'Chưa có phòng ban',
     fileAttachment: request.attachmentUrl || undefined,
   };
 }
@@ -171,11 +171,11 @@ function getVisiblePages(currentPage: number, totalPages: number) {
 export default function ApprovalPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [deptFilter, setDeptFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const [statusFilter, setStatusFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
@@ -187,7 +187,7 @@ export default function ApprovalPage() {
     totalPages: 1,
   });
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
-  const [summary, setSummary] = useState<DashboardSummary["stats"] | null>(null);
+  const [summary, setSummary] = useState<DashboardSummary['stats'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -195,21 +195,21 @@ export default function ApprovalPage() {
 
   const typeIdByCode = useMemo(
     () => Object.fromEntries(leaveTypes.map((type) => [type.code, type.id])),
-    [leaveTypes]
+    [leaveTypes],
   );
 
   useEffect(() => {
     let mounted = true;
 
     apiClient
-      .get<LeaveTypeOption[]>("/api/leave-types")
+      .get<LeaveTypeOption[]>('/api/leave-types')
       .then((response) => {
         if (!mounted) return;
         setLeaveTypes(response.data || []);
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : "Không tải được loại nghỉ.");
+        setError(err instanceof Error ? err.message : 'Không tải được loại nghỉ.');
       });
 
     return () => {
@@ -223,7 +223,7 @@ export default function ApprovalPage() {
 
   const buildPendingQuery = useCallback(() => {
     return buildQuery({
-      status: "PENDING",
+      status: 'PENDING',
       department: deptFilter || undefined,
       leaveTypeId: typeFilter ? typeIdByCode[typeFilter] : undefined,
       page: currentPage,
@@ -238,7 +238,7 @@ export default function ApprovalPage() {
     try {
       const [requestResponse, summaryResponse] = await Promise.all([
         apiClient.get<LeaveRequestItem[]>(`/api/leave-requests?${buildPendingQuery()}`),
-        apiClient.get<DashboardSummary>("/api/dashboard/summary"),
+        apiClient.get<DashboardSummary>('/api/dashboard/summary'),
       ]);
 
       setRequests(requestResponse.data || []);
@@ -258,9 +258,7 @@ export default function ApprovalPage() {
         setCurrentPage(requestResponse.meta.totalPages);
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Không tải được danh sách yêu cầu chờ duyệt."
-      );
+      setError(err instanceof Error ? err.message : 'Không tải được danh sách yêu cầu chờ duyệt.');
       setRequests([]);
     } finally {
       setLoading(false);
@@ -280,8 +278,8 @@ export default function ApprovalPage() {
       new Set(
         requests
           .map((request) => request.user?.department?.trim())
-          .filter((department): department is string => Boolean(department))
-      )
+          .filter((department): department is string => Boolean(department)),
+      ),
     );
   }, [requests]);
 
@@ -290,16 +288,16 @@ export default function ApprovalPage() {
 
     return requests.filter((request) => {
       const derivedStatus = getDerivedStatus(request);
-      const fullName = request.user?.fullName || "";
+      const fullName = request.user?.fullName || '';
 
       if (statusFilter && derivedStatus !== statusFilter) return false;
-      if (priorityFilter === "high" && derivedStatus !== "overdue") return false;
-      if (priorityFilter === "normal" && derivedStatus !== "pending") return false;
+      if (priorityFilter === 'high' && derivedStatus !== 'overdue') return false;
+      if (priorityFilter === 'normal' && derivedStatus !== 'pending') return false;
       if (
         normalizedSearch &&
         !fullName.toLowerCase().includes(normalizedSearch) &&
         !String(request.id).toLowerCase().includes(normalizedSearch) &&
-        !(request.user?.username || "").toLowerCase().includes(normalizedSearch)
+        !(request.user?.username || '').toLowerCase().includes(normalizedSearch)
       ) {
         return false;
       }
@@ -316,16 +314,13 @@ export default function ApprovalPage() {
 
   const toggleSelect = (id: string) => {
     setSelectedIds((previous) =>
-      previous.includes(id)
-        ? previous.filter((item) => item !== id)
-        : [...previous, id]
+      previous.includes(id) ? previous.filter((item) => item !== id) : [...previous, id],
     );
   };
 
   const toggleAll = () => {
     const pageIds = filteredRequests.map((request) => String(request.id));
-    const allSelected =
-      pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
     setSelectedIds(allSelected ? [] : pageIds);
   };
 
@@ -342,7 +337,7 @@ export default function ApprovalPage() {
       });
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể duyệt yêu cầu.");
+      setError(err instanceof Error ? err.message : 'Không thể duyệt yêu cầu.');
     } finally {
       setActionLoadingId(null);
     }
@@ -361,7 +356,7 @@ export default function ApprovalPage() {
       });
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể từ chối yêu cầu.");
+      setError(err instanceof Error ? err.message : 'Không thể từ chối yêu cầu.');
     } finally {
       setActionLoadingId(null);
     }
@@ -370,15 +365,15 @@ export default function ApprovalPage() {
   const executeBulkApprove = async () => {
     if (selectedIds.length === 0) return;
 
-    setActionLoadingId("bulk");
+    setActionLoadingId('bulk');
 
     try {
-      await apiClient.post("/api/leave-requests/bulk-approve", { ids: selectedIds });
+      await apiClient.post('/api/leave-requests/bulk-approve', { ids: selectedIds });
       setSelectedIds([]);
       setBulkConfirmOpen(false);
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể duyệt hàng loạt.");
+      setError(err instanceof Error ? err.message : 'Không thể duyệt hàng loạt.');
     } finally {
       setActionLoadingId(null);
     }
@@ -387,11 +382,11 @@ export default function ApprovalPage() {
   const handleRefresh = () => {
     setNotes({});
     setSelectedIds([]);
-    setStatusFilter("");
-    setDeptFilter("");
-    setTypeFilter("");
-    setPriorityFilter("");
-    setSearchInput("");
+    setStatusFilter('');
+    setDeptFilter('');
+    setTypeFilter('');
+    setPriorityFilter('');
+    setSearchInput('');
     setCurrentPage(1);
     setSelectedDetail(null);
     setBulkConfirmOpen(false);
@@ -405,9 +400,7 @@ export default function ApprovalPage() {
       const response = await apiClient.get<LeaveRequestItem>(`/api/leave-requests/${id}`);
       setSelectedDetail(toDetailData(response.data));
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Không tải được chi tiết yêu cầu."
-      );
+      setError(err instanceof Error ? err.message : 'Không tải được chi tiết yêu cầu.');
     } finally {
       setDetailLoadingId(null);
     }
@@ -421,27 +414,27 @@ export default function ApprovalPage() {
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
-            style={{ background: "#D3F2E7" }}
+            style={{ background: '#D3F2E7' }}
           >
-            <CheckCircle2 size={18} style={{ color: "#0E474E" }} />
+            <CheckCircle2 size={18} style={{ color: '#0E474E' }} />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>
+          <h1 className="text-xl font-bold" style={{ color: '#203430' }}>
             Duyệt yêu cầu nghỉ phép
           </h1>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => selectedIds.length > 0 && setBulkConfirmOpen(true)}
-            disabled={selectedIds.length === 0 || actionLoadingId === "bulk"}
+            disabled={selectedIds.length === 0 || actionLoadingId === 'bulk'}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ borderColor: "#1DB87A", color: "#1DB87A" }}
+            style={{ borderColor: '#1DB87A', color: '#1DB87A' }}
           >
             <CheckCircle size={14} />
             Duyệt hàng loạt
             {selectedIds.length > 0 ? (
               <span
                 className="ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold text-white"
-                style={{ background: "#1DB87A" }}
+                style={{ background: '#1DB87A' }}
               >
                 {selectedIds.length}
               </span>
@@ -450,7 +443,7 @@ export default function ApprovalPage() {
           <button
             onClick={handleRefresh}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-gray-50"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}
+            style={{ borderColor: '#e2ede9', color: '#203430' }}
           >
             <RefreshCw size={14} /> Làm mới
           </button>
@@ -460,23 +453,23 @@ export default function ApprovalPage() {
       <div
         className="rounded-xl border px-4 py-3 text-sm"
         style={{
-          borderColor: "#bfdbfe",
-          background: "#eff6ff",
-          color: "#1d4ed8",
+          borderColor: '#bfdbfe',
+          background: '#eff6ff',
+          color: '#1d4ed8',
         }}
       >
-        Backend hiện chỉ trả trạng thái chuẩn `PENDING`, `APPROVED`, `REJECTED`. Trang
-        này suy ra `quá hạn` nếu yêu cầu chờ hơn 2 ngày, còn luồng `HR confirm` riêng
-        chưa có endpoint nên đang được giản lược an toàn.
+        Backend hiện chỉ trả trạng thái chuẩn `PENDING`, `APPROVED`, `REJECTED`. Trang này suy ra
+        `quá hạn` nếu yêu cầu chờ hơn 2 ngày, còn luồng `HR confirm` riêng chưa có endpoint nên đang
+        được giản lược an toàn.
       </div>
 
       {error ? (
         <div
           className="rounded-xl border px-4 py-3 text-sm"
           style={{
-            borderColor: "#fecaca",
-            background: "#fef2f2",
-            color: "#b91c1c",
+            borderColor: '#fecaca',
+            background: '#fef2f2',
+            color: '#b91c1c',
           }}
         >
           {error}
@@ -486,38 +479,38 @@ export default function ApprovalPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
-            label: "Chờ duyệt",
+            label: 'Chờ duyệt',
             value: pendingCount,
             icon: Clock,
-            color: "#f59e0b",
-            bg: "#fffbeb",
+            color: '#f59e0b',
+            bg: '#fffbeb',
           },
           {
-            label: "Quá hạn trên trang",
+            label: 'Quá hạn trên trang',
             value: overduePageCount,
             icon: AlertTriangle,
-            color: "#ef4444",
-            bg: "#fef2f2",
+            color: '#ef4444',
+            bg: '#fef2f2',
           },
           {
-            label: "Đã duyệt tuần này",
+            label: 'Đã duyệt tuần này',
             value: summary?.weekApproved ?? 0,
             icon: CheckCircle,
-            color: "#1DB87A",
-            bg: "#f0fdf9",
+            color: '#1DB87A',
+            bg: '#f0fdf9',
           },
           {
-            label: "Luồng HR riêng",
+            label: 'Luồng HR riêng',
             value: 0,
             icon: Users,
-            color: "#3b82f6",
-            bg: "#eff6ff",
+            color: '#3b82f6',
+            bg: '#eff6ff',
           },
         ].map((stat) => (
           <div
             key={stat.label}
             className="rounded-xl border bg-white p-4"
-            style={{ borderColor: "#e2ede9" }}
+            style={{ borderColor: '#e2ede9' }}
           >
             <div
               className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg"
@@ -525,81 +518,76 @@ export default function ApprovalPage() {
             >
               <stat.icon size={18} style={{ color: stat.color }} />
             </div>
-            <p className="text-2xl font-bold" style={{ color: "#203430" }}>
+            <p className="text-2xl font-bold" style={{ color: '#203430' }}>
               {stat.value}
             </p>
-            <p className="mt-0.5 text-xs" style={{ color: "#6b7f78" }}>
+            <p className="mt-0.5 text-xs" style={{ color: '#6b7f78' }}>
               {stat.label}
             </p>
           </div>
         ))}
       </div>
 
-      <div
-        className="rounded-xl border bg-white p-4"
-        style={{ borderColor: "#e2ede9" }}
-      >
+      <div className="rounded-xl border bg-white p-4" style={{ borderColor: '#e2ede9' }}>
         <div className="flex flex-wrap items-end gap-3">
           {[
             {
-              id: "status",
-              label: "Trạng thái",
+              id: 'status',
+              label: 'Trạng thái',
               value: statusFilter,
               setter: setStatusFilter,
               options: [
-                ["", "Tất cả"],
-                ["pending", "Chờ duyệt"],
-                ["overdue", "Quá hạn"],
+                ['', 'Tất cả'],
+                ['pending', 'Chờ duyệt'],
+                ['overdue', 'Quá hạn'],
               ],
             },
             {
-              id: "dept",
-              label: "Phòng ban",
+              id: 'dept',
+              label: 'Phòng ban',
               value: deptFilter,
               setter: setDeptFilter,
               options: [
-                ["", "Tất cả phòng ban"],
+                ['', 'Tất cả phòng ban'],
                 ...departmentOptions.map((department) => [department, department]),
               ],
             },
             {
-              id: "type",
-              label: "Loại nghỉ",
+              id: 'type',
+              label: 'Loại nghỉ',
               value: typeFilter,
               setter: setTypeFilter,
               options: [
-                ["", "Tất cả loại"],
+                ['', 'Tất cả loại'],
                 ...leaveTypes.map((type) => [type.code, `${type.code} - ${type.name}`]),
               ],
             },
             {
-              id: "priority",
-              label: "Độ ưu tiên",
+              id: 'priority',
+              label: 'Độ ưu tiên',
               value: priorityFilter,
               setter: setPriorityFilter,
               options: [
-                ["", "Tất cả"],
-                ["high", "Ưu tiên cao"],
-                ["normal", "Bình thường"],
+                ['', 'Tất cả'],
+                ['high', 'Ưu tiên cao'],
+                ['normal', 'Bình thường'],
               ],
             },
           ].map((filter) => (
             <div key={filter.id} className="flex flex-col gap-1">
-              <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>
+              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
                 {filter.label}
               </label>
               <Select
                 value={filter.value || `all-${filter.id}`}
-                onValueChange={(value) =>
-                  filter.setter(value.startsWith("all-") ? "" : value)
-                }
+                onValueChange={(value) => filter.setter(value.startsWith('all-') ? '' : value)}
               >
                 <SelectTrigger className="min-w-[150px]">
                   <SelectValue placeholder={filter.label} />
                 </SelectTrigger>
                 <SelectContent>
                   {filter.options.map(([value, label]) => {
-                    const itemValue = value === "" ? `all-${filter.id}` : value;
+                    const itemValue = value === '' ? `all-${filter.id}` : value;
                     return (
                       <SelectItem key={`${filter.id}-${itemValue}`} value={itemValue}>
                         {label}
@@ -612,10 +600,7 @@ export default function ApprovalPage() {
           ))}
           <div className="flex min-w-[220px] flex-1 items-end gap-2">
             <div className="flex-1">
-              <label
-                className="mb-1 block text-xs font-semibold"
-                style={{ color: "#6b7f78" }}
-              >
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
                 Tìm nhân viên
               </label>
               <Input
@@ -627,7 +612,7 @@ export default function ApprovalPage() {
             </div>
             <button
               className="flex items-center gap-1.5 rounded-lg px-4 py-2 font-semibold text-white"
-              style={{ background: "#1DB87A" }}
+              style={{ background: '#1DB87A' }}
             >
               <Search size={14} />
             </button>
@@ -649,10 +634,10 @@ export default function ApprovalPage() {
             const derivedStatus = getDerivedStatus(request);
             const header = CARD_HEADER[derivedStatus];
             const requestId = String(request.id);
-            const fullName = request.user?.fullName || "Nhân viên";
-            const code = request.user?.username || "N/A";
-            const department = request.user?.department || "Chưa có phòng ban";
-            const noteValue = notes[requestId] || "";
+            const fullName = request.user?.fullName || 'Nhân viên';
+            const code = request.user?.username || 'N/A';
+            const department = request.user?.department || 'Chưa có phòng ban';
+            const noteValue = notes[requestId] || '';
             const overdueDays = getOverdueDays(request);
 
             return (
@@ -660,7 +645,7 @@ export default function ApprovalPage() {
                 key={requestId}
                 className="overflow-hidden rounded-xl border bg-white transition-all hover:shadow-md"
                 style={{
-                  borderColor: "#e2ede9",
+                  borderColor: '#e2ede9',
                   borderLeft: `4px solid ${header.bg}`,
                 }}
               >
@@ -673,10 +658,10 @@ export default function ApprovalPage() {
                     <span className="text-sm font-semibold">
                       {header.label} - ID: #{requestId}
                     </span>
-                    {derivedStatus === "overdue" && overdueDays > 0 ? (
+                    {derivedStatus === 'overdue' && overdueDays > 0 ? (
                       <span
                         className="animate-pulse rounded-full px-2 py-0.5 text-xs font-bold"
-                        style={{ background: "rgba(255,255,255,0.25)" }}
+                        style={{ background: 'rgba(255,255,255,0.25)' }}
                       >
                         Quá hạn {overdueDays} ngày
                       </span>
@@ -694,16 +679,16 @@ export default function ApprovalPage() {
                     <div
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
                       style={{
-                        background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)",
+                        background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
                       }}
                     >
                       {getEmployeeInitials(fullName)}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold" style={{ color: "#203430" }}>
+                      <p className="text-sm font-semibold" style={{ color: '#203430' }}>
                         {fullName} ({code})
                       </p>
-                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
                         {department}
                       </p>
                     </div>
@@ -714,31 +699,34 @@ export default function ApprovalPage() {
                       <div className="flex items-center gap-2">
                         <span
                           className="rounded px-2 py-0.5 text-xs font-bold text-white"
-                          style={{ background: request.leaveType?.color || "#6b7280" }}
+                          style={{ background: request.leaveType?.color || '#6b7280' }}
                         >
-                          {request.leaveType?.code || "-"}
+                          {request.leaveType?.code || '-'}
                         </span>
-                        <span className="text-sm font-semibold" style={{ color: "#203430" }}>
+                        <span className="text-sm font-semibold" style={{ color: '#203430' }}>
                           {formatDateVN(request.fromDate)}
                           {numberValue(request.totalDays) > 1
                             ? ` - ${formatDateVN(request.toDate)}`
-                            : ""}
+                            : ''}
                           {` (${numberValue(request.totalDays)} ngày)`}
                         </span>
                       </div>
-                      <p className="text-xs" style={{ color: "#6b7f78" }}>
-                        <strong style={{ color: "#203430" }}>Lý do:</strong>{" "}
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
+                        <strong style={{ color: '#203430' }}>Lý do:</strong>{' '}
                         {getPrimaryReason(request.reason)}
                       </p>
-                      <p className="text-xs" style={{ color: "#6b7f78" }}>
-                        <strong style={{ color: "#203430" }}>Người bàn giao:</strong>{" "}
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
+                        <strong style={{ color: '#203430' }}>Người bàn giao:</strong>{' '}
                         {extractHandover(request.reason)}
                       </p>
-                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
                         Gửi: {formatDateTimeVN(request.createdAt)}
                       </p>
                       {request.attachmentUrl ? (
-                        <div className="flex items-center gap-1 text-xs" style={{ color: "#3b82f6" }}>
+                        <div
+                          className="flex items-center gap-1 text-xs"
+                          style={{ color: '#3b82f6' }}
+                        >
                           <Download size={11} />
                           <span>File đính kèm: {request.attachmentUrl}</span>
                         </div>
@@ -746,13 +734,13 @@ export default function ApprovalPage() {
                     </div>
                   </div>
 
-                  {derivedStatus === "overdue" ? (
+                  {derivedStatus === 'overdue' ? (
                     <div
                       className="rounded-lg p-2.5 text-xs"
                       style={{
-                        background: "#fef2f2",
-                        color: "#991b1b",
-                        border: "1px solid #fecaca",
+                        background: '#fef2f2',
+                        color: '#991b1b',
+                        border: '1px solid #fecaca',
                       }}
                     >
                       Yêu cầu này đang chờ xử lý quá 2 ngày nên được gắn mức ưu tiên cao.
@@ -762,7 +750,7 @@ export default function ApprovalPage() {
                   <div>
                     <label
                       className="mb-1 block text-xs font-semibold"
-                      style={{ color: "#6b7f78" }}
+                      style={{ color: '#6b7f78' }}
                     >
                       Ghi chú duyệt
                     </label>
@@ -785,7 +773,7 @@ export default function ApprovalPage() {
                       onClick={() => void handleApprove(requestId)}
                       disabled={!!actionLoadingId}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: "#1DB87A" }}
+                      style={{ background: '#1DB87A' }}
                     >
                       <CheckCircle size={14} /> Duyệt
                     </button>
@@ -793,7 +781,7 @@ export default function ApprovalPage() {
                       onClick={() => void handleReject(requestId)}
                       disabled={!!actionLoadingId}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: "#ef4444" }}
+                      style={{ background: '#ef4444' }}
                     >
                       Từ chối
                     </button>
@@ -801,25 +789,25 @@ export default function ApprovalPage() {
                       onClick={() => void handleView(requestId)}
                       disabled={detailLoadingId === requestId}
                       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-blue-50 disabled:opacity-50"
-                      style={{ borderColor: "#e2ede9" }}
+                      style={{ borderColor: '#e2ede9' }}
                       title="Xem chi tiết"
                     >
-                      <Eye size={15} style={{ color: "#3b82f6" }} />
+                      <Eye size={15} style={{ color: '#3b82f6' }} />
                     </button>
                     {request.attachmentUrl ? (
                       <button
                         onClick={() =>
                           window.open(
                             `${getApiBaseUrl()}/uploads/${request.attachmentUrl}`,
-                            "_blank",
-                            "noopener,noreferrer"
+                            '_blank',
+                            'noopener,noreferrer',
                           )
                         }
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-emerald-50"
-                        style={{ borderColor: "#e2ede9" }}
+                        style={{ borderColor: '#e2ede9' }}
                         title="Tải file đính kèm"
                       >
-                        <Download size={15} style={{ color: "#1DB87A" }} />
+                        <Download size={15} style={{ color: '#1DB87A' }} />
                       </button>
                     ) : null}
                   </div>
@@ -846,7 +834,7 @@ export default function ApprovalPage() {
           onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
           disabled={meta.page === 1}
           className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+          style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
         >
           <ChevronLeft size={14} /> Trước
         </button>
@@ -856,9 +844,9 @@ export default function ApprovalPage() {
             onClick={() => setCurrentPage(page)}
             className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-medium transition-colors"
             style={{
-              borderColor: page === meta.page ? "#1DB87A" : "#e2ede9",
-              background: page === meta.page ? "#1DB87A" : undefined,
-              color: page === meta.page ? "white" : "#6b7f78",
+              borderColor: page === meta.page ? '#1DB87A' : '#e2ede9',
+              background: page === meta.page ? '#1DB87A' : undefined,
+              color: page === meta.page ? 'white' : '#6b7f78',
             }}
           >
             {page}
@@ -868,7 +856,7 @@ export default function ApprovalPage() {
           onClick={() => setCurrentPage((page) => Math.min(meta.totalPages, page + 1))}
           disabled={meta.page === meta.totalPages}
           className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+          style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
         >
           Sau <ChevronRight size={14} />
         </button>

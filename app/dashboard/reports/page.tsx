@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   BarChart2,
   Building2,
@@ -13,7 +13,7 @@ import {
   TrendingDown,
   TrendingUp,
   Trophy,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   CartesianGrid,
   Cell,
@@ -27,16 +27,16 @@ import {
   Tooltip as PieTooltip,
   XAxis,
   YAxis,
-} from "recharts";
-import { apiClient, getApiBaseUrl, getStoredToken } from "@/lib/api-client";
-import { DatePicker } from "@/components/ui/date-picker";
+} from 'recharts';
+import { apiClient, getApiBaseUrl, getStoredToken } from '@/lib/api-client';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 
 type LeaveTrendRow = {
   month: string;
@@ -68,28 +68,28 @@ type TopUserRow = {
 };
 
 const DEPARTMENT_COLORS = [
-  "#3b82f6",
-  "#f59e0b",
-  "#1DB87A",
-  "#06b6d4",
-  "#8b5cf6",
-  "#ef4444",
-  "#14b8a6",
+  '#3b82f6',
+  '#f59e0b',
+  '#1DB87A',
+  '#06b6d4',
+  '#8b5cf6',
+  '#ef4444',
+  '#14b8a6',
 ];
 
 const DEPARTMENT_BACKGROUNDS = [
-  "#eff6ff",
-  "#fffbeb",
-  "#f0fdf9",
-  "#ecfeff",
-  "#f5f3ff",
-  "#fef2f2",
-  "#f0fdfa",
+  '#eff6ff',
+  '#fffbeb',
+  '#f0fdf9',
+  '#ecfeff',
+  '#f5f3ff',
+  '#fef2f2',
+  '#f0fdfa',
 ];
 
 function formatHours(value?: number | string | null) {
   const numeric = Number(value ?? 0);
-  if (!Number.isFinite(numeric)) return "--";
+  if (!Number.isFinite(numeric)) return '--';
   return `${numeric.toFixed(1)}h`;
 }
 
@@ -108,41 +108,41 @@ function getDepartmentBg(index: number) {
 function trendMeta(current: number, previous: number) {
   if (current > previous) {
     const delta = previous ? Math.round(((current - previous) / previous) * 100) : 100;
-    return { trend: "up" as const, sub: `+${delta}% so với tháng trước` };
+    return { trend: 'up' as const, sub: `+${delta}% so với tháng trước` };
   }
 
   if (current < previous) {
     const delta = current ? Math.round(((previous - current) / previous) * 100) : 100;
-    return { trend: "down" as const, sub: `-${delta}% so với tháng trước` };
+    return { trend: 'down' as const, sub: `-${delta}% so với tháng trước` };
   }
 
-  return { trend: "neutral" as const, sub: "Không đổi so với tháng trước" };
+  return { trend: 'neutral' as const, sub: 'Không đổi so với tháng trước' };
 }
 
-function trendColor(trend: "up" | "down" | "neutral", dark = true) {
+function trendColor(trend: 'up' | 'down' | 'neutral', dark = true) {
   if (!dark) {
-    if (trend === "up") return "#059669";
-    if (trend === "down") return "#dc2626";
-    return "#6b7280";
+    if (trend === 'up') return '#059669';
+    if (trend === 'down') return '#dc2626';
+    return '#6b7280';
   }
-  return "rgba(255,255,255,0.9)";
+  return 'rgba(255,255,255,0.9)';
 }
 
 function rateColor(rate: number) {
-  if (rate >= 75) return "#1DB87A";
-  if (rate >= 50) return "#f59e0b";
-  return "#ef4444";
+  if (rate >= 75) return '#1DB87A';
+  if (rate >= 50) return '#f59e0b';
+  return '#ef4444';
 }
 
 export default function ReportsPage() {
   const now = useMemo(() => new Date(), []);
   const currentYear = now.getFullYear();
 
-  const [reportType, setReportType] = useState("leave-summary");
+  const [reportType, setReportType] = useState('leave-summary');
   const [fromDate, setFromDate] = useState(`${currentYear}-01-01`);
   const [toDate, setToDate] = useState(`${currentYear}-12-31`);
-  const [deptFilter, setDeptFilter] = useState("");
-  const [teamFilter, setTeamFilter] = useState("");
+  const [deptFilter, setDeptFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [leaveTrend, setLeaveTrend] = useState<LeaveTrendRow[]>([]);
   const [overtimeTrend, setOvertimeTrend] = useState<OvertimeReportRow[]>([]);
   const [departmentRows, setDepartmentRows] = useState<DepartmentReportRow[]>([]);
@@ -169,16 +169,16 @@ export default function ReportsPage() {
     try {
       const [leaveResponse, overtimeResponse, departmentResponse, topUsersResponse] =
         await Promise.all([
-          apiClient.get<LeaveTrendRow[]>("/api/reports/leave", {
+          apiClient.get<LeaveTrendRow[]>('/api/reports/leave', {
             params: { year: selectedYear, department: deptFilter || undefined },
           }),
-          apiClient.get<OvertimeReportRow[]>("/api/reports/overtime", {
+          apiClient.get<OvertimeReportRow[]>('/api/reports/overtime', {
             params: { year: selectedYear },
           }),
-          apiClient.get<DepartmentReportRow[]>("/api/reports/department", {
+          apiClient.get<DepartmentReportRow[]>('/api/reports/department', {
             params: { year: selectedYear },
           }),
-          apiClient.get<TopUserRow[]>("/api/reports/top-users", {
+          apiClient.get<TopUserRow[]>('/api/reports/top-users', {
             params: { year: selectedYear, limit: 10 },
           }),
         ]);
@@ -188,9 +188,7 @@ export default function ReportsPage() {
       setDepartmentRows(departmentResponse.data ?? []);
       setTopUsers(topUsersResponse.data ?? []);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Khong the tai du lieu bao cao."
-      );
+      setErrorMessage(error instanceof Error ? error.message : 'Khong the tai du lieu bao cao.');
     } finally {
       setIsLoading(false);
     }
@@ -206,12 +204,12 @@ export default function ReportsPage() {
         ...row,
         monthLabel: monthLabel(row.month),
       })),
-    [leaveTrend]
+    [leaveTrend],
   );
 
   const filteredDepartments = useMemo(() => {
     const rows = departmentRows.filter((row) =>
-      deptFilter ? (row.department ?? "") === deptFilter : true
+      deptFilter ? (row.department ?? '') === deptFilter : true,
     );
 
     return rows.map((row, index) => {
@@ -223,7 +221,7 @@ export default function ReportsPage() {
 
       return {
         ...row,
-        label: row.department ?? "Khác",
+        label: row.department ?? 'Khác',
         color,
         bg,
         avgDays,
@@ -238,15 +236,12 @@ export default function ReportsPage() {
         value: row.totalDays,
         color: row.color,
       })),
-    [filteredDepartments]
+    [filteredDepartments],
   );
 
   const filteredTopUsers = useMemo(
-    () =>
-      topUsers.filter((user) =>
-        deptFilter ? (user.department ?? "") === deptFilter : true
-      ),
-    [deptFilter, topUsers]
+    () => topUsers.filter((user) => (deptFilter ? (user.department ?? '') === deptFilter : true)),
+    [deptFilter, topUsers],
   );
 
   const leaveTotals = useMemo(() => {
@@ -261,9 +256,9 @@ export default function ReportsPage() {
       wfh,
       total,
       types: [
-        { code: "AL", label: "Nghỉ phép năm", days: annual, color: "#3b82f6" },
-        { code: "SL", label: "Nghỉ ốm", days: sick, color: "#10b981" },
-        { code: "WFH", label: "Làm việc tại nhà", days: wfh, color: "#8b5cf6" },
+        { code: 'AL', label: 'Nghỉ phép năm', days: annual, color: '#3b82f6' },
+        { code: 'SL', label: 'Nghỉ ốm', days: sick, color: '#10b981' },
+        { code: 'WFH', label: 'Làm việc tại nhà', days: wfh, color: '#8b5cf6' },
       ].map((item) => ({
         ...item,
         pct: total ? Math.round((item.days / total) * 100) : 0,
@@ -272,10 +267,7 @@ export default function ReportsPage() {
   }, [leaveTrend]);
 
   const overtimeTotals = useMemo(() => {
-    const totalHours = overtimeTrend.reduce(
-      (sum, row) => sum + Number(row.totalHours ?? 0),
-      0
-    );
+    const totalHours = overtimeTrend.reduce((sum, row) => sum + Number(row.totalHours ?? 0), 0);
     const totalCount = overtimeTrend.reduce((sum, row) => sum + Number(row.count ?? 0), 0);
     return { totalHours, totalCount };
   }, [overtimeTrend]);
@@ -288,48 +280,43 @@ export default function ReportsPage() {
 
     const leaveMeta = trendMeta(
       (latestLeave?.annual ?? 0) + (latestLeave?.sick ?? 0) + (latestLeave?.wfh ?? 0),
-      (previousLeave?.annual ?? 0) +
-        (previousLeave?.sick ?? 0) +
-        (previousLeave?.wfh ?? 0)
+      (previousLeave?.annual ?? 0) + (previousLeave?.sick ?? 0) + (previousLeave?.wfh ?? 0),
     );
     const annualMeta = trendMeta(latestLeave?.annual ?? 0, previousLeave?.annual ?? 0);
-    const overtimeMeta = trendMeta(
-      latestOt?.totalHours ?? 0,
-      previousOt?.totalHours ?? 0
-    );
+    const overtimeMeta = trendMeta(latestOt?.totalHours ?? 0, previousOt?.totalHours ?? 0);
     const departmentMeta = trendMeta(filteredDepartments.length, departmentRows.length);
 
     return [
       {
-        label: "Tổng yêu cầu nghỉ",
+        label: 'Tổng yêu cầu nghỉ',
         value: String(leaveTotals.total),
         ...leaveMeta,
-        gradFrom: "#0E474E",
-        gradTo: "#1DB87A",
+        gradFrom: '#0E474E',
+        gradTo: '#1DB87A',
         dark: true,
       },
       {
-        label: "Nghỉ phép năm",
+        label: 'Nghỉ phép năm',
         value: String(leaveTotals.annual),
         ...annualMeta,
-        gradFrom: "#059669",
-        gradTo: "#34d399",
+        gradFrom: '#059669',
+        gradTo: '#34d399',
         dark: true,
       },
       {
-        label: "Tổng overtime",
+        label: 'Tổng overtime',
         value: formatHours(overtimeTotals.totalHours),
         ...overtimeMeta,
-        gradFrom: "#d97706",
-        gradTo: "#fbbf24",
+        gradFrom: '#d97706',
+        gradTo: '#fbbf24',
         dark: false,
       },
       {
-        label: "Phòng ban có dữ liệu",
+        label: 'Phòng ban có dữ liệu',
         value: String(filteredDepartments.length),
         ...departmentMeta,
-        gradFrom: "#0891b2",
-        gradTo: "#a5f3fc",
+        gradFrom: '#0891b2',
+        gradTo: '#a5f3fc',
         dark: false,
       },
     ];
@@ -348,16 +335,16 @@ export default function ReportsPage() {
       const overtimeRow = overtimeTrend.find((item) => item.month === row.month);
       const totalRequests = Number(row.annual ?? 0) + Number(row.sick ?? 0) + Number(row.wfh ?? 0);
       const dominantType = [
-        { label: "Phép năm", value: row.annual },
-        { label: "Nghỉ ốm", value: row.sick },
-        { label: "WFH", value: row.wfh },
+        { label: 'Phép năm', value: row.annual },
+        { label: 'Nghỉ ốm', value: row.sick },
+        { label: 'WFH', value: row.wfh },
       ].sort((a, b) => Number(b.value) - Number(a.value))[0];
       const annualRate = totalRequests
         ? Math.round((Number(row.annual ?? 0) / totalRequests) * 100)
         : 0;
 
       return {
-        month: `${row.month.padStart(2, "0")}/${selectedYear}`,
+        month: `${row.month.padStart(2, '0')}/${selectedYear}`,
         annual: Number(row.annual ?? 0),
         sick: Number(row.sick ?? 0),
         wfh: Number(row.wfh ?? 0),
@@ -376,28 +363,25 @@ export default function ReportsPage() {
 
     try {
       const token = getStoredToken();
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/reports/export?year=${selectedYear}`,
-        {
-          credentials: "include",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        }
-      );
+      const response = await fetch(`${getApiBaseUrl()}/api/reports/export?year=${selectedYear}`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
 
       if (!response.ok) {
-        throw new Error("Khong the export file CSV.");
+        throw new Error('Khong the export file CSV.');
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       link.href = url;
       link.download = `leave-report-${selectedYear}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
       setNoticeMessage(`Đã tải báo cáo CSV cho năm ${selectedYear}.`);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Khong the export CSV.");
+      setErrorMessage(error instanceof Error ? error.message : 'Khong the export CSV.');
     } finally {
       setIsExporting(false);
     }
@@ -409,11 +393,11 @@ export default function ReportsPage() {
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-xl"
-            style={{ background: "#D3F2E7" }}
+            style={{ background: '#D3F2E7' }}
           >
-            <BarChart2 size={18} style={{ color: "#0E474E" }} />
+            <BarChart2 size={18} style={{ color: '#0E474E' }} />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>
+          <h1 className="text-xl font-bold" style={{ color: '#203430' }}>
             Báo cáo &amp; Thống kê
           </h1>
         </div>
@@ -422,7 +406,7 @@ export default function ReportsPage() {
             type="button"
             onClick={() => void loadReports()}
             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white"
-            style={{ background: "#1DB87A" }}
+            style={{ background: '#1DB87A' }}
           >
             <FileText size={14} /> Tạo báo cáo
           </button>
@@ -431,16 +415,16 @@ export default function ReportsPage() {
             onClick={() => void exportCsv()}
             disabled={isExporting}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}
+            style={{ borderColor: '#e2ede9', color: '#203430' }}
           >
-            <FileDown size={14} /> {isExporting ? "Đang export CSV" : "Export CSV"}
+            <FileDown size={14} /> {isExporting ? 'Đang export CSV' : 'Export CSV'}
           </button>
           <button
             type="button"
             disabled
             title="Backend hiện chưa có endpoint export PDF/Excel."
             className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold opacity-60"
-            style={{ borderColor: "#ef4444", color: "#ef4444" }}
+            style={{ borderColor: '#ef4444', color: '#ef4444' }}
           >
             <FilePieChart size={14} /> Export PDF
           </button>
@@ -451,28 +435,25 @@ export default function ReportsPage() {
         <div
           className="rounded-xl border p-3 text-sm"
           style={{
-            background: errorMessage ? "#fff5f5" : "#f7fffb",
-            color: errorMessage ? "#b91c1c" : "#0E474E",
-            borderColor: errorMessage ? "#fecaca" : "#D3F2E7",
+            background: errorMessage ? '#fff5f5' : '#f7fffb',
+            color: errorMessage ? '#b91c1c' : '#0E474E',
+            borderColor: errorMessage ? '#fecaca' : '#D3F2E7',
           }}
         >
           {errorMessage ?? noticeMessage}
         </div>
       )}
 
-      <div className="rounded-xl border bg-white p-4" style={{ borderColor: "#e2ede9" }}>
+      <div className="rounded-xl border bg-white p-4" style={{ borderColor: '#e2ede9' }}>
         <div className="mb-3 flex items-center gap-2">
-          <BarChart2 size={14} style={{ color: "#1DB87A" }} />
-          <span className="text-sm font-semibold" style={{ color: "#203430" }}>
+          <BarChart2 size={14} style={{ color: '#1DB87A' }} />
+          <span className="text-sm font-semibold" style={{ color: '#203430' }}>
             Bộ lọc báo cáo
           </span>
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label
-              className="mb-1 block text-xs font-semibold"
-              style={{ color: "#6b7f78" }}
-            >
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
               Loại báo cáo
             </label>
             <Select value={reportType} onValueChange={setReportType}>
@@ -490,33 +471,24 @@ export default function ReportsPage() {
             </Select>
           </div>
           <div>
-            <label
-              className="mb-1 block text-xs font-semibold"
-              style={{ color: "#6b7f78" }}
-            >
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
               Từ ngày
             </label>
             <DatePicker value={fromDate} onChange={setFromDate} />
           </div>
           <div>
-            <label
-              className="mb-1 block text-xs font-semibold"
-              style={{ color: "#6b7f78" }}
-            >
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
               Đến ngày
             </label>
             <DatePicker value={toDate} onChange={setToDate} />
           </div>
           <div>
-            <label
-              className="mb-1 block text-xs font-semibold"
-              style={{ color: "#6b7f78" }}
-            >
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
               Phòng ban
             </label>
             <Select
-              value={deptFilter || "all"}
-              onValueChange={(value) => setDeptFilter(value === "all" ? "" : value)}
+              value={deptFilter || 'all'}
+              onValueChange={(value) => setDeptFilter(value === 'all' ? '' : value)}
             >
               <SelectTrigger className="min-w-[130px]">
                 <SelectValue placeholder="Chọn phòng ban" />
@@ -535,15 +507,12 @@ export default function ReportsPage() {
             </Select>
           </div>
           <div>
-            <label
-              className="mb-1 block text-xs font-semibold"
-              style={{ color: "#6b7f78" }}
-            >
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
               Nhóm
             </label>
             <Select
-              value={teamFilter || "all"}
-              onValueChange={(value) => setTeamFilter(value === "all" ? "" : value)}
+              value={teamFilter || 'all'}
+              onValueChange={(value) => setTeamFilter(value === 'all' ? '' : value)}
               disabled
             >
               <SelectTrigger className="min-w-[130px]">
@@ -558,14 +527,14 @@ export default function ReportsPage() {
             type="button"
             onClick={() => void loadReports()}
             className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white"
-            style={{ background: "#1DB87A" }}
+            style={{ background: '#1DB87A' }}
           >
             <Search size={14} />
           </button>
         </div>
-        <p className="mt-3 text-xs" style={{ color: "#6b7f78" }}>
-          Dữ liệu chart và bảng đang lấy theo năm {selectedYear}. Bộ lọc nhóm hiện chưa có
-          endpoint backend nên chỉ giữ ở trạng thái an toàn.
+        <p className="mt-3 text-xs" style={{ color: '#6b7f78' }}>
+          Dữ liệu chart và bảng đang lấy theo năm {selectedYear}. Bộ lọc nhóm hiện chưa có endpoint
+          backend nên chỉ giữ ở trạng thái an toàn.
         </p>
       </div>
 
@@ -580,21 +549,18 @@ export default function ReportsPage() {
           >
             <p
               className="mb-2 text-3xl font-bold"
-              style={{ color: card.dark === false ? "#1f2937" : "white" }}
+              style={{ color: card.dark === false ? '#1f2937' : 'white' }}
             >
-              {isLoading ? "..." : card.value}
+              {isLoading ? '...' : card.value}
             </p>
             <div className="flex items-center gap-1.5">
-              {card.trend === "up" && <TrendingUp size={14} className="text-green-200" />}
-              {card.trend === "down" && (
-                <TrendingDown size={14} className="text-red-300" />
-              )}
-              {card.trend === "neutral" && <Minus size={14} className="opacity-70" />}
+              {card.trend === 'up' && <TrendingUp size={14} className="text-green-200" />}
+              {card.trend === 'down' && <TrendingDown size={14} className="text-red-300" />}
+              {card.trend === 'neutral' && <Minus size={14} className="opacity-70" />}
               <span
                 className="text-xs opacity-80"
                 style={{
-                  color:
-                    card.dark === false ? "#374151" : "rgba(255,255,255,0.85)",
+                  color: card.dark === false ? '#374151' : 'rgba(255,255,255,0.85)',
                 }}
               >
                 {card.label}
@@ -611,20 +577,23 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="rounded-xl border bg-white p-5 lg:col-span-2" style={{ borderColor: "#e2ede9" }}>
+        <div
+          className="rounded-xl border bg-white p-5 lg:col-span-2"
+          style={{ borderColor: '#e2ede9' }}
+        >
           <div className="mb-4 flex items-center gap-2">
-            <TrendingUp size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+            <TrendingUp size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
               Xu hướng nghỉ phép 12 tháng
             </h3>
           </div>
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f2" />
-              <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#6b7f78" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#6b7f78" }} />
+              <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: '#6b7f78' }} />
+              <YAxis tick={{ fontSize: 11, fill: '#6b7f78' }} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, border: "1px solid #e2ede9", fontSize: 12 }}
+                contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Line
@@ -655,10 +624,10 @@ export default function ReportsPage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: "#e2ede9" }}>
+        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
           <div className="mb-4 flex items-center gap-2">
-            <FilePieChart size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+            <FilePieChart size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
               Phân bố theo phòng ban
             </h3>
           </div>
@@ -678,7 +647,7 @@ export default function ReportsPage() {
                 ))}
               </Pie>
               <PieTooltip
-                contentStyle={{ borderRadius: 8, border: "1px solid #e2ede9", fontSize: 12 }}
+                contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -687,7 +656,7 @@ export default function ReportsPage() {
               <div
                 key={item.name}
                 className="flex items-center gap-1.5 text-xs"
-                style={{ color: "#6b7f78" }}
+                style={{ color: '#6b7f78' }}
               >
                 <div
                   className="h-2.5 w-2.5 shrink-0 rounded-sm"
@@ -700,10 +669,10 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white p-5" style={{ borderColor: "#e2ede9" }}>
+      <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
         <div className="mb-4 flex items-center gap-2">
-          <Building2 size={15} style={{ color: "#1DB87A" }} />
-          <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+          <Building2 size={15} style={{ color: '#1DB87A' }} />
+          <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
             Phân tích chi tiết theo phòng ban
           </h3>
         </div>
@@ -714,7 +683,7 @@ export default function ReportsPage() {
                 100,
                 department.employeeCount
                   ? Math.round((department.avgDays / Math.max(department.avgDays, 1)) * 100)
-                  : 0
+                  : 0,
               );
 
               return (
@@ -722,7 +691,7 @@ export default function ReportsPage() {
                   key={department.label}
                   className="rounded-xl border p-4 transition-all hover:shadow-sm"
                   style={{
-                    borderColor: "#e2ede9",
+                    borderColor: '#e2ede9',
                     borderLeft: `4px solid ${department.color}`,
                   }}
                 >
@@ -734,11 +703,11 @@ export default function ReportsPage() {
                       >
                         {department.label.slice(0, 2).toUpperCase()}
                       </span>
-                      <span className="text-sm font-semibold" style={{ color: "#203430" }}>
+                      <span className="text-sm font-semibold" style={{ color: '#203430' }}>
                         {department.label}
                       </span>
                     </div>
-                    <span className="text-xs" style={{ color: "#6b7f78" }}>
+                    <span className="text-xs" style={{ color: '#6b7f78' }}>
                       {department.employeeCount} nhân viên
                     </span>
                   </div>
@@ -746,41 +715,44 @@ export default function ReportsPage() {
                     {[
                       {
                         val: department.totalDays.toFixed(1),
-                        label: "Ngày nghỉ",
+                        label: 'Ngày nghỉ',
                         color: department.color,
                       },
                       {
                         val: formatHours(department.otHours),
-                        label: "Overtime",
-                        color: "#1DB87A",
+                        label: 'Overtime',
+                        color: '#1DB87A',
                       },
                       {
                         val: String(department.employeeCount),
-                        label: "Nhân sự",
-                        color: "#f59e0b",
+                        label: 'Nhân sự',
+                        color: '#f59e0b',
                       },
                       {
                         val: department.avgDays.toFixed(1),
-                        label: "Ngày/NV",
-                        color: "#06b6d4",
+                        label: 'Ngày/NV',
+                        color: '#06b6d4',
                       },
                     ].map((metric) => (
                       <div key={metric.label}>
                         <p className="text-lg font-bold" style={{ color: metric.color }}>
                           {metric.val}
                         </p>
-                        <p className="text-xs" style={{ color: "#6b7f78" }}>
+                        <p className="text-xs" style={{ color: '#6b7f78' }}>
                           {metric.label}
                         </p>
                       </div>
                     ))}
                   </div>
                   <div>
-                    <div className="mb-1 flex justify-between text-xs" style={{ color: "#6b7f78" }}>
+                    <div className="mb-1 flex justify-between text-xs" style={{ color: '#6b7f78' }}>
                       <span>Mức tải nghỉ phép / nhân sự</span>
                       <span className="font-semibold">{department.avgDays.toFixed(1)} ngày</span>
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "#f0f4f2" }}>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full"
+                      style={{ background: '#f0f4f2' }}
+                    >
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -796,30 +768,30 @@ export default function ReportsPage() {
           ) : (
             <div
               className="rounded-xl border p-6 text-center text-sm md:col-span-2"
-              style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+              style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
             >
-              {isLoading ? "Đang tải dữ liệu phòng ban..." : "Không có dữ liệu phòng ban."}
+              {isLoading ? 'Đang tải dữ liệu phòng ban...' : 'Không có dữ liệu phòng ban.'}
             </div>
           )}
         </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: "#e2ede9" }}>
+        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
           <div className="mb-4 flex items-center gap-2">
-            <Trophy size={15} style={{ color: "#f59e0b" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+            <Trophy size={15} style={{ color: '#f59e0b' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
               Top 10 nhân viên nghỉ phép nhiều nhất
             </h3>
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "#f7f7f7" }}>
-                {["#", "Nhân viên", "Phòng ban", "Số ngày", "%"].map((header) => (
+              <tr style={{ background: '#f7f7f7' }}>
+                {['#', 'Nhân viên', 'Phòng ban', 'Số ngày', '%'].map((header) => (
                   <th
                     key={header}
                     className="px-3 py-2.5 text-left text-xs font-semibold"
-                    style={{ color: "#6b7f78" }}
+                    style={{ color: '#6b7f78' }}
                   >
                     {header}
                   </th>
@@ -836,15 +808,15 @@ export default function ReportsPage() {
                     <tr
                       key={`${user.rank}-${user.name}`}
                       className="border-b last:border-0"
-                      style={{ borderColor: "#f0f4f2" }}
+                      style={{ borderColor: '#f0f4f2' }}
                     >
                       <td
                         className="px-3 py-3 text-xs font-bold"
-                        style={{ color: user.rank <= 3 ? "#f59e0b" : "#6b7f78" }}
+                        style={{ color: user.rank <= 3 ? '#f59e0b' : '#6b7f78' }}
                       >
                         {user.rank}
                       </td>
-                      <td className="px-3 py-3 text-xs font-medium" style={{ color: "#203430" }}>
+                      <td className="px-3 py-3 text-xs font-medium" style={{ color: '#203430' }}>
                         {user.name}
                       </td>
                       <td className="px-3 py-3">
@@ -852,21 +824,27 @@ export default function ReportsPage() {
                           className="rounded px-2 py-0.5 text-xs font-bold"
                           style={{ background: bg, color }}
                         >
-                          {user.department ?? "Chưa rõ"}
+                          {user.department ?? 'Chưa rõ'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-xs font-bold" style={{ color: "#203430" }}>
+                      <td className="px-3 py-3 text-xs font-bold" style={{ color: '#203430' }}>
                         {user.days}
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full" style={{ background: "#f0f4f2" }}>
+                          <div
+                            className="h-1.5 flex-1 overflow-hidden rounded-full"
+                            style={{ background: '#f0f4f2' }}
+                          >
                             <div
                               className="h-full rounded-full"
-                              style={{ width: `${user.pct}%`, background: "#1DB87A" }}
+                              style={{ width: `${user.pct}%`, background: '#1DB87A' }}
                             />
                           </div>
-                          <span className="min-w-[32px] text-xs font-semibold" style={{ color: "#203430" }}>
+                          <span
+                            className="min-w-[32px] text-xs font-semibold"
+                            style={{ color: '#203430' }}
+                          >
                             {user.pct}%
                           </span>
                         </div>
@@ -879,9 +857,9 @@ export default function ReportsPage() {
                   <td
                     colSpan={5}
                     className="px-3 py-6 text-center text-sm"
-                    style={{ color: "#6b7f78" }}
+                    style={{ color: '#6b7f78' }}
                   >
-                    {isLoading ? "Đang tải top users..." : "Không có dữ liệu top users."}
+                    {isLoading ? 'Đang tải top users...' : 'Không có dữ liệu top users.'}
                   </td>
                 </tr>
               )}
@@ -889,10 +867,10 @@ export default function ReportsPage() {
           </table>
         </div>
 
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: "#e2ede9" }}>
+        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
           <div className="mb-4 flex items-center gap-2">
-            <BarChart2 size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+            <BarChart2 size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
               Phân tích theo loại nghỉ phép
             </h3>
           </div>
@@ -907,12 +885,15 @@ export default function ReportsPage() {
                 </span>
                 <div className="flex-1">
                   <div className="mb-1 flex justify-between text-xs">
-                    <span style={{ color: "#203430" }}>{type.label}</span>
-                    <span className="font-semibold" style={{ color: "#203430" }}>
+                    <span style={{ color: '#203430' }}>{type.label}</span>
+                    <span className="font-semibold" style={{ color: '#203430' }}>
                       {type.days} lượt ({type.pct}%)
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full" style={{ background: "#f0f4f2" }}>
+                  <div
+                    className="h-2 overflow-hidden rounded-full"
+                    style={{ background: '#f0f4f2' }}
+                  >
                     <div
                       className="h-full rounded-full"
                       style={{ width: `${Math.max(type.pct, 4)}%`, background: type.color }}
@@ -922,34 +903,40 @@ export default function ReportsPage() {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-xs" style={{ color: "#6b7f78" }}>
-            Báo cáo hiện lấy trực tiếp từ endpoint `leave`, nên các loại nghỉ chưa có trong API
-            tổng hợp sẽ chưa hiển thị ở khối này.
+          <p className="mt-4 text-xs" style={{ color: '#6b7f78' }}>
+            Báo cáo hiện lấy trực tiếp từ endpoint `leave`, nên các loại nghỉ chưa có trong API tổng
+            hợp sẽ chưa hiển thị ở khối này.
           </p>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-white" style={{ borderColor: "#e2ede9" }}>
-        <div className="flex items-center gap-2 border-b px-5 py-3" style={{ borderColor: "#e2ede9" }}>
-          <BarChart2 size={15} style={{ color: "#1DB87A" }} />
-          <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+      <div
+        className="overflow-hidden rounded-xl border bg-white"
+        style={{ borderColor: '#e2ede9' }}
+      >
+        <div
+          className="flex items-center gap-2 border-b px-5 py-3"
+          style={{ borderColor: '#e2ede9' }}
+        >
+          <BarChart2 size={15} style={{ color: '#1DB87A' }} />
+          <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
             Báo cáo chi tiết theo tháng
           </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "#203430" }}>
+              <tr style={{ background: '#203430' }}>
                 {[
-                  "Tháng",
-                  "Phép năm",
-                  "Nghỉ ốm",
-                  "WFH",
-                  "Tổng lượt",
-                  "Overtime (h)",
-                  "Phiếu OT",
-                  "Loại chính",
-                  "Thao tác",
+                  'Tháng',
+                  'Phép năm',
+                  'Nghỉ ốm',
+                  'WFH',
+                  'Tổng lượt',
+                  'Overtime (h)',
+                  'Phiếu OT',
+                  'Loại chính',
+                  'Thao tác',
                 ].map((header) => (
                   <th
                     key={header}
@@ -966,27 +953,27 @@ export default function ReportsPage() {
                   <tr
                     key={row.month}
                     className="border-b transition-colors last:border-0 hover:bg-gray-50"
-                    style={{ borderColor: "#f0f4f2" }}
+                    style={{ borderColor: '#f0f4f2' }}
                   >
-                    <td className="px-4 py-3 text-xs font-bold" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs font-bold" style={{ color: '#203430' }}>
                       {row.month}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
                       {row.annual}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
                       {row.sick}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
                       {row.wfh}
                     </td>
-                    <td className="px-4 py-3 text-xs font-medium" style={{ color: "#1DB87A" }}>
+                    <td className="px-4 py-3 text-xs font-medium" style={{ color: '#1DB87A' }}>
                       {row.totalRequests}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
                       {row.otHours.toFixed(1)}
                     </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: "#203430" }}>
+                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
                       {row.otCount}
                     </td>
                     <td className="px-4 py-3">
@@ -1003,9 +990,9 @@ export default function ReportsPage() {
                         disabled
                         title="Backend hiện chưa có endpoint chi tiết theo tháng."
                         className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-lg border opacity-60"
-                        style={{ borderColor: "#e2ede9" }}
+                        style={{ borderColor: '#e2ede9' }}
                       >
-                        <Eye size={13} style={{ color: "#3b82f6" }} />
+                        <Eye size={13} style={{ color: '#3b82f6' }} />
                       </button>
                     </td>
                   </tr>
@@ -1015,9 +1002,9 @@ export default function ReportsPage() {
                   <td
                     colSpan={9}
                     className="px-4 py-6 text-center text-sm"
-                    style={{ color: "#6b7f78" }}
+                    style={{ color: '#6b7f78' }}
                   >
-                    {isLoading ? "Đang tải bảng tổng hợp..." : "Chưa có dữ liệu theo tháng."}
+                    {isLoading ? 'Đang tải bảng tổng hợp...' : 'Chưa có dữ liệu theo tháng.'}
                   </td>
                 </tr>
               )}
@@ -1028,4 +1015,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-

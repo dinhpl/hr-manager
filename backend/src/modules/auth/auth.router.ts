@@ -1,11 +1,11 @@
-import { Router, IRouter } from "express";
+import { Router, IRouter } from 'express';
 import {
   loginController,
   refreshController,
   logoutController,
   meController,
-} from "./auth.controller";
-import { authMiddleware } from "../../middlewares/auth.middleware";
+} from './auth.controller';
+import { authMiddleware } from '../../middlewares/auth.middleware';
 
 export const authRouter: IRouter = Router();
 
@@ -30,7 +30,7 @@ export const authRouter: IRouter = Router();
  *       401:
  *         description: Sai credentials
  */
-authRouter.post("/login", loginController);
+authRouter.post('/login', loginController);
 
 /**
  * @swagger
@@ -39,7 +39,7 @@ authRouter.post("/login", loginController);
  *     summary: Làm mới access token từ refresh token cookie
  *     tags: [Auth]
  */
-authRouter.post("/refresh-token", refreshController);
+authRouter.post('/refresh-token', refreshController);
 
 /**
  * @swagger
@@ -48,7 +48,7 @@ authRouter.post("/refresh-token", refreshController);
  *     summary: Đăng xuất, xóa refresh token cookie
  *     tags: [Auth]
  */
-authRouter.post("/logout", logoutController);
+authRouter.post('/logout', logoutController);
 
 /**
  * @swagger
@@ -59,4 +59,4 @@ authRouter.post("/logout", logoutController);
  *     security:
  *       - bearerAuth: []
  */
-authRouter.get("/me", authMiddleware, meController);
+authRouter.get('/me', authMiddleware, meController);

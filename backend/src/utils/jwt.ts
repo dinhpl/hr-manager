@@ -1,6 +1,6 @@
-import jwt from "jsonwebtoken";
-import { env } from "../config/env";
-import { UserRole } from "@prisma/client";
+import jwt from 'jsonwebtoken';
+import { env } from '../config/env';
+import { UserRole } from '@prisma/client';
 
 export interface JwtPayload {
   id: string; // BigInt serialized as string
@@ -11,13 +11,13 @@ export interface JwtPayload {
 
 export function signAccessToken(payload: JwtPayload): string {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
-    expiresIn: env.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+    expiresIn: env.JWT_ACCESS_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
 }
 
 export function signRefreshToken(payload: JwtPayload): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
-    expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions["expiresIn"],
+    expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
 }
 

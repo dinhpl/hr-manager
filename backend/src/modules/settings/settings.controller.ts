@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import * as service from "./settings.service";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import * as service from './settings.service';
+import { sendSuccess } from '../../utils/response';
 
 export async function getLeavePolicy(req: Request, res: Response, next: NextFunction) {
   try {

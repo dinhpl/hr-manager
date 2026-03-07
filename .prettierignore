@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+coverage
+uploads
+backend/dist
+backend/uploads
+pnpm-lock.yaml

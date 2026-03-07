@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Response } from 'express';
 
 // Standard success response
 export function sendSuccess<T>(res: Response, data: T, meta?: object, status = 200) {
@@ -11,7 +11,7 @@ export function sendError(
   message: string,
   code: string,
   status = 400,
-  details?: unknown
+  details?: unknown,
 ) {
   const errorBody: Record<string, unknown> = { code, message };
   if (details !== undefined) errorBody.details = details;

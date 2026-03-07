@@ -1,12 +1,12 @@
-import { Request, Response, NextFunction } from "express";
-import * as service from "./leave-requests.service";
+import { Request, Response, NextFunction } from 'express';
+import * as service from './leave-requests.service';
 import {
   createLeaveRequestSchema,
   getLeaveRequestsQuerySchema,
   approveRejectSchema,
   bulkApproveSchema,
-} from "./leave-requests.validation";
-import { sendSuccess } from "../../utils/response";
+} from './leave-requests.validation';
+import { sendSuccess } from '../../utils/response';
 
 export async function getAll(req: Request, res: Response, next: NextFunction) {
   try {
@@ -42,7 +42,11 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 export async function approve(req: Request, res: Response, next: NextFunction) {
   try {
     const { note } = approveRejectSchema.parse(req.body);
-    const request = await service.approveLeaveRequest(BigInt(String(req.params.id)), req.user!.id, note);
+    const request = await service.approveLeaveRequest(
+      BigInt(String(req.params.id)),
+      req.user!.id,
+      note,
+    );
     sendSuccess(res, request);
   } catch (err) {
     next(err);
@@ -52,7 +56,11 @@ export async function approve(req: Request, res: Response, next: NextFunction) {
 export async function reject(req: Request, res: Response, next: NextFunction) {
   try {
     const { note } = approveRejectSchema.parse(req.body);
-    const request = await service.rejectLeaveRequest(BigInt(String(req.params.id)), req.user!.id, note);
+    const request = await service.rejectLeaveRequest(
+      BigInt(String(req.params.id)),
+      req.user!.id,
+      note,
+    );
     sendSuccess(res, request);
   } catch (err) {
     next(err);

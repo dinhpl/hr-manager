@@ -1,13 +1,13 @@
-import { Request, Response, NextFunction } from "express";
-import { verifyAccessToken } from "../utils/jwt";
+import { Request, Response, NextFunction } from 'express';
+import { verifyAccessToken } from '../utils/jwt';
 
 // Verify Bearer token and attach user payload to req.user
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return res
       .status(401)
-      .json({ success: false, error: { code: "UNAUTHORIZED", message: "Missing access token" } });
+      .json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing access token' } });
   }
 
   const token = authHeader.slice(7);
@@ -23,6 +23,9 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   } catch {
     return res
       .status(401)
-      .json({ success: false, error: { code: "UNAUTHORIZED", message: "Invalid or expired token" } });
+      .json({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Invalid or expired token' },
+      });
   }
 }

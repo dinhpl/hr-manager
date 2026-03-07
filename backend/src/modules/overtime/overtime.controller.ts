@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from "express";
-import * as service from "./overtime.service";
-import { createOvertimeSchema, getOvertimeQuerySchema } from "./overtime.validation";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import * as service from './overtime.service';
+import { createOvertimeSchema, getOvertimeQuerySchema } from './overtime.validation';
+import { sendSuccess } from '../../utils/response';
 
 export async function getAll(req: Request, res: Response, next: NextFunction) {
   try {

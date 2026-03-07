@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from "express";
-import { z } from "zod";
-import * as service from "./leave-balances.service";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import * as service from './leave-balances.service';
+import { sendSuccess } from '../../utils/response';
 
 export async function getMyBalances(req: Request, res: Response, next: NextFunction) {
   try {
@@ -25,10 +25,12 @@ export async function getUserBalances(req: Request, res: Response, next: NextFun
 
 export async function initializeBalances(req: Request, res: Response, next: NextFunction) {
   try {
-    const { userId, year } = z.object({
-      userId: z.coerce.bigint(),
-      year: z.coerce.number().int().min(2020).max(2100),
-    }).parse(req.body);
+    const { userId, year } = z
+      .object({
+        userId: z.coerce.bigint(),
+        year: z.coerce.number().int().min(2020).max(2100),
+      })
+      .parse(req.body);
 
     await service.initializeBalancesForUser(userId, year);
     sendSuccess(res, { message: `Balances initialized for user ${userId} year ${year}` });

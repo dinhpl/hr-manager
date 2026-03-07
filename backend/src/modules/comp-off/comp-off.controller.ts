@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from "express";
-import { z } from "zod";
-import * as service from "./comp-off.service";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
+import * as service from './comp-off.service';
+import { sendSuccess } from '../../utils/response';
 
 const createSchema = z.object({
   fromDate: z.string().datetime(),

@@ -1,12 +1,12 @@
-import { Request, Response, NextFunction } from "express";
-import * as authService from "./auth.service";
-import { loginSchema } from "./auth.validation";
-import { sendSuccess } from "../../utils/response";
+import { Request, Response, NextFunction } from 'express';
+import * as authService from './auth.service';
+import { loginSchema } from './auth.validation';
+import { sendSuccess } from '../../utils/response';
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
@@ -16,7 +16,7 @@ export async function loginController(req: Request, res: Response, next: NextFun
     const result = await authService.login(username, password);
 
     // Store refresh token in httpOnly cookie — not accessible from JS
-    res.cookie("refreshToken", result.refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
+    res.cookie('refreshToken', result.refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
 
     sendSuccess(res, { accessToken: result.accessToken, user: result.user });
   } catch (err) {
@@ -30,7 +30,7 @@ export async function refreshController(req: Request, res: Response, next: NextF
     if (!refreshToken) {
       return res
         .status(401)
-        .json({ success: false, error: { code: "NO_REFRESH_TOKEN", message: "No refresh token" } });
+        .json({ success: false, error: { code: 'NO_REFRESH_TOKEN', message: 'No refresh token' } });
     }
     const result = await authService.refreshAccessToken(refreshToken);
     sendSuccess(res, result);
@@ -40,8 +40,8 @@ export async function refreshController(req: Request, res: Response, next: NextF
 }
 
 export async function logoutController(_req: Request, res: Response) {
-  res.clearCookie("refreshToken");
-  sendSuccess(res, { message: "Logged out successfully" });
+  res.clearCookie('refreshToken');
+  sendSuccess(res, { message: 'Logged out successfully' });
 }
 
 export async function meController(req: Request, res: Response, next: NextFunction) {

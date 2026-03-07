@@ -5,12 +5,14 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "pnpm run format && tsc",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "format": "prettier --config ../.prettierrc --ignore-path ../.prettierignore --write \"src/**/*.{ts,tsx,js,jsx}\" \"prisma/**/*.{ts,js}\" \"*.json\"",
+    "format:check": "prettier --config ../.prettierrc --ignore-path ../.prettierignore --check \"src/**/*.{ts,tsx,js,jsx}\" \"prisma/**/*.{ts,js}\" \"*.json\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },

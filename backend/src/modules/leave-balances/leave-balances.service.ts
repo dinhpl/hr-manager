@@ -1,4 +1,4 @@
-import prisma from "../../config/prisma";
+import prisma from '../../config/prisma';
 
 // Fetch balances for a user (defaults to current year)
 export async function getUserBalances(userId: bigint, year?: number) {
@@ -6,7 +6,7 @@ export async function getUserBalances(userId: bigint, year?: number) {
   return prisma.leaveBalance.findMany({
     where: { userId, year: targetYear },
     include: { leaveType: { select: { code: true, name: true, color: true } } },
-    orderBy: { leaveType: { code: "asc" } },
+    orderBy: { leaveType: { code: 'asc' } },
   });
 }
 
@@ -20,8 +20,8 @@ export async function initializeBalancesForUser(userId: bigint, year: number) {
         where: { userId_leaveTypeId_year: { userId, leaveTypeId: lt.id, year } },
         create: { userId, leaveTypeId: lt.id, year, totalDays: lt.defaultDays, usedDays: 0 },
         update: {}, // don't overwrite existing balance
-      })
-    )
+      }),
+    ),
   );
 }
 
@@ -36,7 +36,7 @@ export async function deductBalance(
   userId: bigint,
   leaveTypeId: bigint,
   days: number,
-  year: number
+  year: number,
 ) {
   await tx.leaveBalance.updateMany({
     where: { userId, leaveTypeId, year },
@@ -50,7 +50,7 @@ export async function restoreBalance(
   userId: bigint,
   leaveTypeId: bigint,
   days: number,
-  year: number
+  year: number,
 ) {
   await tx.leaveBalance.updateMany({
     where: { userId, leaveTypeId, year },

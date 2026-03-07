@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { LeaveRequestStatus } from "@prisma/client";
+import { z } from 'zod';
+import { LeaveRequestStatus } from '@prisma/client';
 
 export const createLeaveRequestSchema = z.object({
   leaveTypeId: z.coerce.bigint(),

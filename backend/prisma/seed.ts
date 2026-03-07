@@ -1,17 +1,41 @@
-import prisma from "../src/config/prisma";
+import prisma from '../src/config/prisma';
+
+async function syncSequence(tableName: string, columnName = 'id') {
+  await prisma.$executeRawUnsafe(`
+    SELECT setval(
+      pg_get_serial_sequence('"${tableName}"', '${columnName}'),
+      COALESCE((SELECT MAX("${columnName}") FROM "${tableName}"), 1),
+      true
+    )
+  `);
+}
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log('🌱 Seeding database...');
 
   // 1. Leave types (AL, SL, WFH, UL, BL, ML)
   await prisma.leaveType.createMany({
     data: [
-      { id: 1n, code: "AL", name: "Nghỉ phép năm", defaultDays: 12, isPaid: true, color: "#1DB87A" },
-      { id: 2n, code: "SL", name: "Nghỉ ốm", defaultDays: 30, isPaid: true, color: "#ef4444" },
-      { id: 3n, code: "WFH", name: "Làm từ xa", defaultDays: 0, isPaid: true, color: "#3b82f6" },
-      { id: 4n, code: "UL", name: "Nghỉ không lương", defaultDays: 0, isPaid: false, color: "#6b7280" },
-      { id: 5n, code: "BL", name: "Nghỉ cưới", defaultDays: 3, isPaid: true, color: "#8b5cf6" },
-      { id: 6n, code: "ML", name: "Nghỉ tang", defaultDays: 3, isPaid: true, color: "#374151" },
+      {
+        id: 1n,
+        code: 'AL',
+        name: 'Nghỉ phép năm',
+        defaultDays: 12,
+        isPaid: true,
+        color: '#1DB87A',
+      },
+      { id: 2n, code: 'SL', name: 'Nghỉ ốm', defaultDays: 30, isPaid: true, color: '#ef4444' },
+      { id: 3n, code: 'WFH', name: 'Làm từ xa', defaultDays: 0, isPaid: true, color: '#3b82f6' },
+      {
+        id: 4n,
+        code: 'UL',
+        name: 'Nghỉ không lương',
+        defaultDays: 0,
+        isPaid: false,
+        color: '#6b7280',
+      },
+      { id: 5n, code: 'BL', name: 'Nghỉ cưới', defaultDays: 3, isPaid: true, color: '#8b5cf6' },
+      { id: 6n, code: 'ML', name: 'Nghỉ tang', defaultDays: 3, isPaid: true, color: '#374151' },
     ],
     skipDuplicates: true,
   });
@@ -22,58 +46,58 @@ async function main() {
     data: [
       {
         id: 1n,
-        email: "admin@company.com",
-        username: "admin",
-        password: "$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i",
-        fullName: "Quản trị viên",
-        role: "ADMIN",
-        department: "IT",
-        position: "System Admin",
+        email: 'admin@company.com',
+        username: 'admin',
+        password: '$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i',
+        fullName: 'Quản trị viên',
+        role: 'ADMIN',
+        department: 'IT',
+        position: 'System Admin',
         isActive: true,
       },
       {
         id: 2n,
-        email: "hr@company.com",
-        username: "hr_nguyen",
-        password: "$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i",
-        fullName: "Nguyễn Thị HR",
-        role: "HR",
-        department: "HR",
-        position: "HR Manager",
+        email: 'hr@company.com',
+        username: 'hr_nguyen',
+        password: '$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i',
+        fullName: 'Nguyễn Thị HR',
+        role: 'HR',
+        department: 'HR',
+        position: 'HR Manager',
         isActive: true,
       },
       {
         id: 3n,
-        email: "manager@company.com",
-        username: "manager_tran",
-        password: "$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i",
-        fullName: "Trần Văn Manager",
-        role: "MANAGER",
-        department: "Engineering",
-        position: "Team Lead",
+        email: 'manager@company.com',
+        username: 'manager_tran',
+        password: '$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i',
+        fullName: 'Trần Văn Manager',
+        role: 'MANAGER',
+        department: 'Engineering',
+        position: 'Team Lead',
         isActive: true,
       },
       {
         id: 4n,
-        email: "employee@company.com",
-        username: "emp_le",
-        password: "$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i",
-        fullName: "Lê Thị Employee",
-        role: "EMPLOYEE",
-        department: "Engineering",
-        position: "Developer",
+        email: 'employee@company.com',
+        username: 'emp_le',
+        password: '$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i',
+        fullName: 'Lê Thị Employee',
+        role: 'EMPLOYEE',
+        department: 'Engineering',
+        position: 'Developer',
         managerId: 3n,
         isActive: true,
       },
       {
         id: 10n,
-        email: "emp2@company.com",
-        username: "emp_pham",
-        password: "$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i",
-        fullName: "Phạm Văn Employee 2",
-        role: "EMPLOYEE",
-        department: "Engineering",
-        position: "Developer",
+        email: 'emp2@company.com',
+        username: 'emp_pham',
+        password: '$2b$10$O10wd5iD0C.k4RJuycVci.hgUQ66.j8JECoXgPb2G6xKFE9AghT3i',
+        fullName: 'Phạm Văn Employee 2',
+        role: 'EMPLOYEE',
+        department: 'Engineering',
+        position: 'Developer',
         managerId: 3n,
         isActive: true,
       },
@@ -97,7 +121,7 @@ async function main() {
   await prisma.setting.createMany({
     data: [
       {
-        key: "leave_policy",
+        key: 'leave_policy',
         value: {
           maxConsecutiveDays: 14,
           minAdvanceNoticeDays: 1,
@@ -106,7 +130,7 @@ async function main() {
         },
       },
       {
-        key: "approval_flow",
+        key: 'approval_flow',
         value: {
           requireManagerApproval: true,
           requireHrApproval: false,
@@ -117,8 +141,14 @@ async function main() {
     skipDuplicates: true,
   });
 
-  console.log("✅ Seed complete");
-  console.log("👤 Login: admin@company.com / password123");
+  await Promise.all([
+    syncSequence('leave_types'),
+    syncSequence('users'),
+    syncSequence('leave_balances'),
+  ]);
+
+  console.log('✅ Seed complete');
+  console.log('👤 Login: admin@company.com / password123');
 }
 
 main()

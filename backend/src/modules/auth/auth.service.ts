@@ -1,6 +1,6 @@
-import prisma from "../../config/prisma";
-import { comparePassword } from "../../utils/hash";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt";
+import prisma from '../../config/prisma';
+import { comparePassword } from '../../utils/hash';
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt';
 
 // Login: find user by username or email, verify password, return tokens + user info
 export async function login(username: string, password: string) {
@@ -11,12 +11,17 @@ export async function login(username: string, password: string) {
     },
   });
 
-  if (!user) throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  if (!user) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
 
   const valid = await comparePassword(password, user.password);
-  if (!valid) throw Object.assign(new Error("Invalid credentials"), { status: 401 });
+  if (!valid) throw Object.assign(new Error('Invalid credentials'), { status: 401 });
 
-  const payload = { id: user.id.toString(), email: user.email, role: user.role, username: user.username };
+  const payload = {
+    id: user.id.toString(),
+    email: user.email,
+    role: user.role,
+    username: user.username,
+  };
   const accessToken = signAccessToken(payload);
   const refreshToken = signRefreshToken(payload);
 
@@ -48,7 +53,7 @@ export async function refreshAccessToken(refreshToken: string) {
     });
     return { accessToken };
   } catch {
-    throw Object.assign(new Error("Invalid refresh token"), { status: 401 });
+    throw Object.assign(new Error('Invalid refresh token'), { status: 401 });
   }
 }
 
@@ -70,12 +75,14 @@ export async function getMe(userId: bigint) {
     },
   });
 
-  if (!user) throw Object.assign(new Error("User not found"), { status: 404 });
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
 
   // Serialize BigInt to string for JSON
   return {
     ...user,
     id: user.id.toString(),
-    manager: user.manager ? { id: user.manager.id.toString(), fullName: user.manager.fullName } : null,
+    manager: user.manager
+      ? { id: user.manager.id.toString(), fullName: user.manager.fullName }
+      : null,
   };
 }

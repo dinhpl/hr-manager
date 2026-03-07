@@ -1,7 +1,7 @@
-import prisma from "../../config/prisma";
-import { getPaginationParams, buildMeta } from "../../utils/pagination";
-import { UserRole } from "@prisma/client";
-import { CreateOvertimeDto, GetOvertimeQuery } from "./overtime.validation";
+import prisma from '../../config/prisma';
+import { getPaginationParams, buildMeta } from '../../utils/pagination';
+import { UserRole } from '@prisma/client';
+import { CreateOvertimeDto, GetOvertimeQuery } from './overtime.validation';
 
 const COMP_OFF_RATE: Record<string, number> = {
   weekday: 1,
@@ -9,9 +9,9 @@ const COMP_OFF_RATE: Record<string, number> = {
   holiday: 2,
 };
 
-function detectOtType(date: Date): "weekday" | "weekend" {
+function detectOtType(date: Date): 'weekday' | 'weekend' {
   const day = date.getDay();
-  return day === 0 || day === 6 ? "weekend" : "weekday";
+  return day === 0 || day === 6 ? 'weekend' : 'weekday';
 }
 
 const OVERTIME_INCLUDE = {
@@ -22,13 +22,13 @@ const OVERTIME_INCLUDE = {
 function buildScopeFilter(user: { id: bigint; role: UserRole }, query: GetOvertimeQuery) {
   const where: Record<string, unknown> = {};
 
-  if (user.role === "EMPLOYEE") {
+  if (user.role === 'EMPLOYEE') {
     where.userId = user.id;
-  } else if (user.role === "MANAGER") {
+  } else if (user.role === 'MANAGER') {
     where.user = { OR: [{ id: user.id }, { managerId: user.id }] };
   }
 
-  if (query.userId && user.role !== "EMPLOYEE") where.userId = query.userId;
+  if (query.userId && user.role !== 'EMPLOYEE') where.userId = query.userId;
   if (query.status) where.status = query.status;
 
   const dateFilter: Record<string, Date> = {};
@@ -41,9 +41,10 @@ function buildScopeFilter(user: { id: bigint; role: UserRole }, query: GetOverti
 
 function enrichRecord(r: { date: Date; hours: { toNumber?: () => number } | number | string }) {
   const otType = detectOtType(r.date);
-  const hours = typeof r.hours === "object" && "toNumber" in (r.hours as object)
-    ? (r.hours as { toNumber: () => number }).toNumber()
-    : Number(r.hours);
+  const hours =
+    typeof r.hours === 'object' && 'toNumber' in (r.hours as object)
+      ? (r.hours as { toNumber: () => number }).toNumber()
+      : Number(r.hours);
   return { otType, compOffHours: hours * COMP_OFF_RATE[otType] };
 }
 
@@ -57,7 +58,7 @@ export async function getOvertimes(user: { id: bigint; role: UserRole }, query: 
       include: OVERTIME_INCLUDE,
       skip,
       take: limit,
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
     }),
     prisma.overtimeRecord.count({ where }),
   ]);
@@ -77,9 +78,9 @@ export async function getOvertimeById(id: bigint, user: { id: bigint; role: User
     },
   });
 
-  if (!record) throw Object.assign(new Error("Overtime record not found"), { status: 404 });
-  if (user.role === "EMPLOYEE" && record.userId !== user.id) {
-    throw Object.assign(new Error("Forbidden"), { status: 403 });
+  if (!record) throw Object.assign(new Error('Overtime record not found'), { status: 404 });
+  if (user.role === 'EMPLOYEE' && record.userId !== user.id) {
+    throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
 
   return { ...record, ...enrichRecord(record) };
@@ -92,7 +93,7 @@ export async function createOvertime(userId: bigint, data: CreateOvertimeDto) {
       date: new Date(data.date),
       hours: data.hours,
       reason: data.reason,
-      status: "PENDING",
+      status: 'PENDING',
     },
     include: { user: { select: { id: true, fullName: true } } },
   });
@@ -100,8 +101,10 @@ export async function createOvertime(userId: bigint, data: CreateOvertimeDto) {
 
 export async function approveOvertime(id: bigint, approverId: bigint) {
   const record = await prisma.overtimeRecord.findUnique({ where: { id } });
-  if (!record || record.status !== "PENDING") {
-    throw Object.assign(new Error("Cannot approve: record not found or not pending"), { status: 400 });
+  if (!record || record.status !== 'PENDING') {
+    throw Object.assign(new Error('Cannot approve: record not found or not pending'), {
+      status: 400,
+    });
   }
 
   const otType = detectOtType(record.date);
@@ -111,7 +114,7 @@ export async function approveOvertime(id: bigint, approverId: bigint) {
   return prisma.$transaction(async (tx) => {
     const updated = await tx.overtimeRecord.update({
       where: { id },
-      data: { status: "APPROVED", approverId, approvedAt: new Date() },
+      data: { status: 'APPROVED', approverId, approvedAt: new Date() },
     });
 
     await tx.compOffRecord.create({
@@ -121,8 +124,8 @@ export async function approveOvertime(id: bigint, approverId: bigint) {
         fromDate: new Date(),
         toDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         totalDays: compOffDays,
-        reason: `Comp-off từ OT ngày ${record.date.toLocaleDateString("vi-VN")}`,
-        status: "APPROVED",
+        reason: `Comp-off từ OT ngày ${record.date.toLocaleDateString('vi-VN')}`,
+        status: 'APPROVED',
       },
     });
 
@@ -132,12 +135,14 @@ export async function approveOvertime(id: bigint, approverId: bigint) {
 
 export async function rejectOvertime(id: bigint, approverId: bigint) {
   const record = await prisma.overtimeRecord.findUnique({ where: { id } });
-  if (!record || record.status !== "PENDING") {
-    throw Object.assign(new Error("Cannot reject: record not found or not pending"), { status: 400 });
+  if (!record || record.status !== 'PENDING') {
+    throw Object.assign(new Error('Cannot reject: record not found or not pending'), {
+      status: 400,
+    });
   }
 
   return prisma.overtimeRecord.update({
     where: { id },
-    data: { status: "REJECTED", approverId, approvedAt: new Date() },
+    data: { status: 'REJECTED', approverId, approvedAt: new Date() },
   });
 }

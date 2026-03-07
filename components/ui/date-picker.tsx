@@ -29,18 +29,18 @@ function parseDateValue(value?: string): Date | undefined {
   return isValid(fallbackDate) ? fallbackDate : undefined;
 }
 
-export function DatePicker({ 
-  value, 
-  onChange, 
+export function DatePicker({
+  value,
+  onChange,
   placeholder = 'Pick a date',
   className,
-  disabled = false 
+  disabled = false,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
-  
+
   // Accept both ISO form values and display-formatted dates from older screens.
   const selectedDate = parseDateValue(value);
-  
+
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       // Convert Date back to YYYY-MM-DD string format
@@ -59,7 +59,7 @@ export function DatePicker({
           className={cn(
             'w-full justify-start text-left font-normal',
             !value && 'text-muted-foreground',
-            className
+            className,
           )}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   CalendarCheck,
@@ -16,20 +16,15 @@ import {
   TrendingUp,
   Users,
   XCircle,
-} from "lucide-react";
-import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
-import LeaveRequestModal from "@/components/leave-request-modal";
-import { apiClient, clearAuthSession } from "@/lib/api-client";
-import {
-  formatDateTimeVN,
-  formatDateVN,
-  numberValue,
-  toFrontendRole,
-} from "@/lib/hr-utils";
-import type { FrontendRole } from "@/lib/hr-utils";
+} from 'lucide-react';
+import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
+import LeaveRequestModal from '@/components/leave-request-modal';
+import { apiClient, clearAuthSession } from '@/lib/api-client';
+import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
+import type { FrontendRole } from '@/lib/hr-utils';
 
 type UserRole = FrontendRole;
-type StatusKey = "pending" | "approved" | "rejected" | "cancelled";
+type StatusKey = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 interface UserInfo {
   id: string;
@@ -39,7 +34,7 @@ interface UserInfo {
 }
 
 interface DashboardEmployeeSummary {
-  type: "employee";
+  type: 'employee';
   stats: {
     remainingLeaveDays: number;
     usedLeaveDays: number;
@@ -50,7 +45,7 @@ interface DashboardEmployeeSummary {
 }
 
 interface DashboardManagerSummary {
-  type: "manager" | "hr" | "admin";
+  type: 'manager' | 'hr' | 'admin';
   stats: {
     totalEmployees: number;
     pendingRequests: number;
@@ -100,27 +95,27 @@ interface SharedDashboardProps {
   onPrevMonth: () => void;
 }
 
-const WEEK_DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+const WEEK_DAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const MONTH_NAMES = [
-  "Tháng 1",
-  "Tháng 2",
-  "Tháng 3",
-  "Tháng 4",
-  "Tháng 5",
-  "Tháng 6",
-  "Tháng 7",
-  "Tháng 8",
-  "Tháng 9",
-  "Tháng 10",
-  "Tháng 11",
-  "Tháng 12",
+  'Tháng 1',
+  'Tháng 2',
+  'Tháng 3',
+  'Tháng 4',
+  'Tháng 5',
+  'Tháng 6',
+  'Tháng 7',
+  'Tháng 8',
+  'Tháng 9',
+  'Tháng 10',
+  'Tháng 11',
+  'Tháng 12',
 ];
 
 const STATUS_CONFIG: Record<StatusKey, { label: string; bg: string; color: string }> = {
-  pending: { label: "Chờ duyệt", bg: "#fef3c7", color: "#d97706" },
-  approved: { label: "Đã duyệt", bg: "#d1fae5", color: "#059669" },
-  rejected: { label: "Từ chối", bg: "#fee2e2", color: "#dc2626" },
-  cancelled: { label: "Đã hủy", bg: "#f3f4f6", color: "#6b7280" },
+  pending: { label: 'Chờ duyệt', bg: '#fef3c7', color: '#d97706' },
+  approved: { label: 'Đã duyệt', bg: '#d1fae5', color: '#059669' },
+  rejected: { label: 'Từ chối', bg: '#fee2e2', color: '#dc2626' },
+  cancelled: { label: 'Đã hủy', bg: '#f3f4f6', color: '#6b7280' },
 };
 
 function getCalendarDays(year: number, month: number) {
@@ -129,7 +124,7 @@ function getCalendarDays(year: number, month: number) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
 
-  const days: { day: number; month: "prev" | "current" | "next"; dateStr: string }[] = [];
+  const days: { day: number; month: 'prev' | 'current' | 'next'; dateStr: string }[] = [];
 
   for (let i = startOffset - 1; i >= 0; i -= 1) {
     const day = daysInPrevMonth - i;
@@ -137,16 +132,16 @@ function getCalendarDays(year: number, month: number) {
     const prevYear = month - 1 === 0 ? year - 1 : year;
     days.push({
       day,
-      month: "prev",
-      dateStr: `${prevYear}-${String(prevMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      month: 'prev',
+      dateStr: `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     });
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
     days.push({
       day,
-      month: "current",
-      dateStr: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      month: 'current',
+      dateStr: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     });
   }
 
@@ -156,8 +151,8 @@ function getCalendarDays(year: number, month: number) {
     const nextYear = month + 1 === 13 ? year + 1 : year;
     days.push({
       day,
-      month: "next",
-      dateStr: `${nextYear}-${String(nextMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      month: 'next',
+      dateStr: `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
     });
   }
 
@@ -165,31 +160,31 @@ function getCalendarDays(year: number, month: number) {
 }
 
 function normalizeStatus(status?: string | null): StatusKey {
-  switch ((status ?? "").toUpperCase()) {
-    case "APPROVED":
-      return "approved";
-    case "REJECTED":
-      return "rejected";
-    case "CANCELLED":
-      return "cancelled";
+  switch ((status ?? '').toUpperCase()) {
+    case 'APPROVED':
+      return 'approved';
+    case 'REJECTED':
+      return 'rejected';
+    case 'CANCELLED':
+      return 'cancelled';
     default:
-      return "pending";
+      return 'pending';
   }
 }
 
-function getDisplayName(user?: DashboardLeaveRequest["user"]) {
-  return user?.fullName?.trim() || "Nhân viên";
+function getDisplayName(user?: DashboardLeaveRequest['user']) {
+  return user?.fullName?.trim() || 'Nhân viên';
 }
 
 function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
   return {
     id: String(request.id),
-    typeCode: request.leaveType?.code || "-",
+    typeCode: request.leaveType?.code || '-',
     typeColor: request.leaveType?.color || undefined,
     fromDate: formatDateVN(request.fromDate),
     toDate: formatDateVN(request.toDate),
     days: numberValue(request.totalDays),
-    reason: request.reason || "—",
+    reason: request.reason || '—',
     status: normalizeStatus(request.status),
     submittedAt: formatDateTimeVN(request.createdAt),
     approver: request.approver?.fullName || undefined,
@@ -208,10 +203,10 @@ function EmployeeDashboard({
   onOpenDetail,
   onOpenRequestModal,
   onPrevMonth,
-}: SharedDashboardProps & { summary: DashboardEmployeeSummary["stats"] }) {
+}: SharedDashboardProps & { summary: DashboardEmployeeSummary['stats'] }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
-    [currentMonth, currentYear]
+    [currentMonth, currentYear],
   );
 
   const nextUpcoming = useMemo(() => {
@@ -222,46 +217,45 @@ function EmployeeDashboard({
       .filter((request) => {
         const status = normalizeStatus(request.status);
         const fromDate = new Date(request.fromDate);
-        return fromDate >= today && status !== "rejected" && status !== "cancelled";
+        return fromDate >= today && status !== 'rejected' && status !== 'cancelled';
       })
       .sort(
-        (left, right) =>
-          new Date(left.fromDate).getTime() - new Date(right.fromDate).getTime()
+        (left, right) => new Date(left.fromDate).getTime() - new Date(right.fromDate).getTime(),
       )[0];
   }, [recentRequests]);
 
   const employeeStats = [
     {
-      label: "Phép còn lại (ngày)",
+      label: 'Phép còn lại (ngày)',
       value: summary.remainingLeaveDays,
       icon: CalendarCheck,
-      iconBg: "#D3F2E7",
-      iconColor: "#1DB87A",
-      borderColor: "#1DB87A",
+      iconBg: '#D3F2E7',
+      iconColor: '#1DB87A',
+      borderColor: '#1DB87A',
     },
     {
-      label: "Chờ duyệt",
+      label: 'Chờ duyệt',
       value: summary.pendingRequests,
       icon: Hourglass,
-      iconBg: "#fef3c7",
-      iconColor: "#f59e0b",
-      borderColor: "#f59e0b",
+      iconBg: '#fef3c7',
+      iconColor: '#f59e0b',
+      borderColor: '#f59e0b',
     },
     {
-      label: "Đã duyệt",
+      label: 'Đã duyệt',
       value: summary.approvedRequests,
       icon: CheckCircle2,
-      iconBg: "#dbeafe",
-      iconColor: "#3b82f6",
-      borderColor: "#3b82f6",
+      iconBg: '#dbeafe',
+      iconColor: '#3b82f6',
+      borderColor: '#3b82f6',
     },
     {
-      label: "Từ chối",
+      label: 'Từ chối',
       value: summary.rejectedRequests,
       icon: XCircle,
-      iconBg: "#fee2e2",
-      iconColor: "#ef4444",
-      borderColor: "#ef4444",
+      iconBg: '#fee2e2',
+      iconColor: '#ef4444',
+      borderColor: '#ef4444',
     },
   ];
 
@@ -273,7 +267,7 @@ function EmployeeDashboard({
             key={stat.label}
             className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             style={{
-              border: "1px solid #e2ede9",
+              border: '1px solid #e2ede9',
               borderTop: `3px solid ${stat.borderColor}`,
             }}
           >
@@ -288,7 +282,7 @@ function EmployeeDashboard({
                 <stat.icon size={18} style={{ color: stat.iconColor }} />
               </div>
             </div>
-            <p className="text-3xl font-bold" style={{ color: "#203430" }}>
+            <p className="text-3xl font-bold" style={{ color: '#203430' }}>
               {stat.value}
             </p>
           </div>
@@ -298,24 +292,24 @@ function EmployeeDashboard({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div
           className="rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:col-span-2"
-          style={{ border: "1px solid #e2ede9" }}
+          style={{ border: '1px solid #e2ede9' }}
         >
           <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <h2 className="text-base font-bold" style={{ color: "#203430" }}>
+            <h2 className="text-base font-bold" style={{ color: '#203430' }}>
               Lịch nghỉ phép — {MONTH_NAMES[currentMonth - 1]}/{currentYear}
             </h2>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 onClick={onPrevMonth}
                 className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: "#1DB87A" }}
+                style={{ background: '#1DB87A' }}
               >
                 <ChevronLeft size={14} /> Trước
               </button>
               <button
                 onClick={onNextMonth}
                 className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: "#1DB87A" }}
+                style={{ background: '#1DB87A' }}
               >
                 Sau <ChevronRight size={14} />
               </button>
@@ -324,17 +318,11 @@ function EmployeeDashboard({
 
           <div className="mb-4 flex flex-wrap gap-4">
             <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{ background: "#d1fae5" }}
-              />
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d1fae5' }} />
               <span className="text-xs text-muted-foreground">Đã duyệt</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{ background: "#fef3c7" }}
-              />
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#fef3c7' }} />
               <span className="text-xs text-muted-foreground">Chờ duyệt</span>
             </div>
           </div>
@@ -346,7 +334,7 @@ function EmployeeDashboard({
                   <div
                     key={day}
                     className="rounded-lg py-2 text-center text-xs font-bold"
-                    style={{ background: "#1DB87A", color: "#fff" }}
+                    style={{ background: '#1DB87A', color: '#fff' }}
                   >
                     {day}
                   </div>
@@ -355,17 +343,17 @@ function EmployeeDashboard({
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((cell, index) => {
                   const data = calendarData[cell.dateStr];
-                  let background = "transparent";
-                  let textColor = cell.month === "current" ? "#203430" : "#c4d4cf";
+                  let background = 'transparent';
+                  let textColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
 
                   if (data?.approved) {
-                    background = "#d1fae5";
-                    textColor = "#059669";
+                    background = '#d1fae5';
+                    textColor = '#059669';
                   }
 
                   if (data?.pending) {
-                    background = "#fef3c7";
-                    textColor = "#d97706";
+                    background = '#fef3c7';
+                    textColor = '#d97706';
                   }
 
                   return (
@@ -386,16 +374,14 @@ function EmployeeDashboard({
         <div className="space-y-4">
           <div
             className="rounded-xl bg-linear-to-br p-5 text-white shadow-sm sm:p-6"
-            style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
+            style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
           >
             <h3 className="mb-2 text-base font-bold">Đăng ký nghỉ phép</h3>
-            <p className="mb-4 text-sm opacity-90">
-              Tạo yêu cầu nghỉ phép mới cho bạn
-            </p>
+            <p className="mb-4 text-sm opacity-90">Tạo yêu cầu nghỉ phép mới cho bạn</p>
             <button
               onClick={onOpenRequestModal}
               className="inline-block rounded-lg bg-white px-4 py-2 text-xs font-semibold transition-all hover:shadow-lg"
-              style={{ color: "#1DB87A" }}
+              style={{ color: '#1DB87A' }}
             >
               Tạo yêu cầu →
             </button>
@@ -403,32 +389,30 @@ function EmployeeDashboard({
 
           <div
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-            style={{ border: "1px solid #e2ede9" }}
+            style={{ border: '1px solid #e2ede9' }}
           >
-            <h3 className="mb-4 text-sm font-bold" style={{ color: "#203430" }}>
+            <h3 className="mb-4 text-sm font-bold" style={{ color: '#203430' }}>
               Thông tin chính
             </h3>
             <div className="space-y-3">
               <div>
                 <p className="mb-1 text-xs text-muted-foreground">Phép còn lại</p>
-                <p className="text-2xl font-bold" style={{ color: "#1DB87A" }}>
+                <p className="text-2xl font-bold" style={{ color: '#1DB87A' }}>
                   {summary.remainingLeaveDays} ngày
                 </p>
               </div>
-              <div style={{ height: "1px", background: "#e2ede9" }} />
+              <div style={{ height: '1px', background: '#e2ede9' }} />
               <div>
-                <p className="mb-1 text-xs text-muted-foreground">
-                  Đã sử dụng năm nay
-                </p>
-                <p className="text-2xl font-bold" style={{ color: "#203430" }}>
+                <p className="mb-1 text-xs text-muted-foreground">Đã sử dụng năm nay</p>
+                <p className="text-2xl font-bold" style={{ color: '#203430' }}>
                   {summary.usedLeaveDays} ngày
                 </p>
               </div>
-              <div style={{ height: "1px", background: "#e2ede9" }} />
+              <div style={{ height: '1px', background: '#e2ede9' }} />
               <div>
                 <p className="mb-1 text-xs text-muted-foreground">Kế tiếp</p>
-                <p className="text-sm font-semibold" style={{ color: "#203430" }}>
-                  {nextUpcoming ? formatDateVN(nextUpcoming.fromDate) : "Chưa có lịch sắp tới"}
+                <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                  {nextUpcoming ? formatDateVN(nextUpcoming.fromDate) : 'Chưa có lịch sắp tới'}
                 </p>
               </div>
             </div>
@@ -438,10 +422,10 @@ function EmployeeDashboard({
 
       <div
         className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-        style={{ border: "1px solid #e2ede9" }}
+        style={{ border: '1px solid #e2ede9' }}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-bold" style={{ color: "#203430" }}>
+          <h2 className="text-base font-bold" style={{ color: '#203430' }}>
             Yêu cầu gần đây
           </h2>
         </div>
@@ -449,15 +433,15 @@ function EmployeeDashboard({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px]">
             <thead>
-              <tr style={{ borderBottom: "2px solid #e2ede9" }}>
+              <tr style={{ borderBottom: '2px solid #e2ede9' }}>
                 {[
-                  "ID",
-                  "Loại nghỉ",
-                  "Từ ngày",
-                  "Đến ngày",
-                  "Số ngày",
-                  "Trạng thái",
-                  "Thao tác",
+                  'ID',
+                  'Loại nghỉ',
+                  'Từ ngày',
+                  'Đến ngày',
+                  'Số ngày',
+                  'Trạng thái',
+                  'Thao tác',
                 ].map((header) => (
                   <th
                     key={header}
@@ -471,10 +455,7 @@ function EmployeeDashboard({
             <tbody>
               {recentRequests.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-6 text-center text-sm text-muted-foreground"
-                  >
+                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Chưa có yêu cầu gần đây.
                   </td>
                 </tr>
@@ -485,17 +466,14 @@ function EmployeeDashboard({
                     <tr
                       key={request.id}
                       className="transition-colors hover:bg-[#f7f7f7]"
-                      style={{ borderBottom: "1px solid #f0f4f2" }}
+                      style={{ borderBottom: '1px solid #f0f4f2' }}
                     >
-                      <td
-                        className="px-3 py-3 text-sm font-semibold"
-                        style={{ color: "#203430" }}
-                      >
+                      <td className="px-3 py-3 text-sm font-semibold" style={{ color: '#203430' }}>
                         #{request.id}
                       </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: "#203430" }}>
-                        {request.leaveType?.code || "-"}
-                        {request.leaveType?.name ? ` - ${request.leaveType.name}` : ""}
+                      <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
+                        {request.leaveType?.code || '-'}
+                        {request.leaveType?.name ? ` - ${request.leaveType.name}` : ''}
                       </td>
                       <td className="px-3 py-3 text-sm text-muted-foreground">
                         {formatDateVN(request.fromDate)}
@@ -503,10 +481,7 @@ function EmployeeDashboard({
                       <td className="px-3 py-3 text-sm text-muted-foreground">
                         {formatDateVN(request.toDate)}
                       </td>
-                      <td
-                        className="px-3 py-3 text-sm font-medium"
-                        style={{ color: "#203430" }}
-                      >
+                      <td className="px-3 py-3 text-sm font-medium" style={{ color: '#203430' }}>
                         {numberValue(request.totalDays)}
                       </td>
                       <td className="px-3 py-3">
@@ -521,7 +496,7 @@ function EmployeeDashboard({
                         <button
                           onClick={() => onOpenDetail(request)}
                           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
-                          style={{ background: "#1DB87A" }}
+                          style={{ background: '#1DB87A' }}
                         >
                           <Eye size={13} /> Xem
                         </button>
@@ -538,7 +513,7 @@ function EmployeeDashboard({
       <button
         onClick={onOpenRequestModal}
         className="fixed bottom-6 right-6 z-10 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
-        style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
+        style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
         aria-label="Đăng ký nghỉ phép mới"
       >
         <Plus size={24} />
@@ -559,20 +534,20 @@ function AdminHRDashboard({
   onOpenRequestModal,
   onPrevMonth,
 }: SharedDashboardProps & {
-  summary: DashboardManagerSummary["stats"];
-  userRole: Exclude<UserRole, "employee">;
+  summary: DashboardManagerSummary['stats'];
+  userRole: Exclude<UserRole, 'employee'>;
 }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
-    [currentMonth, currentYear]
+    [currentMonth, currentYear],
   );
 
   const recentApprovalRate = useMemo(() => {
     const completed = recentRequests.filter((request) =>
-      ["APPROVED", "REJECTED"].includes((request.status || "").toUpperCase())
+      ['APPROVED', 'REJECTED'].includes((request.status || '').toUpperCase()),
     );
     const approved = completed.filter(
-      (request) => (request.status || "").toUpperCase() === "APPROVED"
+      (request) => (request.status || '').toUpperCase() === 'APPROVED',
     ).length;
 
     if (completed.length === 0) {
@@ -584,36 +559,36 @@ function AdminHRDashboard({
 
   const adminStats = [
     {
-      label: userRole === "admin" ? "Tổng nhân viên" : "Yêu cầu chờ xử lý",
-      value: userRole === "admin" ? summary.totalEmployees : summary.pendingRequests,
+      label: userRole === 'admin' ? 'Tổng nhân viên' : 'Yêu cầu chờ xử lý',
+      value: userRole === 'admin' ? summary.totalEmployees : summary.pendingRequests,
       icon: Users,
-      iconBg: "#dbeafe",
-      iconColor: "#0284c7",
-      borderColor: "#0284c7",
+      iconBg: '#dbeafe',
+      iconColor: '#0284c7',
+      borderColor: '#0284c7',
     },
     {
-      label: "Yêu cầu hôm nay",
+      label: 'Yêu cầu hôm nay',
       value: summary.todayRequests,
       icon: Hourglass,
-      iconBg: "#fef3c7",
-      iconColor: "#f59e0b",
-      borderColor: "#f59e0b",
+      iconBg: '#fef3c7',
+      iconColor: '#f59e0b',
+      borderColor: '#f59e0b',
     },
     {
-      label: "Đã duyệt tuần này",
+      label: 'Đã duyệt tuần này',
       value: summary.weekApproved,
       icon: CheckCircle2,
-      iconBg: "#d1fae5",
-      iconColor: "#059669",
-      borderColor: "#059669",
+      iconBg: '#d1fae5',
+      iconColor: '#059669',
+      borderColor: '#059669',
     },
     {
-      label: "Quá hạn xử lý",
+      label: 'Quá hạn xử lý',
       value: summary.overdueRequests,
       icon: AlertCircle,
-      iconBg: "#fee2e2",
-      iconColor: "#dc2626",
-      borderColor: "#dc2626",
+      iconBg: '#fee2e2',
+      iconColor: '#dc2626',
+      borderColor: '#dc2626',
     },
   ];
 
@@ -625,7 +600,7 @@ function AdminHRDashboard({
             key={stat.label}
             className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
             style={{
-              border: "1px solid #e2ede9",
+              border: '1px solid #e2ede9',
               borderTop: `3px solid ${stat.borderColor}`,
             }}
           >
@@ -641,10 +616,10 @@ function AdminHRDashboard({
               </div>
             </div>
             <div className="flex items-end justify-between">
-              <p className="text-3xl font-bold" style={{ color: "#203430" }}>
+              <p className="text-3xl font-bold" style={{ color: '#203430' }}>
                 {stat.value}
               </p>
-              {stat.label.includes("tuần") && (
+              {stat.label.includes('tuần') && (
                 <div className="flex items-center gap-1 text-xs font-semibold text-green-600">
                   <TrendingUp size={12} />
                   API thật
@@ -658,24 +633,24 @@ function AdminHRDashboard({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div
           className="rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:col-span-2"
-          style={{ border: "1px solid #e2ede9" }}
+          style={{ border: '1px solid #e2ede9' }}
         >
           <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-            <h2 className="text-base font-bold" style={{ color: "#203430" }}>
+            <h2 className="text-base font-bold" style={{ color: '#203430' }}>
               Lịch — {MONTH_NAMES[currentMonth - 1]}/{currentYear}
             </h2>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 onClick={onPrevMonth}
                 className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: "#1DB87A" }}
+                style={{ background: '#1DB87A' }}
               >
                 <ChevronLeft size={14} /> Trước
               </button>
               <button
                 onClick={onNextMonth}
                 className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: "#1DB87A" }}
+                style={{ background: '#1DB87A' }}
               >
                 Sau <ChevronRight size={14} />
               </button>
@@ -684,17 +659,11 @@ function AdminHRDashboard({
 
           <div className="mb-4 flex flex-wrap gap-4">
             <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{ background: "#d1fae5" }}
-              />
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d1fae5' }} />
               <span className="text-xs text-muted-foreground">Đã duyệt</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{ background: "#fef3c7" }}
-              />
+              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#fef3c7' }} />
               <span className="text-xs text-muted-foreground">Chờ duyệt</span>
             </div>
           </div>
@@ -706,7 +675,7 @@ function AdminHRDashboard({
                   <div
                     key={day}
                     className="rounded-lg py-2 text-center text-xs font-bold"
-                    style={{ background: "#1DB87A", color: "#fff" }}
+                    style={{ background: '#1DB87A', color: '#fff' }}
                   >
                     {day}
                   </div>
@@ -715,17 +684,17 @@ function AdminHRDashboard({
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((cell, index) => {
                   const data = calendarData[cell.dateStr];
-                  let background = "transparent";
-                  let textColor = cell.month === "current" ? "#203430" : "#c4d4cf";
+                  let background = 'transparent';
+                  let textColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
 
                   if (data?.approved) {
-                    background = "#d1fae5";
-                    textColor = "#059669";
+                    background = '#d1fae5';
+                    textColor = '#059669';
                   }
 
                   if (data?.pending) {
-                    background = "#fef3c7";
-                    textColor = "#d97706";
+                    background = '#fef3c7';
+                    textColor = '#d97706';
                   }
 
                   return (
@@ -746,22 +715,22 @@ function AdminHRDashboard({
         <div className="space-y-4">
           <div
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-            style={{ border: "1px solid #e2ede9" }}
+            style={{ border: '1px solid #e2ede9' }}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold" style={{ color: "#203430" }}>
+              <h3 className="text-sm font-bold" style={{ color: '#203430' }}>
                 Chờ duyệt
               </h3>
-              <Clock size={18} style={{ color: "#f59e0b" }} />
+              <Clock size={18} style={{ color: '#f59e0b' }} />
             </div>
-            <p className="mb-2 text-3xl font-bold" style={{ color: "#203430" }}>
+            <p className="mb-2 text-3xl font-bold" style={{ color: '#203430' }}>
               {summary.pendingRequests}
             </p>
             <p className="text-xs text-muted-foreground">Yêu cầu cần xử lý ngay</p>
             <Link
               href="/dashboard/approval"
               className="mt-3 inline-block rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
-              style={{ background: "#f59e0b" }}
+              style={{ background: '#f59e0b' }}
             >
               Xem chi tiết →
             </Link>
@@ -769,15 +738,15 @@ function AdminHRDashboard({
 
           <div
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-            style={{ border: "1px solid #e2ede9" }}
+            style={{ border: '1px solid #e2ede9' }}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold" style={{ color: "#203430" }}>
+              <h3 className="text-sm font-bold" style={{ color: '#203430' }}>
                 Tỉ lệ duyệt gần đây
               </h3>
-              <TrendingUp size={18} style={{ color: "#059669" }} />
+              <TrendingUp size={18} style={{ color: '#059669' }} />
             </div>
-            <p className="mb-2 text-3xl font-bold" style={{ color: "#203430" }}>
+            <p className="mb-2 text-3xl font-bold" style={{ color: '#203430' }}>
               {recentApprovalRate}%
             </p>
             <div className="mb-2 h-2 w-full rounded-full bg-gray-200">
@@ -786,19 +755,17 @@ function AdminHRDashboard({
                 style={{ width: `${recentApprovalRate}%` }}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Suy ra từ danh sách yêu cầu gần đây
-            </p>
+            <p className="text-xs text-muted-foreground">Suy ra từ danh sách yêu cầu gần đây</p>
           </div>
         </div>
       </div>
 
       <div
         className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-        style={{ border: "1px solid #e2ede9" }}
+        style={{ border: '1px solid #e2ede9' }}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-bold" style={{ color: "#203430" }}>
+          <h2 className="text-base font-bold" style={{ color: '#203430' }}>
             Yêu cầu gần đây
           </h2>
           <Link
@@ -812,15 +779,15 @@ function AdminHRDashboard({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[600px]">
             <thead>
-              <tr style={{ borderBottom: "2px solid #e2ede9" }}>
+              <tr style={{ borderBottom: '2px solid #e2ede9' }}>
                 {[
-                  "ID",
-                  "Nhân viên",
-                  "Loại nghỉ",
-                  "Từ ngày",
-                  "Đến ngày",
-                  "Trạng thái",
-                  "Thao tác",
+                  'ID',
+                  'Nhân viên',
+                  'Loại nghỉ',
+                  'Từ ngày',
+                  'Đến ngày',
+                  'Trạng thái',
+                  'Thao tác',
                 ].map((header) => (
                   <th
                     key={header}
@@ -834,10 +801,7 @@ function AdminHRDashboard({
             <tbody>
               {recentRequests.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-6 text-center text-sm text-muted-foreground"
-                  >
+                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Chưa có yêu cầu gần đây.
                   </td>
                 </tr>
@@ -848,20 +812,17 @@ function AdminHRDashboard({
                     <tr
                       key={request.id}
                       className="transition-colors hover:bg-[#f7f7f7]"
-                      style={{ borderBottom: "1px solid #f0f4f2" }}
+                      style={{ borderBottom: '1px solid #f0f4f2' }}
                     >
-                      <td
-                        className="px-3 py-3 text-sm font-semibold"
-                        style={{ color: "#203430" }}
-                      >
+                      <td className="px-3 py-3 text-sm font-semibold" style={{ color: '#203430' }}>
                         #{request.id}
                       </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: "#203430" }}>
+                      <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
                         {getDisplayName(request.user)}
                       </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: "#203430" }}>
-                        {request.leaveType?.code || "-"}
-                        {request.leaveType?.name ? ` - ${request.leaveType.name}` : ""}
+                      <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
+                        {request.leaveType?.code || '-'}
+                        {request.leaveType?.name ? ` - ${request.leaveType.name}` : ''}
                       </td>
                       <td className="px-3 py-3 text-sm text-muted-foreground">
                         {formatDateVN(request.fromDate)}
@@ -881,7 +842,7 @@ function AdminHRDashboard({
                         <button
                           onClick={() => onOpenDetail(request)}
                           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
-                          style={{ background: "#1DB87A" }}
+                          style={{ background: '#1DB87A' }}
                         >
                           <Eye size={13} /> Xem
                         </button>
@@ -898,7 +859,7 @@ function AdminHRDashboard({
       <button
         onClick={onOpenRequestModal}
         className="fixed bottom-6 right-6 z-10 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
-        style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
+        style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
         aria-label="Đăng ký nghỉ phép mới"
       >
         <Plus size={24} />
@@ -926,11 +887,11 @@ export default function DashboardPage() {
     setLoadingUser(true);
 
     try {
-      const response = await apiClient.get<UserInfo>("/api/auth/me");
+      const response = await apiClient.get<UserInfo>('/api/auth/me');
       setUserInfo(response.data);
     } catch {
       clearAuthSession();
-      router.replace("/");
+      router.replace('/');
     } finally {
       setLoadingUser(false);
     }
@@ -942,22 +903,18 @@ export default function DashboardPage() {
 
     try {
       const [summaryResponse, calendarResponse, recentResponse] = await Promise.all([
-        apiClient.get<DashboardSummary>("/api/dashboard/summary"),
+        apiClient.get<DashboardSummary>('/api/dashboard/summary'),
         apiClient.get<CalendarData>(
-          `/api/dashboard/calendar?year=${currentYear}&month=${currentMonth}`
+          `/api/dashboard/calendar?year=${currentYear}&month=${currentMonth}`,
         ),
-        apiClient.get<DashboardLeaveRequest[]>("/api/dashboard/recent-requests"),
+        apiClient.get<DashboardLeaveRequest[]>('/api/dashboard/recent-requests'),
       ]);
 
       setSummary(summaryResponse.data);
       setCalendarData(calendarResponse.data || {});
       setRecentRequests(recentResponse.data || []);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Không tải được dữ liệu dashboard từ API."
-      );
+      setError(err instanceof Error ? err.message : 'Không tải được dữ liệu dashboard từ API.');
       setCalendarData({});
       setRecentRequests([]);
     } finally {
@@ -1009,12 +966,12 @@ export default function DashboardPage() {
       <div
         className="rounded-xl border px-4 py-3 text-sm"
         style={{
-          borderColor: "#fecaca",
-          background: "#fef2f2",
-          color: "#b91c1c",
+          borderColor: '#fecaca',
+          background: '#fef2f2',
+          color: '#b91c1c',
         }}
       >
-        {error || "Không có dữ liệu dashboard để hiển thị."}
+        {error || 'Không có dữ liệu dashboard để hiển thị.'}
       </div>
     );
   }
@@ -1025,16 +982,16 @@ export default function DashboardPage() {
         <div
           className="mb-5 rounded-xl border px-4 py-3 text-sm"
           style={{
-            borderColor: "#fde68a",
-            background: "#fffbeb",
-            color: "#92400e",
+            borderColor: '#fde68a',
+            background: '#fffbeb',
+            color: '#92400e',
           }}
         >
           {error}
         </div>
       ) : null}
 
-      {currentRole === "employee" && summary.type === "employee" ? (
+      {currentRole === 'employee' && summary.type === 'employee' ? (
         <EmployeeDashboard
           currentMonth={currentMonth}
           currentYear={currentYear}
@@ -1053,7 +1010,7 @@ export default function DashboardPage() {
           calendarData={calendarData}
           recentRequests={recentRequests}
           summary={
-            summary.type === "employee"
+            summary.type === 'employee'
               ? {
                   totalEmployees: 0,
                   pendingRequests: 0,
@@ -1063,7 +1020,7 @@ export default function DashboardPage() {
                 }
               : summary.stats
           }
-          userRole={currentRole === "employee" ? "manager" : currentRole}
+          userRole={currentRole === 'employee' ? 'manager' : currentRole}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
           onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
