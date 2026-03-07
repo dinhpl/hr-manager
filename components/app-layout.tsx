@@ -21,6 +21,8 @@ import {
   Gem,
   ChevronDown,
 } from "lucide-react";
+import { apiClient, clearAuthSession } from "@/lib/api-client";
+import { getRoleLabel, toFrontendRole } from "@/lib/hr-utils";
 
 const NAV_ITEMS = [
   {
@@ -69,23 +71,15 @@ const NAV_ITEMS = [
 ];
 
 interface UserInfo {
+  id: string;
   username: string;
+  email: string;
+  fullName: string;
   role: string;
+  department?: string | null;
+  position?: string | null;
+  avatar?: string | null;
 }
-
-const USER_NAMES: Record<string, string> = {
-  employee: "Phạm Long Đĩnh",
-  manager: "Trương Hữu Đạt",
-  hr: "Lê Thị Bình",
-  admin: "System Admin",
-};
-
-const ROLE_TITLES: Record<string, string> = {
-  employee: "Nhân viên",
-  manager: "Quản lý",
-  hr: "HR Executive",
-  admin: "Admin",
-};
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -102,25 +96,36 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   ];
 
   useEffect(() => {
-    const stored =
-      localStorage.getItem("userInfo") || sessionStorage.getItem("userInfo");
-    if (!stored) {
-      router.push("/");
-      return;
-    }
-    setUserInfo(JSON.parse(stored));
+    apiClient
+      .get<UserInfo>("/api/auth/me")
+      .then(({ data }) => {
+        setUserInfo(data);
+      })
+      .catch(() => {
+        clearAuthSession();
+        router.replace("/");
+      });
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("userInfo");
-    sessionStorage.removeItem("userInfo");
-    router.push("/");
+  const handleLogout = async () => {
+    try {
+      await apiClient.post("/api/auth/logout", {});
+    } finally {
+      clearAuthSession();
+      router.push("/");
+    }
   };
 
-  const displayName = userInfo
-    ? USER_NAMES[userInfo.role] || userInfo.username
-    : "Người dùng";
-  const roleTitle = userInfo ? ROLE_TITLES[userInfo.role] || userInfo.role : "";
+  const displayName = userInfo?.fullName || userInfo?.username || "Người dùng";
+  const roleTitle = userInfo ? getRoleLabel(userInfo.role) : "";
+  const currentRole = toFrontendRole(userInfo?.role);
+  const visibleNavItems = NAV_ITEMS.filter((item) => {
+    if (item.key === "approval") return currentRole !== "employee";
+    if (item.key === "employees" || item.key === "settings") {
+      return currentRole === "hr" || currentRole === "admin";
+    }
+    return true;
+  });
 
   return (
     <div
@@ -182,7 +187,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
-            {NAV_ITEMS.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <li key={item.key}>
@@ -203,7 +208,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                         : {}
                     }
                   >
-                    <item.icon size={17} className="flex-shrink-0" />
+                    <item.icon size={17} className="shrink-0" />
                     {item.label}
                   </Link>
                 </li>

@@ -1,15 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  History, PlusCircle, FileDown, Printer, Filter,
-  ChevronUp, ChevronDown, Eye, Pencil, X, Download,
-  CheckCircle, Clock, XCircle, List, ChevronLeft, ChevronRight, RotateCcw, Send,
+  CheckCircle,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  Download,
+  Eye,
+  FileDown,
+  Filter,
+  History,
+  List,
+  PlusCircle,
+  Printer,
+  X,
+  XCircle,
 } from "lucide-react";
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
-import LeaveRequestModal, { LeaveRequestData } from "@/components/leave-request-modal";
+import LeaveRequestModal from "@/components/leave-request-modal";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -21,278 +32,558 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiClient, getApiBaseUrl } from "@/lib/api-client";
+import {
+  buildQuery,
+  formatDateTimeVN,
+  formatDateVN,
+  numberValue,
+  toDateInputValue,
+  toIsoDateTime,
+} from "@/lib/hr-utils";
 
-/** Leave type code → color mapping (used for localStorage-sourced records) */
-const TYPE_COLORS: Record<string, string> = {
-  AL: "#3b82f6", SL: "#10b981", ML: "#f97316",
-  WFH: "#8b5cf6", CO: "#1DB87A", PL: "#6b7280",
-  CSL: "#ec4899", UL: "#f59e0b", BT: "#0ea5e9",
-};
+type StatusKey = "pending" | "approved" | "rejected" | "cancelled";
+
+interface LeaveTypeOption {
+  id: string;
+  code: string;
+  name: string;
+  color?: string | null;
+}
+
+interface LeaveBalanceRecord {
+  id: string;
+  totalDays: number | string;
+  usedDays: number | string;
+  leaveType: {
+    code: string;
+    name: string;
+    color?: string | null;
+  };
+}
+
+interface LeaveRequestItem {
+  id: string;
+  status: string;
+  fromDate: string;
+  toDate: string;
+  totalDays: number | string;
+  reason?: string | null;
+  attachmentUrl?: string | null;
+  createdAt: string;
+  approvedAt?: string | null;
+  user?: {
+    id?: string;
+    fullName?: string | null;
+    username?: string | null;
+    department?: string | null;
+  };
+  leaveType?: {
+    id?: string;
+    code?: string | null;
+    name?: string | null;
+    color?: string | null;
+  };
+  approver?: {
+    id?: string;
+    fullName?: string | null;
+  } | null;
+}
 
 interface LeaveRecord {
   id: string;
-  type: { code: string; color: string };
+  type: { code: string; label: string; color: string };
   fromDate: string;
   toDate: string;
   days: number;
   reason: string;
   handover: string;
-  status: "draft" | "pending" | "approved" | "rejected" | "hr_confirm";
+  status: StatusKey;
   submittedAt: string;
+  submittedAtValue: number;
   approver: string;
   approverRole: string;
   approvedAt: string;
-  actions: string[];
+  attachmentUrl?: string | null;
 }
 
-const RECORDS: LeaveRecord[] = [
-  { id: "001", type: { code: "AL", color: "#3b82f6" }, fromDate: "25/02/2026", toDate: "27/02/2026", days: 3,
-    reason: "Nghỉ phép thăm gia đình...", handover: "Trần Bình",
-    status: "pending", submittedAt: "20/02/2026 09:12", approver: "Trương Hữu Đạt", approverRole: "Line Manager", approvedAt: "-",
-    actions: ["view", "edit", "cancel"] },
-  { id: "002", type: { code: "SL", color: "#10b981" }, fromDate: "20/02/2026", toDate: "21/02/2026", days: 2,
-    reason: "Nghỉ ốm do cảm cúm", handover: "Nguyễn An",
-    status: "approved", submittedAt: "19/02/2026 14:30", approver: "Trương Hữu Đạt", approverRole: "Line Manager", approvedAt: "19/02/2026 16:45",
-    actions: ["view", "download"] },
-  { id: "003", type: { code: "WFH", color: "#8b5cf6" }, fromDate: "15/02/2026", toDate: "15/02/2026", days: 1,
-    reason: "Làm việc từ xa do thời tiết...", handover: "Lê Vương",
-    status: "rejected", submittedAt: "14/02/2026 16:45", approver: "Trương Hữu Đạt", approverRole: "Line Manager", approvedAt: "15/02/2026 08:30",
-    actions: ["view", "resubmit"] },
-  { id: "004", type: { code: "ML", color: "#f97316" }, fromDate: "01/02/2026", toDate: "30/04/2026", days: 90,
-    reason: "Nghỉ thai sản", handover: "Lê Thị Bình",
-    status: "hr_confirm", submittedAt: "25/01/2026 10:15", approver: "Lê Thị Bình", approverRole: "HR Manager", approvedAt: "26/01/2026 14:20",
-    actions: ["view", "download", "print"] },
-  { id: "005", type: { code: "CO", color: "#1DB87A" }, fromDate: "10/02/2026", toDate: "10/02/2026", days: 0.5,
-    reason: "Sử dụng comp-off từ OT n...", handover: "-",
-    status: "approved", submittedAt: "08/02/2026 11:20", approver: "Trương Hữu Đạt", approverRole: "Line Manager", approvedAt: "08/02/2026 13:45",
-    actions: ["view", "link"] },
-  { id: "006", type: { code: "PL", color: "#6b7280" }, fromDate: "05/03/2026", toDate: "05/03/2026", days: 1,
-    reason: "Đi làm giấy tờ cá nhân", handover: "Trần Bình",
-    status: "draft", submittedAt: "28/02/2026 15:30", approver: "-", approverRole: "", approvedAt: "-",
-    actions: ["edit", "submit", "delete"] },
-];
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
 
-const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  draft: { label: "Nháp", badge: "bg-gray-100 text-gray-500 border border-gray-200" },
-  pending: { label: "Chờ duyệt", badge: "bg-amber-50 text-amber-600 border border-amber-200" },
-  approved: { label: "Đã duyệt", badge: "bg-emerald-50 text-emerald-600 border border-emerald-200" },
-  rejected: { label: "Từ chối", badge: "bg-red-50 text-red-500 border border-red-200" },
-  hr_confirm: { label: "HR xác nhận", badge: "bg-blue-50 text-blue-600 border border-blue-200" },
+const TYPE_COLORS: Record<string, string> = {
+  AL: "#3b82f6",
+  SL: "#10b981",
+  ML: "#f97316",
+  WFH: "#8b5cf6",
+  CO: "#1DB87A",
+  PL: "#6b7280",
+  CSL: "#ec4899",
+  UL: "#f59e0b",
+  BT: "#0ea5e9",
 };
 
-const ROW_BG: Record<string, string> = {
-  draft: "#ffffff",
+const STATUS_CONFIG: Record<StatusKey, { label: string; badge: string }> = {
+  pending: {
+    label: "Chờ duyệt",
+    badge: "bg-amber-50 text-amber-600 border border-amber-200",
+  },
+  approved: {
+    label: "Đã duyệt",
+    badge: "bg-emerald-50 text-emerald-600 border border-emerald-200",
+  },
+  rejected: {
+    label: "Từ chối",
+    badge: "bg-red-50 text-red-500 border border-red-200",
+  },
+  cancelled: {
+    label: "Đã hủy",
+    badge: "bg-gray-100 text-gray-500 border border-gray-200",
+  },
+};
+
+const ROW_BG: Record<StatusKey, string> = {
   pending: "#fffbf0",
   approved: "#f0fdf9",
   rejected: "#fff5f5",
-  hr_confirm: "#eff6ff",
+  cancelled: "#f8fafc",
 };
 
-/** Map a LeaveRecord to the normalized modal shape */
-function toDetailData(r: LeaveRecord): LeaveDetailData {
+function normalizeStatus(status?: string | null): StatusKey {
+  switch ((status ?? "").toUpperCase()) {
+    case "APPROVED":
+      return "approved";
+    case "REJECTED":
+      return "rejected";
+    case "CANCELLED":
+      return "cancelled";
+    default:
+      return "pending";
+  }
+}
+
+function getPeriodRange(period: string) {
+  const now = new Date();
+  const start = new Date(now);
+  const end = new Date(now);
+
+  if (period === "thisWeek") {
+    const offset = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    start.setDate(now.getDate() - offset);
+    end.setDate(start.getDate() + 6);
+  } else if (period === "lastMonth") {
+    start.setMonth(now.getMonth() - 1, 1);
+    end.setMonth(now.getMonth(), 0);
+  } else if (period === "thisYear") {
+    start.setMonth(0, 1);
+    end.setMonth(11, 31);
+  } else {
+    start.setDate(1);
+    end.setMonth(now.getMonth() + 1, 0);
+  }
+
   return {
-    id: r.id,
-    typeCode: r.type.code,
-    typeColor: r.type.color,
-    fromDate: r.fromDate,
-    toDate: r.toDate,
-    days: r.days,
-    reason: r.reason,
-    handover: r.handover,
-    status: r.status,
-    submittedAt: r.submittedAt,
-    approver: r.approver,
-    approverRole: r.approverRole,
-    approvedAt: r.approvedAt,
+    from: toDateInputValue(start),
+    to: toDateInputValue(end),
   };
 }
 
-export default function LeaveHistoryPage() {
-  const router = useRouter();
+function extractHandover(reason?: string | null) {
+  const matched = reason?.match(/Người bàn giao:\s*(.+)$/m);
+  return matched?.[1]?.trim() || "-";
+}
 
-  // ── State ───────────────────────────────────────────────────────────────────
-  const [records, setRecords] = useState<LeaveRecord[]>(RECORDS);
+function getPrimaryReason(reason?: string | null) {
+  if (!reason) return "—";
+  const [firstLine] = reason
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return firstLine || "—";
+}
+
+function mapToRecord(item: LeaveRequestItem): LeaveRecord {
+  const code = item.leaveType?.code || "-";
+  const label = item.leaveType?.name ? `${code} - ${item.leaveType.name}` : code;
+
+  return {
+    id: String(item.id),
+    type: {
+      code,
+      label,
+      color: item.leaveType?.color || TYPE_COLORS[code] || "#6b7280",
+    },
+    fromDate: formatDateVN(item.fromDate),
+    toDate: formatDateVN(item.toDate),
+    days: numberValue(item.totalDays),
+    reason: getPrimaryReason(item.reason),
+    handover: extractHandover(item.reason),
+    status: normalizeStatus(item.status),
+    submittedAt: formatDateTimeVN(item.createdAt),
+    submittedAtValue: new Date(item.createdAt).getTime(),
+    approver: item.approver?.fullName || "-",
+    approverRole: item.approver?.fullName ? "Người duyệt" : "",
+    approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : "-",
+    attachmentUrl: item.attachmentUrl,
+  };
+}
+
+function toDetailData(item: LeaveRequestItem): LeaveDetailData {
+  return {
+    id: String(item.id),
+    typeCode: item.leaveType?.code || "-",
+    typeColor: item.leaveType?.color || TYPE_COLORS[item.leaveType?.code || ""] || "#6b7280",
+    fromDate: formatDateVN(item.fromDate),
+    toDate: formatDateVN(item.toDate),
+    days: numberValue(item.totalDays),
+    reason: item.reason || "—",
+    handover: extractHandover(item.reason),
+    status: normalizeStatus(item.status),
+    submittedAt: formatDateTimeVN(item.createdAt),
+    approver: item.approver?.fullName || undefined,
+    approverRole: item.approver?.fullName ? "Người duyệt" : undefined,
+    approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : undefined,
+    fileAttachment: item.attachmentUrl || undefined,
+  };
+}
+
+function getVisiblePages(currentPage: number, totalPages: number) {
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, start + 4);
+  const safeStart = Math.max(1, end - 4);
+  return Array.from({ length: end - safeStart + 1 }, (_, index) => safeStart + index);
+}
+
+export default function LeaveHistoryPage() {
+  const initialRange = useMemo(() => getPeriodRange("thisMonth"), []);
+  const [records, setRecords] = useState<LeaveRecord[]>([]);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
-  const [selectedEditData, setSelectedEditData] = useState<LeaveRequestData | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{
-    type: "cancel" | "submit_draft" | "resubmit";
-    id: string;
-    label: string;
-  } | null>(null);
-
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState("thisMonth");
-  const [fromDate, setFromDate] = useState("2026-02-01");
-  const [toDate, setToDate] = useState("2026-02-28");
+  const [fromDate, setFromDate] = useState(initialRange.from);
+  const [toDate, setToDate] = useState(initialRange.to);
+  const [dayRangeFilter, setDayRangeFilter] = useState("all-days");
   const [searchInput, setSearchInput] = useState("");
   const [approverFilter, setApproverFilter] = useState("");
   const [sortBy, setSortBy] = useState("date_desc");
   const [pageSize, setPageSize] = useState("25");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
+  const [balances, setBalances] = useState<LeaveBalanceRecord[]>([]);
+  const [meta, setMeta] = useState<PaginationMeta>({
+    total: 0,
+    page: 1,
+    limit: 25,
+    totalPages: 1,
+  });
+  const [counts, setCounts] = useState({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const pageSizeNum = Number(pageSize);
+  const typeIdByCode = useMemo(
+    () => Object.fromEntries(leaveTypes.map((type) => [type.code, type.id])),
+    [leaveTypes]
+  );
 
-  // On mount: load any requests saved from the Leave Request page
   useEffect(() => {
-    try {
-      const stored: Array<{
-        id: string; typeCode: string; fromDate: string; toDate: string;
-        days: number; reason: string; handoverPerson: string;
-        status: "draft" | "pending"; submittedAt: string;
-      }> = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
-
-      if (stored.length > 0) {
-        const existingIds = new Set(RECORDS.map((r) => r.id));
-        const newRecords: LeaveRecord[] = stored
-          .filter((r) => !existingIds.has(r.id))
-          .map((r) => ({
-            id: r.id,
-            type: { code: r.typeCode, color: TYPE_COLORS[r.typeCode] ?? "#6b7280" },
-            fromDate: r.fromDate,
-            toDate: r.toDate,
-            days: r.days,
-            reason: r.reason,
-            handover: r.handoverPerson || "-",
-            status: r.status,
-            submittedAt: r.submittedAt,
-            approver: "-",
-            approverRole: "",
-            approvedAt: "-",
-            actions: r.status === "draft" ? ["edit", "submit", "delete"] : ["view", "cancel"],
-          }));
-        if (newRecords.length > 0) {
-          setRecords((prev) => [...newRecords, ...prev]);
-        }
-      }
-    } catch {
-      // localStorage unavailable or invalid JSON — skip
-    }
-  }, []);
-
-  // ── Row action handlers ──────────────────────────────────────────────────────
-
-  /** Open detail modal */
-  const handleView = (r: LeaveRecord) => setSelectedDetail(toDetailData(r));
-
-  /** Open modal for re-editing a draft */
-  const handleEdit = (r: LeaveRecord) => {
-    setSelectedEditData({
-      id: r.id,
-      typeCode: r.type.code,
-      fromDate: r.fromDate,
-      toDate: r.toDate,
-      durationMode: "FULL_DAY",
-      fromTime: "08:00",
-      toTime: "17:00",
-      reason: r.reason,
-      handoverPerson: r.handover !== "-" ? r.handover : "",
-    });
-    setIsLeaveRequestModalOpen(true);
-  };
-
-  /** Ask confirmation then remove the record (cancel or delete draft) */
-  const handleCancelOrDelete = (r: LeaveRecord) => {
-    setConfirmAction({
-      type: "cancel",
-      id: r.id,
-      label: r.status === "draft" ? "xóa nháp" : "hủy yêu cầu",
-    });
-  };
-
-  /** Ask confirmation then change draft → pending */
-  const handleSubmitDraft = (r: LeaveRecord) => {
-    setConfirmAction({ type: "submit_draft", id: r.id, label: "gửi yêu cầu" });
-  };
-
-  /** Ask confirmation then change rejected → pending */
-  const handleResubmit = (r: LeaveRecord) => {
-    setConfirmAction({ type: "resubmit", id: r.id, label: "gửi lại yêu cầu" });
-  };
-
-  /** Execute the confirmed action */
-  const executeConfirm = () => {
-    if (!confirmAction) return;
-    const { type, id } = confirmAction;
-
-    if (type === "cancel") {
-      // Remove from visible list
-      setRecords((prev) => prev.filter((r) => r.id !== id));
-      setSelectedIds((prev) => prev.filter((x) => x !== id));
-    } else if (type === "submit_draft") {
-      setRecords((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? { ...r, status: "pending" as const, actions: ["view", "cancel"] }
-            : r
-        )
-      );
-    } else if (type === "resubmit") {
-      setRecords((prev) =>
-        prev.map((r) =>
-          r.id === id
-            ? { ...r, status: "pending" as const, actions: ["view", "cancel"] }
-            : r
-        )
-      );
-    }
-
-    setConfirmAction(null);
-  };
-
-  const filtered = records.filter((r) => {
-    if (statusFilter && r.status !== statusFilter) return false;
-    if (typeFilter && r.type.code !== typeFilter) return false;
-    if (approverFilter === "TRUONGDAT" && r.approver !== "Trương Hữu Đạt") return false;
-    if (approverFilter === "LETHIBINH" && r.approver !== "Lê Thị Bình") return false;
-    if (searchInput && !r.id.includes(searchInput) && !r.reason.toLowerCase().includes(searchInput.toLowerCase())) return false;
-    return true;
-  });
-
-  const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === "status") return a.status.localeCompare(b.status);
-    const aDate = a.submittedAt;
-    const bDate = b.submittedAt;
-    return sortBy === "date_asc" ? aDate.localeCompare(bDate) : bDate.localeCompare(aDate);
-  });
-
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSizeNum));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * pageSizeNum;
-  const pagedRows = sorted.slice(startIndex, startIndex + pageSizeNum);
+    if (periodFilter === "custom") return;
+    const range = getPeriodRange(periodFilter);
+    setFromDate(range.from);
+    setToDate(range.to);
+  }, [periodFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, typeFilter, approverFilter, searchInput, sortBy, pageSize]);
+  }, [statusFilter, typeFilter, fromDate, toDate, pageSize]);
 
-  const exportCsv = () => {
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [records]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    Promise.all([
+      apiClient.get<LeaveTypeOption[]>("/api/leave-types"),
+      apiClient.get<LeaveBalanceRecord[]>("/api/leave-balances"),
+    ])
+      .then(([leaveTypeResponse, balanceResponse]) => {
+        if (!mounted) return;
+        setLeaveTypes(leaveTypeResponse.data || []);
+        setBalances(balanceResponse.data || []);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(
+          err instanceof Error ? err.message : "Không tải được dữ liệu bộ lọc."
+        );
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const buildServerQuery = useCallback(
+    (overrides?: Record<string, string | number | undefined>) => {
+      const leaveTypeId = typeFilter ? typeIdByCode[typeFilter] : undefined;
+      return buildQuery({
+        page: currentPage,
+        limit: pageSizeNum,
+        status: statusFilter || undefined,
+        leaveTypeId,
+        fromDate: fromDate ? toIsoDateTime(fromDate) : undefined,
+        toDate: toDate ? toIsoDateTime(toDate, true) : undefined,
+        ...overrides,
+      });
+    },
+    [currentPage, fromDate, pageSizeNum, statusFilter, toDate, typeFilter, typeIdByCode]
+  );
+
+  const loadRecords = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [
+        listResponse,
+        totalResponse,
+        approvedResponse,
+        pendingResponse,
+        rejectedResponse,
+      ] = await Promise.all([
+        apiClient.get<LeaveRequestItem[]>(`/api/leave-requests?${buildServerQuery()}`),
+        apiClient.get<LeaveRequestItem[]>(
+          `/api/leave-requests?${buildServerQuery({ page: 1, limit: 1, status: undefined })}`
+        ),
+        apiClient.get<LeaveRequestItem[]>(
+          `/api/leave-requests?${buildServerQuery({ page: 1, limit: 1, status: "APPROVED" })}`
+        ),
+        apiClient.get<LeaveRequestItem[]>(
+          `/api/leave-requests?${buildServerQuery({ page: 1, limit: 1, status: "PENDING" })}`
+        ),
+        apiClient.get<LeaveRequestItem[]>(
+          `/api/leave-requests?${buildServerQuery({ page: 1, limit: 1, status: "REJECTED" })}`
+        ),
+      ]);
+
+      setRecords((listResponse.data || []).map(mapToRecord));
+      setMeta({
+        total: listResponse.meta?.total || 0,
+        page: listResponse.meta?.page || currentPage,
+        limit: listResponse.meta?.limit || pageSizeNum,
+        totalPages: Math.max(1, listResponse.meta?.totalPages || 1),
+      });
+      setCounts({
+        total: totalResponse.meta?.total || 0,
+        approved: approvedResponse.meta?.total || 0,
+        pending: pendingResponse.meta?.total || 0,
+        rejected: rejectedResponse.meta?.total || 0,
+      });
+
+      if (
+        listResponse.meta?.totalPages &&
+        currentPage > listResponse.meta.totalPages &&
+        listResponse.meta.totalPages > 0
+      ) {
+        setCurrentPage(listResponse.meta.totalPages);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Không tải được lịch sử nghỉ phép từ API."
+      );
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildServerQuery, currentPage, pageSizeNum]);
+
+  useEffect(() => {
+    void loadRecords();
+  }, [loadRecords]);
+
+  const approverOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        records
+          .map((record) => record.approver)
+          .filter((approver) => approver && approver !== "-")
+      )
+    );
+  }, [records]);
+
+  const filteredRows = useMemo(() => {
+    const normalizedSearch = searchInput.trim().toLowerCase();
+
+    const rows = records.filter((record) => {
+      if (approverFilter && record.approver !== approverFilter) return false;
+
+      if (dayRangeFilter === "1" && record.days !== 1) return false;
+      if (dayRangeFilter === "2-3" && (record.days < 2 || record.days > 3)) return false;
+      if (dayRangeFilter === "4-7" && (record.days < 4 || record.days > 7)) return false;
+      if (dayRangeFilter === "8+" && record.days < 8) return false;
+
+      if (
+        normalizedSearch &&
+        !record.id.toLowerCase().includes(normalizedSearch) &&
+        !record.reason.toLowerCase().includes(normalizedSearch) &&
+        !record.approver.toLowerCase().includes(normalizedSearch)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return rows.sort((left, right) => {
+      if (sortBy === "status") return left.status.localeCompare(right.status);
+      return sortBy === "date_asc"
+        ? left.submittedAtValue - right.submittedAtValue
+        : right.submittedAtValue - left.submittedAtValue;
+    });
+  }, [approverFilter, dayRangeFilter, records, searchInput, sortBy]);
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((row) => selectedIds.includes(row.id)),
+    [filteredRows, selectedIds]
+  );
+
+  const annualBalance = balances.find((item) => item.leaveType.code === "AL");
+  const compOffBalance = balances.find((item) => item.leaveType.code === "CO");
+  const grantedDays = numberValue(annualBalance?.totalDays);
+  const usedDays = numberValue(annualBalance?.usedDays);
+  const remainingDays = Math.max(grantedDays - usedDays, 0);
+  const compOffHours =
+    Math.max(
+      numberValue(compOffBalance?.totalDays) - numberValue(compOffBalance?.usedDays),
+      0
+    ) * 8;
+
+  const typeBreakdown = useMemo(() => {
+    const totalDays = filteredRows.reduce((sum, row) => sum + row.days, 0);
+    const grouped = filteredRows.reduce<Record<string, { days: number; label: string; color: string }>>(
+      (accumulator, row) => {
+        if (!accumulator[row.type.code]) {
+          accumulator[row.type.code] = {
+            days: 0,
+            label: row.type.label,
+            color: row.type.color,
+          };
+        }
+
+        accumulator[row.type.code].days += row.days;
+        return accumulator;
+      },
+      {}
+    );
+
+    return {
+      totalDays,
+      items: Object.entries(grouped)
+        .map(([code, item]) => ({
+          code,
+          label: item.label,
+          days: item.days,
+          color: item.color,
+          pct: totalDays > 0 ? Math.round((item.days / totalDays) * 100) : 0,
+        }))
+        .sort((left, right) => right.days - left.days),
+    };
+  }, [filteredRows]);
+
+  const handleView = async (id: string) => {
+    setDetailLoadingId(id);
+
+    try {
+      const response = await apiClient.get<LeaveRequestItem>(`/api/leave-requests/${id}`);
+      setSelectedDetail(toDetailData(response.data));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Không tải được chi tiết yêu cầu nghỉ phép."
+      );
+    } finally {
+      setDetailLoadingId(null);
+    }
+  };
+
+  const executeCancel = async () => {
+    if (!confirmCancelId) return;
+
+    setActionLoadingId(confirmCancelId);
+
+    try {
+      await apiClient.patch(`/api/leave-requests/${confirmCancelId}/cancel`, {});
+      setSelectedIds((previous) => previous.filter((id) => id !== confirmCancelId));
+      setConfirmCancelId(null);
+      await loadRecords();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Không thể hủy yêu cầu nghỉ phép."
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const exportCsv = (rows: LeaveRecord[]) => {
     const csvEscape = (value: string | number) => {
-      const raw = String(value ?? "");
-      const escaped = raw.replace(/"/g, '""');
+      const escaped = String(value ?? "").replace(/"/g, '""');
       return `"${escaped}"`;
     };
 
     const headers = [
-      "ID", "Loai", "Tu ngay", "Den ngay", "So ngay", "Ly do", "Ban giao",
-      "Trang thai", "Ngay gui", "Nguoi duyet", "Vai tro", "Ngay duyet",
+      "ID",
+      "Loai",
+      "Tu ngay",
+      "Den ngay",
+      "So ngay",
+      "Ly do",
+      "Ban giao",
+      "Trang thai",
+      "Ngay gui",
+      "Nguoi duyet",
+      "Vai tro",
+      "Ngay duyet",
     ];
-    const lines = sorted.map((r) => [
-      r.id,
-      r.type.code,
-      r.fromDate,
-      r.toDate,
-      r.days,
-      r.reason,
-      r.handover,
-      STATUS_CONFIG[r.status].label,
-      r.submittedAt,
-      r.approver,
-      r.approverRole,
-      r.approvedAt,
-    ].map(csvEscape).join(","));
+
+    const lines = rows.map((row) =>
+      [
+        row.id,
+        row.type.code,
+        row.fromDate,
+        row.toDate,
+        row.days,
+        row.reason,
+        row.handover,
+        STATUS_CONFIG[row.status].label,
+        row.submittedAt,
+        row.approver,
+        row.approverRole,
+        row.approvedAt,
+      ]
+        .map(csvEscape)
+        .join(",")
+    );
 
     const content = [headers.join(","), ...lines].join("\n");
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
@@ -307,116 +598,232 @@ export default function LeaveHistoryPage() {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedIds((previous) =>
+      previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id]
+    );
   };
+
   const toggleAll = () => {
-    setSelectedIds(selectedIds.length === pagedRows.length ? [] : pagedRows.map((r) => r.id));
+    const pageIds = filteredRows.map((row) => row.id);
+    const allSelected =
+      pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+    setSelectedIds(allSelected ? [] : pageIds);
   };
+
+  const visiblePages = getVisiblePages(meta.page, meta.totalPages);
+  const selectedAllOnPage =
+    filteredRows.length > 0 && filteredRows.every((row) => selectedIds.includes(row.id));
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#D3F2E7" }}>
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            style={{ background: "#D3F2E7" }}
+          >
             <History size={18} style={{ color: "#0E474E" }} />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>Lịch sử nghỉ phép</h1>
+          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>
+            Lịch sử nghỉ phép
+          </h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => {
-            setSelectedEditData(null);
-            setIsLeaveRequestModalOpen(true);
-          }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white" style={{ background: "#1DB87A" }}>
+          <button
+            onClick={() => setIsLeaveRequestModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white"
+            style={{ background: "#1DB87A" }}
+          >
             <PlusCircle size={14} /> Đăng ký mới
           </button>
-          <button onClick={exportCsv}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button
+            onClick={() => exportCsv(filteredRows)}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+            style={{ borderColor: "#e2ede9", color: "#203430" }}
+          >
             <FileDown size={14} /> Export Excel
           </button>
-          <button onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+            style={{ borderColor: "#e2ede9", color: "#203430" }}
+          >
             <Printer size={14} /> In báo cáo
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div
+        className="rounded-xl border px-4 py-3 text-sm"
+        style={{
+          borderColor: "#bfdbfe",
+          background: "#eff6ff",
+          color: "#1d4ed8",
+        }}
+      >
+        Backend hiện chưa hỗ trợ draft, edit và resubmit cho lịch sử nghỉ phép. Trang này
+        chỉ dùng API thật cho tạo mới, xem chi tiết và hủy yêu cầu đang ở trạng thái chờ duyệt.
+      </div>
+
+      {error ? (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: "#fecaca",
+            background: "#fef2f2",
+            color: "#b91c1c",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          { label: "Tổng yêu cầu", value: "28", icon: List, color: "#3b82f6", bg: "#eff6ff" },
-          { label: "Đã duyệt", value: "24", icon: CheckCircle, color: "#1DB87A", bg: "#f0fdf9" },
-          { label: "Chờ duyệt", value: "2", icon: Clock, color: "#f59e0b", bg: "#fffbeb" },
-          { label: "Từ chối", value: "2", icon: XCircle, color: "#ef4444", bg: "#fef2f2" },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl p-4 border" style={{ borderColor: "#e2ede9" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: s.bg }}>
-              <s.icon size={18} style={{ color: s.color }} />
+          {
+            label: "Tổng yêu cầu",
+            value: counts.total,
+            icon: List,
+            color: "#3b82f6",
+            bg: "#eff6ff",
+          },
+          {
+            label: "Đã duyệt",
+            value: counts.approved,
+            icon: CheckCircle,
+            color: "#1DB87A",
+            bg: "#f0fdf9",
+          },
+          {
+            label: "Chờ duyệt",
+            value: counts.pending,
+            icon: Clock,
+            color: "#f59e0b",
+            bg: "#fffbeb",
+          },
+          {
+            label: "Từ chối",
+            value: counts.rejected,
+            icon: XCircle,
+            color: "#ef4444",
+            bg: "#fef2f2",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border bg-white p-4"
+            style={{ borderColor: "#e2ede9" }}
+          >
+            <div
+              className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: stat.bg }}
+            >
+              <stat.icon size={18} style={{ color: stat.color }} />
             </div>
-            <p className="text-2xl font-bold" style={{ color: "#203430" }}>{s.value}</p>
-            <p className="text-xs mt-0.5" style={{ color: "#6b7f78" }}>{s.label}</p>
+            <p className="text-2xl font-bold" style={{ color: "#203430" }}>
+              {stat.value}
+            </p>
+            <p className="mt-0.5 text-xs" style={{ color: "#6b7f78" }}>
+              {stat.label}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Advanced Filters */}
-      <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "#e2ede9" }}>
-        <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "#e2ede9" }}>
+      <div
+        className="overflow-hidden rounded-xl border bg-white"
+        style={{ borderColor: "#e2ede9" }}
+      >
+        <div
+          className="flex items-center justify-between border-b px-5 py-3"
+          style={{ borderColor: "#e2ede9" }}
+        >
           <div className="flex items-center gap-2">
             <Filter size={15} style={{ color: "#1DB87A" }} />
-            <span className="font-semibold text-sm" style={{ color: "#203430" }}>Bộ lọc nâng cao</span>
+            <span className="text-sm font-semibold" style={{ color: "#203430" }}>
+              Bộ lọc nâng cao
+            </span>
           </div>
-          <button onClick={() => setFiltersOpen(!filtersOpen)}
-            className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border" style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
-            {filtersOpen ? <><ChevronUp size={13} /> Thu gọn</> : <><ChevronDown size={13} /> Mở rộng</>}
+          <button
+            onClick={() => setFiltersOpen((open) => !open)}
+            className="flex items-center gap-1 rounded border px-2 py-1 text-xs font-medium"
+            style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+          >
+            {filtersOpen ? (
+              <>
+                <ChevronUp size={13} /> Thu gọn
+              </>
+            ) : (
+              <>
+                <ChevronDown size={13} /> Mở rộng
+              </>
+            )}
           </button>
         </div>
-        {filtersOpen && (
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {filtersOpen ? (
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Trạng thái</label>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Trạng thái
+                </label>
                 <Select
                   value={statusFilter || "all-status"}
-                  onValueChange={(value) => setStatusFilter(value === "all-status" ? "" : value)}
+                  onValueChange={(value) =>
+                    setStatusFilter(value === "all-status" ? "" : value)
+                  }
                 >
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Trạng thái" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all-status">Tất cả</SelectItem>
-                    <SelectItem value="draft">Nháp</SelectItem>
                     <SelectItem value="pending">Chờ duyệt</SelectItem>
                     <SelectItem value="approved">Đã duyệt</SelectItem>
-                    <SelectItem value="hr_confirm">HR xác nhận</SelectItem>
                     <SelectItem value="rejected">Từ chối</SelectItem>
+                    <SelectItem value="cancelled">Đã hủy</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Loại nghỉ</label>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Loại nghỉ
+                </label>
                 <Select
                   value={typeFilter || "all-type"}
-                  onValueChange={(value) => setTypeFilter(value === "all-type" ? "" : value)}
+                  onValueChange={(value) =>
+                    setTypeFilter(value === "all-type" ? "" : value)
+                  }
                 >
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Loại nghỉ" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all-type">Tất cả</SelectItem>
-                    <SelectItem value="AL">Phép năm</SelectItem>
-                    <SelectItem value="SL">Phép ốm</SelectItem>
-                    <SelectItem value="ML">Thai sản</SelectItem>
-                    <SelectItem value="CO">Nghỉ bù</SelectItem>
-                    <SelectItem value="WFH">WFH</SelectItem>
-                    <SelectItem value="PL">Việc riêng</SelectItem>
+                    {leaveTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.code}>
+                        {`${type.code} - ${type.name}`}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Thời gian</label>
-                <Select value={periodFilter || "custom"} onValueChange={setPeriodFilter}>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Thời gian
+                </label>
+                <Select value={periodFilter} onValueChange={setPeriodFilter}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Thời gian" />
                   </SelectTrigger>
@@ -430,16 +837,45 @@ export default function LeaveHistoryPage() {
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Từ ngày</label>
-                <DatePicker value={fromDate} onChange={setFromDate} className="text-xs" />
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Từ ngày
+                </label>
+                <DatePicker
+                  value={fromDate}
+                  onChange={(value) => {
+                    setPeriodFilter("custom");
+                    setFromDate(value);
+                  }}
+                  className="text-xs"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Đến ngày</label>
-                <DatePicker value={toDate} onChange={setToDate} className="text-xs" />
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Đến ngày
+                </label>
+                <DatePicker
+                  value={toDate}
+                  onChange={(value) => {
+                    setPeriodFilter("custom");
+                    setToDate(value);
+                  }}
+                  className="text-xs"
+                />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Số ngày</label>
-                <Select defaultValue="all-days">
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Số ngày
+                </label>
+                <Select value={dayRangeFilter} onValueChange={setDayRangeFilter}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Số ngày" />
                   </SelectTrigger>
@@ -453,35 +889,56 @@ export default function LeaveHistoryPage() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+
+            <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-4">
               <div className="md:col-span-2">
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Tìm kiếm</label>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Tìm kiếm
+                </label>
                 <Input
                   type="text"
                   value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+                  onChange={(event) => setSearchInput(event.target.value)}
                   placeholder="Tìm theo ID, lý do, người duyệt..."
                   className="text-xs"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Người duyệt</label>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Người duyệt
+                </label>
                 <Select
                   value={approverFilter || "all-approver"}
-                  onValueChange={(value) => setApproverFilter(value === "all-approver" ? "" : value)}
+                  onValueChange={(value) =>
+                    setApproverFilter(value === "all-approver" ? "" : value)
+                  }
                 >
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Người duyệt" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all-approver">Tất cả</SelectItem>
-                    <SelectItem value="TRUONGDAT">Trương Hữu Đạt</SelectItem>
-                    <SelectItem value="LETHIBINH">Lê Thị Bình</SelectItem>
+                    {approverOptions.map((approver) => (
+                      <SelectItem key={approver} value={approver}>
+                        {approver}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Sắp xếp</label>
+                <label
+                  className="mb-1.5 block text-xs font-semibold"
+                  style={{ color: "#6b7f78" }}
+                >
+                  Sắp xếp
+                </label>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="text-xs">
                     <SelectValue placeholder="Sắp xếp" />
@@ -494,9 +951,12 @@ export default function LeaveHistoryPage() {
                 </Select>
               </div>
             </div>
+
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Hiển thị</label>
+                <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                  Hiển thị
+                </label>
                 <Select value={pageSize} onValueChange={setPageSize}>
                   <SelectTrigger className="w-[100px] text-xs">
                     <SelectValue placeholder="Số dòng" />
@@ -509,36 +969,69 @@ export default function LeaveHistoryPage() {
                 </Select>
               </div>
               <span className="text-xs" style={{ color: "#6b7f78" }}>
-                Bộ lọc áp dụng theo thời gian thực
+                Filter chính đang gọi API thật, tìm kiếm và sắp xếp áp dụng trên dữ liệu đã tải.
               </span>
-              <button onClick={() => { setStatusFilter(""); setTypeFilter(""); setApproverFilter(""); setSearchInput(""); setSortBy("date_desc"); }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border" style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
+              <button
+                onClick={() => {
+                  const range = getPeriodRange("thisMonth");
+                  setStatusFilter("");
+                  setTypeFilter("");
+                  setPeriodFilter("thisMonth");
+                  setFromDate(range.from);
+                  setToDate(range.to);
+                  setDayRangeFilter("all-days");
+                  setApproverFilter("");
+                  setSearchInput("");
+                  setSortBy("date_desc");
+                  setCurrentPage(1);
+                }}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+                style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+              >
                 <X size={13} /> Xóa lọc
               </button>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Bulk action bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border" style={{ background: "#f0fdf9", borderColor: "#D3F2E7" }}>
-          <span className="text-sm font-medium" style={{ color: "#0E474E" }}>Đã chọn {selectedIds.length} yêu cầu</span>
-          <button className="ml-auto text-xs px-3 py-1.5 rounded-lg font-semibold text-white" style={{ background: "#1DB87A" }}>
-            Thao tác hàng loạt
+      {selectedIds.length > 0 ? (
+        <div
+          className="flex items-center gap-3 rounded-xl border px-4 py-2.5"
+          style={{ background: "#f0fdf9", borderColor: "#D3F2E7" }}
+        >
+          <span className="text-sm font-medium" style={{ color: "#0E474E" }}>
+            Đã chọn {selectedIds.length} yêu cầu
+          </span>
+          <button
+            onClick={() => exportCsv(selectedRows)}
+            className="ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+            style={{ background: "#1DB87A" }}
+          >
+            Export đã chọn
           </button>
-          <button onClick={() => setSelectedIds([])}
-            className="text-xs px-3 py-1.5 rounded-lg font-semibold border" style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
+          <button
+            onClick={() => setSelectedIds([])}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+            style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+          >
             Bỏ chọn
           </button>
         </div>
-      )}
+      ) : null}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "#e2ede9" }}>
-        <div className="flex items-center gap-2 px-5 py-3 border-b" style={{ borderColor: "#e2ede9" }}>
+      <div
+        className="overflow-hidden rounded-xl border bg-white"
+        style={{ borderColor: "#e2ede9" }}
+      >
+        <div
+          className="flex items-center gap-2 border-b px-5 py-3"
+          style={{ borderColor: "#e2ede9" }}
+        >
           <List size={15} style={{ color: "#1DB87A" }} />
-          <h2 className="font-semibold text-sm" style={{ color: "#203430" }}>Danh sách yêu cầu nghỉ phép</h2>
+          <h2 className="text-sm font-semibold" style={{ color: "#203430" }}>
+            Danh sách yêu cầu nghỉ phép
+          </h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -546,311 +1039,367 @@ export default function LeaveHistoryPage() {
               <tr style={{ background: "#203430" }}>
                 <th className="px-3 py-3 text-left">
                   <Checkbox
-                    checked={selectedIds.length === pagedRows.length && pagedRows.length > 0}
+                    checked={selectedAllOnPage}
                     onCheckedChange={toggleAll}
                     aria-label="Chọn tất cả yêu cầu"
                   />
                 </th>
-                {["ID", "Loại", "Từ ngày", "Đến ngày", "Số ngày", "Lý do", "Người bàn giao", "Trạng thái", "Ngày gửi", "Người duyệt", "Ngày duyệt", "Thao tác"].map((h) => (
-                  <th key={h} className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap">{h}</th>
+                {[
+                  "ID",
+                  "Loại",
+                  "Từ ngày",
+                  "Đến ngày",
+                  "Số ngày",
+                  "Lý do",
+                  "Người bàn giao",
+                  "Trạng thái",
+                  "Ngày gửi",
+                  "Người duyệt",
+                  "Ngày duyệt",
+                  "Thao tác",
+                ].map((header) => (
+                  <th
+                    key={header}
+                    className="whitespace-nowrap px-3 py-3 text-left font-semibold text-white"
+                  >
+                    {header}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {pagedRows.map((row) => (
-                <tr key={row.id} style={{ background: ROW_BG[row.status] }}
-                  className="border-b last:border-0 hover:brightness-95 transition-all" onClick={() => toggleSelect(row.id)}>
-                  <td className="px-3 py-3">
-                    <Checkbox
-                      checked={selectedIds.includes(row.id)}
-                      onCheckedChange={() => toggleSelect(row.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Chọn yêu cầu ${row.id}`}
-                    />
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={12}
+                    className="px-3 py-6 text-center text-sm text-muted-foreground"
+                  >
+                    Đang tải dữ liệu từ API...
                   </td>
-                  <td className="px-3 py-3 font-bold" style={{ color: "#203430" }}>#{row.id}</td>
-                  <td className="px-3 py-3">
-                    <span className="px-2 py-0.5 rounded text-white font-bold text-xs"
-                      style={{ background: row.type.color }}>{row.type.code}</span>
+                </tr>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={12}
+                    className="px-3 py-6 text-center text-sm text-muted-foreground"
+                  >
+                    Không có yêu cầu nào phù hợp với bộ lọc hiện tại.
                   </td>
-                  <td className="px-3 py-3 whitespace-nowrap" style={{ color: "#203430" }}>{row.fromDate}</td>
-                  <td className="px-3 py-3 whitespace-nowrap" style={{ color: "#203430" }}>{row.toDate}</td>
-                  <td className="px-3 py-3">
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-white"
-                      style={{ background: row.days >= 30 ? "#f97316" : row.days >= 2 ? "#3b82f6" : "#1DB87A" }}>
-                      {row.days}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 max-w-[160px] truncate" style={{ color: "#6b7f78" }}>{row.reason}</td>
-                  <td className="px-3 py-3" style={{ color: "#6b7f78" }}>{row.handover}</td>
-                  <td className="px-3 py-3">
-                    <span className={`px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[row.status].badge}`}>
-                      {STATUS_CONFIG[row.status].label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap" style={{ color: "#6b7f78" }}>
-                    <div>{row.submittedAt.split(" ")[0]}</div>
-                    <div className="text-xs opacity-70">{row.submittedAt.split(" ")[1]}</div>
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    <div className="font-medium" style={{ color: "#203430" }}>{row.approver}</div>
-                    {row.approverRole && <div style={{ color: "#6b7f78" }}>{row.approverRole}</div>}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap" style={{ color: "#6b7f78" }}>{row.approvedAt}</td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {row.actions.includes("view") && (
+                </tr>
+              ) : (
+                filteredRows.map((row) => (
+                  <tr
+                    key={row.id}
+                    style={{ background: ROW_BG[row.status] }}
+                    className="border-b transition-all last:border-0 hover:brightness-95"
+                    onClick={() => toggleSelect(row.id)}
+                  >
+                    <td className="px-3 py-3">
+                      <Checkbox
+                        checked={selectedIds.includes(row.id)}
+                        onCheckedChange={() => toggleSelect(row.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Chọn yêu cầu ${row.id}`}
+                      />
+                    </td>
+                    <td className="px-3 py-3 font-bold" style={{ color: "#203430" }}>
+                      #{row.id}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className="rounded px-2 py-0.5 text-xs font-bold text-white"
+                        style={{ background: row.type.color }}
+                      >
+                        {row.type.code}
+                      </span>
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-3 py-3"
+                      style={{ color: "#203430" }}
+                    >
+                      {row.fromDate}
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-3 py-3"
+                      style={{ color: "#203430" }}
+                    >
+                      {row.toDate}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-lg font-bold text-white"
+                        style={{
+                          background:
+                            row.days >= 30
+                              ? "#f97316"
+                              : row.days >= 2
+                              ? "#3b82f6"
+                              : "#1DB87A",
+                        }}
+                      >
+                        {row.days}
+                      </span>
+                    </td>
+                    <td
+                      className="max-w-[160px] truncate px-3 py-3"
+                      style={{ color: "#6b7f78" }}
+                    >
+                      {row.reason}
+                    </td>
+                    <td className="px-3 py-3" style={{ color: "#6b7f78" }}>
+                      {row.handover}
+                    </td>
+                    <td className="px-3 py-3">
+                      <span
+                        className={`whitespace-nowrap rounded-full px-2 py-0.5 font-medium ${STATUS_CONFIG[row.status].badge}`}
+                      >
+                        {STATUS_CONFIG[row.status].label}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3" style={{ color: "#6b7f78" }}>
+                      {row.submittedAt}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <div className="font-medium" style={{ color: "#203430" }}>
+                        {row.approver}
+                      </div>
+                      {row.approverRole ? (
+                        <div style={{ color: "#6b7f78" }}>{row.approverRole}</div>
+                      ) : null}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3" style={{ color: "#6b7f78" }}>
+                      {row.approvedAt}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div
+                        className="flex items-center gap-1"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <button
-                          onClick={() => handleView(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-50"
+                          onClick={() => void handleView(row.id)}
+                          disabled={detailLoadingId === row.id}
+                          className="flex h-6 w-6 items-center justify-center rounded hover:bg-blue-50 disabled:opacity-50"
                           title="Xem"
                         >
                           <Eye size={13} style={{ color: "#3b82f6" }} />
                         </button>
-                      )}
-                      {row.actions.includes("edit") && (
-                        <button
-                          onClick={() => handleEdit(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
-                          title="Sửa"
-                        >
-                          <Pencil size={13} style={{ color: "#f59e0b" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("submit") && (
-                        <button
-                          onClick={() => handleSubmitDraft(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50"
-                          title="Gửi"
-                        >
-                          <Send size={13} style={{ color: "#1DB87A" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("cancel") && (
-                        <button
-                          onClick={() => handleCancelOrDelete(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
-                          title="Hủy"
-                        >
-                          <X size={13} style={{ color: "#ef4444" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("delete") && (
-                        <button
-                          onClick={() => handleCancelOrDelete(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
-                          title="Xóa nháp"
-                        >
-                          <X size={13} style={{ color: "#ef4444" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("download") && (
-                        <button
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-emerald-50"
-                          title="Tải xuống"
-                        >
-                          <Download size={13} style={{ color: "#1DB87A" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("resubmit") && (
-                        <button
-                          onClick={() => handleResubmit(row)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
-                          title="Gửi lại"
-                        >
-                          <RotateCcw size={13} style={{ color: "#f59e0b" }} />
-                        </button>
-                      )}
-                      {row.actions.includes("print") && (
-                        <button
-                          onClick={() => window.print()}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-gray-100"
-                          title="In"
-                        >
-                          <Printer size={13} style={{ color: "#6b7280" }} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {row.status === "pending" ? (
+                          <button
+                            onClick={() => setConfirmCancelId(row.id)}
+                            disabled={actionLoadingId === row.id}
+                            className="flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 disabled:opacity-50"
+                            title="Hủy"
+                          >
+                            <X size={13} style={{ color: "#ef4444" }} />
+                          </button>
+                        ) : null}
+                        {row.attachmentUrl ? (
+                          <button
+                            onClick={() =>
+                              window.open(
+                                `${getApiBaseUrl()}/uploads/${row.attachmentUrl}`,
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
+                            className="flex h-6 w-6 items-center justify-center rounded hover:bg-emerald-50"
+                            title="Tải file đính kèm"
+                          >
+                            <Download size={13} style={{ color: "#1DB87A" }} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-3 border-t" style={{ borderColor: "#e2ede9" }}>
+
+        <div
+          className="flex items-center justify-between border-t px-5 py-3"
+          style={{ borderColor: "#e2ede9" }}
+        >
           <p className="text-xs" style={{ color: "#6b7f78" }}>
-            Hiển thị {sorted.length === 0 ? 0 : startIndex + 1}-{Math.min(startIndex + pageSizeNum, sorted.length)} trong tổng số <strong>{sorted.length} yêu cầu</strong>
+            Hiển thị <strong>{filteredRows.length}</strong> kết quả trên trang {meta.page}/
+            {meta.totalPages}, tổng server-side là <strong>{meta.total}</strong> yêu cầu
           </p>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ borderColor: "#e2ede9" }}>
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={meta.page === 1}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ borderColor: "#e2ede9" }}
+            >
               <ChevronLeft size={14} style={{ color: "#6b7f78" }} />
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((p) => (
-              <button key={p} onClick={() => setCurrentPage(p)}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium border transition-colors ${p === safePage ? "text-white" : "hover:bg-gray-50"}`}
-                style={{ borderColor: p === safePage ? "#1DB87A" : "#e2ede9", background: p === safePage ? "#1DB87A" : undefined, color: p === safePage ? "white" : "#6b7f78" }}>
-                {p}
+            {visiblePages.map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+                  page === meta.page ? "text-white" : "hover:bg-gray-50"
+                }`}
+                style={{
+                  borderColor: page === meta.page ? "#1DB87A" : "#e2ede9",
+                  background: page === meta.page ? "#1DB87A" : undefined,
+                  color: page === meta.page ? "white" : "#6b7f78",
+                }}
+              >
+                {page}
               </button>
             ))}
             <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ borderColor: "#e2ede9" }}>
+              onClick={() =>
+                setCurrentPage((page) => Math.min(meta.totalPages, page + 1))
+              }
+              disabled={meta.page === meta.totalPages}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ borderColor: "#e2ede9" }}
+            >
               <ChevronRight size={14} style={{ color: "#6b7f78" }} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Leave detail modal */}
-      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
-
-      {/* Confirm dialog for row actions */}
-      <ConfirmDialog
-        open={!!confirmAction}
-        title={
-          confirmAction?.type === "cancel"
-            ? "Xác nhận hủy"
-            : confirmAction?.type === "submit_draft"
-            ? "Xác nhận gửi yêu cầu"
-            : "Xác nhận gửi lại"
-        }
-        message={
-          confirmAction?.type === "cancel"
-            ? `Bạn có chắc muốn ${confirmAction.label} này? Hành động không thể hoàn tác.`
-            : confirmAction?.type === "submit_draft"
-            ? "Yêu cầu sẽ được gửi đến người duyệt. Bạn có chắc muốn gửi?"
-            : "Yêu cầu sẽ được gửi lại để chờ duyệt. Bạn có chắc?"
-        }
-        danger={confirmAction?.type === "cancel"}
-        confirmLabel={
-          confirmAction?.type === "cancel"
-            ? "Hủy yêu cầu"
-            : confirmAction?.type === "submit_draft"
-            ? "Gửi ngay"
-            : "Gửi lại"
-        }
-        onConfirm={executeConfirm}
-        onCancel={() => setConfirmAction(null)}
-      />
-
-      {/* Bottom summary: two columns */}
-      <div className="grid lg:grid-cols-2 gap-5">
-        {/* Annual leave usage */}
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
-          <h3 className="font-semibold text-sm mb-4" style={{ color: "#203430" }}>Tổng quan sử dụng phép năm 2026</h3>
-          <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div
+          className="rounded-xl border bg-white p-5"
+          style={{ borderColor: "#e2ede9" }}
+        >
+          <h3 className="mb-4 text-sm font-semibold" style={{ color: "#203430" }}>
+            Tổng quan sử dụng phép năm {new Date().getFullYear()}
+          </h3>
+          <div className="mb-4 grid grid-cols-3 gap-4">
             {[
-              { label: "Được cấp", val: 12, color: "#3b82f6" },
-              { label: "Đã sử dụng", val: 3, color: "#ef4444" },
-              { label: "Còn lại", val: 9, color: "#1DB87A" },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className="text-2xl font-bold" style={{ color: s.color }}>{s.val}</p>
-                <p className="text-xs mt-0.5" style={{ color: "#6b7f78" }}>{s.label}</p>
+              { label: "Được cấp", val: grantedDays, color: "#3b82f6" },
+              { label: "Đã sử dụng", val: usedDays, color: "#ef4444" },
+              { label: "Còn lại", val: remainingDays, color: "#1DB87A" },
+            ].map((item) => (
+              <div key={item.label} className="text-center">
+                <p className="text-2xl font-bold" style={{ color: item.color }}>
+                  {item.val}
+                </p>
+                <p className="mt-0.5 text-xs" style={{ color: "#6b7f78" }}>
+                  {item.label}
+                </p>
               </div>
             ))}
           </div>
-          <div className="flex h-3 rounded-full overflow-hidden mb-2" style={{ background: "#f0f4f2" }}>
-            <div className="h-full" style={{ width: "25%", background: "#ef4444" }} />
-            <div className="h-full" style={{ width: "75%", background: "#1DB87A" }} />
+          <div
+            className="mb-2 flex h-3 overflow-hidden rounded-full"
+            style={{ background: "#f0f4f2" }}
+          >
+            <div
+              className="h-full"
+              style={{
+                width: grantedDays > 0 ? `${Math.min((usedDays / grantedDays) * 100, 100)}%` : "0%",
+                background: "#ef4444",
+              }}
+            />
+            <div
+              className="h-full"
+              style={{
+                width:
+                  grantedDays > 0
+                    ? `${Math.max(100 - Math.min((usedDays / grantedDays) * 100, 100), 0)}%`
+                    : "0%",
+                background: "#1DB87A",
+              }}
+            />
           </div>
           <div className="space-y-1 text-xs" style={{ color: "#6b7f78" }}>
             <div className="flex justify-between">
-              <span>Phép chuyển từ 2025:</span><span className="font-medium" style={{ color: "#203430" }}>0 ngày</span>
+              <span>Phép chuyển từ năm trước:</span>
+              <span className="font-medium" style={{ color: "#203430" }}>
+                Chưa có API riêng
+              </span>
             </div>
             <div className="flex justify-between">
-              <span>Comp-off khả dụng:</span><span className="font-medium" style={{ color: "#1DB87A" }}>16.5 giờ</span>
+              <span>Comp-off khả dụng:</span>
+              <span className="font-medium" style={{ color: "#1DB87A" }}>
+                {compOffHours} giờ
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Type breakdown */}
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
-          <h3 className="font-semibold text-sm mb-4" style={{ color: "#203430" }}>Thống kê theo loại nghỉ</h3>
+        <div
+          className="rounded-xl border bg-white p-5"
+          style={{ borderColor: "#e2ede9" }}
+        >
+          <h3 className="mb-4 text-sm font-semibold" style={{ color: "#203430" }}>
+            Thống kê theo loại nghỉ của dữ liệu đang hiển thị
+          </h3>
           <div className="space-y-3">
-            {[
-              { code: "AL", label: "Phép năm", days: "2 ngày", pct: 36, color: "#3b82f6" },
-              { code: "SL", label: "Phép ốm", days: "2 ngày", pct: 36, color: "#10b981" },
-              { code: "CO", label: "Nghỉ bù", days: "0.5 ngày", pct: 9, color: "#1DB87A" },
-              { code: "WFH", label: "Làm từ xa", days: "1 ngày", pct: 18, color: "#8b5cf6" },
-            ].map((t) => (
-              <div key={t.code} className="flex items-center gap-3">
-                <span className="w-10 text-xs font-bold text-white px-1 py-0.5 rounded text-center flex-shrink-0"
-                  style={{ background: t.color }}>{t.code}</span>
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: "#203430" }}>{t.label}</span>
-                    <span className="font-semibold" style={{ color: "#203430" }}>{t.days}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "#f0f4f2" }}>
-                    <div className="h-full rounded-full" style={{ width: `${t.pct}%`, background: t.color }} />
+            {typeBreakdown.items.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Chưa có dữ liệu để tổng hợp theo loại nghỉ.
+              </p>
+            ) : (
+              typeBreakdown.items.map((item) => (
+                <div key={item.code} className="flex items-center gap-3">
+                  <span
+                    className="w-10 shrink-0 rounded px-1 py-0.5 text-center text-xs font-bold text-white"
+                    style={{ background: item.color }}
+                  >
+                    {item.code}
+                  </span>
+                  <div className="flex-1">
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span style={{ color: "#203430" }}>{item.label}</span>
+                      <span className="font-semibold" style={{ color: "#203430" }}>
+                        {item.days} ngày
+                      </span>
+                    </div>
+                    <div
+                      className="h-1.5 overflow-hidden rounded-full"
+                      style={{ background: "#f0f4f2" }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${item.pct}%`, background: item.color }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
-          <p className="text-xs mt-4 text-right font-medium" style={{ color: "#6b7f78" }}>
-            Tổng cộng: <strong style={{ color: "#203430" }}>5.5 ngày</strong> đã sử dụng
+          <p
+            className="mt-4 text-right text-xs font-medium"
+            style={{ color: "#6b7f78" }}
+          >
+            Tổng cộng:{" "}
+            <strong style={{ color: "#203430" }}>
+              {typeBreakdown.totalDays} ngày
+            </strong>{" "}
+            trong dữ liệu đang hiển thị
           </p>
         </div>
       </div>
 
-      {/* Leave Request Modal for editing drafts */}
+      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+
       <LeaveRequestModal
         isOpen={isLeaveRequestModalOpen}
-        onClose={() => {
-          setIsLeaveRequestModalOpen(false);
-          setSelectedEditData(null);
-        }}
-        editData={selectedEditData}
+        onClose={() => setIsLeaveRequestModalOpen(false)}
         onSubmitSuccess={() => {
-          const updated = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
-          const existingIds = new Set(RECORDS.map((r) => r.id));
-          const newRecords: LeaveRecord[] = updated
-            .filter((r: any) => !existingIds.has(r.id))
-            .map((r: any) => ({
-              id: r.id,
-              type: { code: r.typeCode, color: TYPE_COLORS[r.typeCode] ?? "#6b7280" },
-              fromDate: r.fromDate,
-              toDate: r.toDate,
-              days: r.days,
-              reason: r.reason,
-              handover: r.handoverPerson || "-",
-              status: r.status,
-              submittedAt: r.submittedAt,
-              approver: "-",
-              approverRole: "",
-              approvedAt: "-",
-              actions: r.status === "draft" ? ["edit", "submit", "delete"] : ["view", "cancel"],
-            }));
-          if (newRecords.length > 0) {
-            setRecords((prev) => [...newRecords.filter((n) => !prev.some((p) => p.id === n.id)), ...prev]);
-          }
+          setCurrentPage(1);
+          void loadRecords();
         }}
       />
 
-      {/* Leave Detail Modal */}
-      <LeaveDetailModal
-        data={selectedDetail}
-        onClose={() => setSelectedDetail(null)}
-      />
-
-      {/* Confirm Dialog */}
       <ConfirmDialog
-        open={!!confirmAction}
-        title={`Xác nhận ${confirmAction?.label || ""}`}
-        message={`Bạn có chắc chắn muốn ${confirmAction?.label || ""}?`}
-        confirmLabel="Xác nhận"
-        cancelLabel="Hủy"
-        onConfirm={executeConfirm}
-        onCancel={() => setConfirmAction(null)}
+        open={!!confirmCancelId}
+        title="Xác nhận hủy yêu cầu"
+        message="Bạn có chắc muốn hủy yêu cầu nghỉ phép này? Chỉ yêu cầu đang chờ duyệt mới có thể hủy."
+        danger
+        confirmLabel="Hủy yêu cầu"
+        onConfirm={executeCancel}
+        onCancel={() => setConfirmCancelId(null)}
       />
     </div>
   );

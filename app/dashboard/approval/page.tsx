@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle2, RefreshCw, Clock, AlertTriangle, CheckCircle,
-  Users, Eye, MessageSquare, Download, Search, ChevronLeft, ChevronRight,
+  AlertTriangle,
+  CheckCircle,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Download,
+  Eye,
+  RefreshCw,
+  Search,
+  Users,
 } from "lucide-react";
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
 import ConfirmDialog from "@/components/confirm-dialog";
@@ -17,104 +26,150 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { apiClient, getApiBaseUrl } from "@/lib/api-client";
+import { buildQuery, formatDateTimeVN, formatDateVN, numberValue } from "@/lib/hr-utils";
 
-interface ApprovalRequest {
+type DerivedStatus = "pending" | "overdue";
+
+interface LeaveTypeOption {
   id: string;
-  status: "overdue" | "pending" | "hr_confirm" | "waiting";
-  overdueBy?: number;
-  employee: { name: string; code: string; team: string; dept: string; initials: string };
-  leaveType: { code: string; color: string };
-  fromDate: string;
-  toDate: string;
-  days: number;
-  reason: string;
-  handover: string;
-  submittedAt: string;
-  leaveBalance?: string;
-  usedThisYear?: number;
-  wfhUsed?: string;
-  wfhMax?: string;
-  lastWFH?: string;
-  fileAttachment?: string;
-  approvedBy?: string;
-  approvedAt?: string;
-  needsHRNote?: string;
-  isMedical?: boolean;
+  code: string;
+  name: string;
+  color?: string | null;
 }
 
-const REQUESTS: ApprovalRequest[] = [
-  {
-    id: "001", status: "overdue", overdueBy: 2,
-    employee: { name: "Phạm Long Đĩnh", code: "DINHPL", team: "Backend Team", dept: "IT", initials: "PL" },
-    leaveType: { code: "AL", color: "#3b82f6" },
-    fromDate: "25/02/2026", toDate: "27/02/2026", days: 3,
-    reason: "Nghỉ phép thăm gia đình", handover: "Trần Bình",
-    submittedAt: "20/02/2026 09:12", leaveBalance: "9/12", usedThisYear: 3,
-  },
-  {
-    id: "002", status: "pending",
-    employee: { name: "Trần Văn Đăng", code: "DANGTV", team: "Marketing Team", dept: "Marketing", initials: "TV" },
-    leaveType: { code: "WFH", color: "#8b5cf6" },
-    fromDate: "28/02/2026", toDate: "28/02/2026", days: 1,
-    reason: "Làm việc từ xa do thời tiết xấu", handover: "Nguyễn An",
-    submittedAt: "26/02/2026 14:30", wfhUsed: "5", wfhMax: "10", lastWFH: "15/02/2026",
-  },
-  {
-    id: "003", status: "hr_confirm",
-    employee: { name: "Nguyễn Thị Anh", code: "ANHNT", team: "Recruitment", dept: "HR", initials: "NT" },
-    leaveType: { code: "ML", color: "#f97316" },
-    fromDate: "01/03/2026", toDate: "30/05/2026", days: 90,
-    reason: "Nghỉ thai sản", handover: "Lê Thị Bình",
-    submittedAt: "25/01/2026 10:15", fileAttachment: "Giấy khám",
-    approvedBy: "Trương Hữu Đạt", approvedAt: "25/02/2026",
-    needsHRNote: "Yêu cầu này đã được Line Manager duyệt và cần HR xác nhận cuối cùng.",
-    isMedical: true,
-  },
-  {
-    id: "004", status: "waiting",
-    employee: { name: "Lê Văn Bình", code: "BINHLV", team: "QA Team", dept: "IT", initials: "LV" },
-    leaveType: { code: "SL", color: "#10b981" },
-    fromDate: "01/03/2026", toDate: "02/03/2026", days: 2,
-    reason: "Nghỉ ốm do sốt cao", handover: "Nguyễn Văn C",
-    submittedAt: "28/02/2026 18:45", leaveBalance: "2/5", fileAttachment: "Có",
-  },
-];
+interface LeaveRequestItem {
+  id: string;
+  status: string;
+  fromDate: string;
+  toDate: string;
+  totalDays: number | string;
+  reason?: string | null;
+  attachmentUrl?: string | null;
+  createdAt: string;
+  approvedAt?: string | null;
+  user?: {
+    id?: string;
+    fullName?: string | null;
+    username?: string | null;
+    department?: string | null;
+  };
+  leaveType?: {
+    id?: string;
+    code?: string | null;
+    name?: string | null;
+    color?: string | null;
+  };
+  approver?: {
+    id?: string;
+    fullName?: string | null;
+  } | null;
+}
 
-const CARD_HEADER: Record<string, { bg: string; text: string; icon: React.ReactNode; label: string }> = {
-  overdue: { bg: "#dc2626", text: "white", icon: <AlertTriangle size={14} />, label: "Quá hạn duyệt" },
-  pending: { bg: "#06b6d4", text: "white", icon: <Clock size={14} />, label: "Chờ duyệt" },
-  hr_confirm: { bg: "#0E474E", text: "white", icon: <Users size={14} />, label: "Cần HR xác nhận" },
-  waiting: { bg: "#f59e0b", text: "white", icon: <Clock size={14} />, label: "Chờ duyệt" },
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+interface DashboardSummary {
+  type: "manager" | "hr" | "admin";
+  stats: {
+    totalEmployees: number;
+    pendingRequests: number;
+    todayRequests: number;
+    weekApproved: number;
+    overdueRequests: number;
+  };
+}
+
+const PAGE_SIZE = 6;
+const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
+const CARD_HEADER: Record<
+  DerivedStatus,
+  { bg: string; text: string; label: string; icon: React.ReactNode }
+> = {
+  overdue: {
+    bg: "#dc2626",
+    text: "white",
+    icon: <AlertTriangle size={14} />,
+    label: "Quá hạn duyệt",
+  },
+  pending: {
+    bg: "#06b6d4",
+    text: "white",
+    icon: <Clock size={14} />,
+    label: "Chờ duyệt",
+  },
 };
 
-/** Map ApprovalRequest to normalized modal shape */
-function toDetailData(r: ApprovalRequest): LeaveDetailData {
+function getEmployeeInitials(name?: string | null) {
+  return (name || "ND")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
+function extractHandover(reason?: string | null) {
+  const matched = reason?.match(/Người bàn giao:\s*(.+)$/m);
+  return matched?.[1]?.trim() || "-";
+}
+
+function getPrimaryReason(reason?: string | null) {
+  if (!reason) return "—";
+  const [firstLine] = reason
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return firstLine || "—";
+}
+
+function isOverdue(request: LeaveRequestItem) {
+  return Date.now() - new Date(request.createdAt).getTime() > TWO_DAYS_MS;
+}
+
+function getDerivedStatus(request: LeaveRequestItem): DerivedStatus {
+  return isOverdue(request) ? "overdue" : "pending";
+}
+
+function getOverdueDays(request: LeaveRequestItem) {
+  const diff = Date.now() - new Date(request.createdAt).getTime();
+  return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)) - 1);
+}
+
+function toDetailData(request: LeaveRequestItem): LeaveDetailData {
+  const department = request.user?.department?.trim();
   return {
-    id: r.id,
-    typeCode: r.leaveType.code,
-    typeColor: r.leaveType.color,
-    fromDate: r.fromDate,
-    toDate: r.toDate,
-    days: r.days,
-    reason: r.reason,
-    handover: r.handover,
-    status: r.status === "hr_confirm" ? "hr_confirm" : r.status === "overdue" || r.status === "pending" || r.status === "waiting" ? "pending" : r.status,
-    submittedAt: r.submittedAt,
-    employeeName: r.employee.name,
-    employeeCode: r.employee.code,
-    employeeTeam: `${r.employee.team} | ${r.employee.dept}`,
-    leaveBalance: r.leaveBalance,
-    fileAttachment: r.fileAttachment,
-    approver: r.approvedBy,
-    approvedAt: r.approvedAt,
+    id: String(request.id),
+    typeCode: request.leaveType?.code || "-",
+    typeColor: request.leaveType?.color || undefined,
+    fromDate: formatDateVN(request.fromDate),
+    toDate: formatDateVN(request.toDate),
+    days: numberValue(request.totalDays),
+    reason: request.reason || "—",
+    handover: extractHandover(request.reason),
+    status: "pending",
+    submittedAt: formatDateTimeVN(request.createdAt),
+    employeeName: request.user?.fullName || "Nhân viên",
+    employeeCode: request.user?.username || undefined,
+    employeeTeam: department || "Chưa có phòng ban",
+    fileAttachment: request.attachmentUrl || undefined,
   };
+}
+
+function getVisiblePages(currentPage: number, totalPages: number) {
+  const start = Math.max(1, currentPage - 2);
+  const end = Math.min(totalPages, start + 4);
+  const safeStart = Math.max(1, end - 4);
+  return Array.from({ length: end - safeStart + 1 }, (_, index) => safeStart + index);
 }
 
 export default function ApprovalPage() {
   const [notes, setNotes] = useState<Record<string, string>>({});
-  const [hrNotes, setHrNotes] = useState<Record<string, string>>({});
-  const [approvedIds, setApprovedIds] = useState<string[]>([]);
-  const [rejectedIds, setRejectedIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("");
@@ -124,37 +179,213 @@ export default function ApprovalPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
+  const [meta, setMeta] = useState<PaginationMeta>({
+    total: 0,
+    page: 1,
+    limit: PAGE_SIZE,
+    totalPages: 1,
+  });
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary["stats"] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
 
-  const handleApprove = (id: string) => {
-    setApprovedIds((p) => [...p, id]);
-    setRejectedIds((p) => p.filter((x) => x !== id));
-  };
-  const handleReject = (id: string) => {
-    setRejectedIds((p) => [...p, id]);
-    setApprovedIds((p) => p.filter((x) => x !== id));
-  };
-  const handleHRConfirm = (id: string) => { handleApprove(id); };
-  const handleHRReject = (id: string) => { handleReject(id); };
+  const typeIdByCode = useMemo(
+    () => Object.fromEntries(leaveTypes.map((type) => [type.code, type.id])),
+    [leaveTypes]
+  );
+
+  useEffect(() => {
+    let mounted = true;
+
+    apiClient
+      .get<LeaveTypeOption[]>("/api/leave-types")
+      .then((response) => {
+        if (!mounted) return;
+        setLeaveTypes(response.data || []);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(err instanceof Error ? err.message : "Không tải được loại nghỉ.");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deptFilter, typeFilter]);
+
+  const buildPendingQuery = useCallback(() => {
+    return buildQuery({
+      status: "PENDING",
+      department: deptFilter || undefined,
+      leaveTypeId: typeFilter ? typeIdByCode[typeFilter] : undefined,
+      page: currentPage,
+      limit: PAGE_SIZE,
+    });
+  }, [currentPage, deptFilter, typeFilter, typeIdByCode]);
+
+  const loadPendingRequests = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [requestResponse, summaryResponse] = await Promise.all([
+        apiClient.get<LeaveRequestItem[]>(`/api/leave-requests?${buildPendingQuery()}`),
+        apiClient.get<DashboardSummary>("/api/dashboard/summary"),
+      ]);
+
+      setRequests(requestResponse.data || []);
+      setMeta({
+        total: requestResponse.meta?.total || 0,
+        page: requestResponse.meta?.page || currentPage,
+        limit: requestResponse.meta?.limit || PAGE_SIZE,
+        totalPages: Math.max(1, requestResponse.meta?.totalPages || 1),
+      });
+      setSummary(summaryResponse.data?.stats || null);
+
+      if (
+        requestResponse.meta?.totalPages &&
+        currentPage > requestResponse.meta.totalPages &&
+        requestResponse.meta.totalPages > 0
+      ) {
+        setCurrentPage(requestResponse.meta.totalPages);
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Không tải được danh sách yêu cầu chờ duyệt."
+      );
+      setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [buildPendingQuery, currentPage]);
+
+  useEffect(() => {
+    void loadPendingRequests();
+  }, [loadPendingRequests]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [requests]);
+
+  const departmentOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        requests
+          .map((request) => request.user?.department?.trim())
+          .filter((department): department is string => Boolean(department))
+      )
+    );
+  }, [requests]);
+
+  const filteredRequests = useMemo(() => {
+    const normalizedSearch = searchInput.trim().toLowerCase();
+
+    return requests.filter((request) => {
+      const derivedStatus = getDerivedStatus(request);
+      const fullName = request.user?.fullName || "";
+
+      if (statusFilter && derivedStatus !== statusFilter) return false;
+      if (priorityFilter === "high" && derivedStatus !== "overdue") return false;
+      if (priorityFilter === "normal" && derivedStatus !== "pending") return false;
+      if (
+        normalizedSearch &&
+        !fullName.toLowerCase().includes(normalizedSearch) &&
+        !String(request.id).toLowerCase().includes(normalizedSearch) &&
+        !(request.user?.username || "").toLowerCase().includes(normalizedSearch)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [priorityFilter, requests, searchInput, statusFilter]);
+
+  const pendingCount = meta.total;
+  const overduePageCount = requests.filter(isOverdue).length;
+  const selectedAllOnPage =
+    filteredRequests.length > 0 &&
+    filteredRequests.every((request) => selectedIds.includes(String(request.id)));
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
+    setSelectedIds((previous) =>
+      previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id]
+    );
   };
 
-  /** Bulk approve all selected requests that haven't been decided yet */
-  const executeBulkApprove = () => {
-    const pending = selectedIds.filter(
-      (id) => !approvedIds.includes(id) && !rejectedIds.includes(id)
-    );
-    setApprovedIds((p) => [...p, ...pending]);
-    setSelectedIds([]);
-    setBulkConfirmOpen(false);
+  const toggleAll = () => {
+    const pageIds = filteredRequests.map((request) => String(request.id));
+    const allSelected =
+      pageIds.length > 0 && pageIds.every((id) => selectedIds.includes(id));
+    setSelectedIds(allSelected ? [] : pageIds);
+  };
+
+  const handleApprove = async (id: string) => {
+    setActionLoadingId(id);
+
+    try {
+      const note = notes[id]?.trim();
+      await apiClient.patch(`/api/leave-requests/${id}/approve`, note ? { note } : {});
+      setNotes((previous) => {
+        const next = { ...previous };
+        delete next[id];
+        return next;
+      });
+      await loadPendingRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể duyệt yêu cầu.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    setActionLoadingId(id);
+
+    try {
+      const note = notes[id]?.trim();
+      await apiClient.patch(`/api/leave-requests/${id}/reject`, note ? { note } : {});
+      setNotes((previous) => {
+        const next = { ...previous };
+        delete next[id];
+        return next;
+      });
+      await loadPendingRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể từ chối yêu cầu.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const executeBulkApprove = async () => {
+    if (selectedIds.length === 0) return;
+
+    setActionLoadingId("bulk");
+
+    try {
+      await apiClient.post("/api/leave-requests/bulk-approve", { ids: selectedIds });
+      setSelectedIds([]);
+      setBulkConfirmOpen(false);
+      await loadPendingRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể duyệt hàng loạt.");
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   const handleRefresh = () => {
     setNotes({});
-    setHrNotes({});
-    setApprovedIds([]);
-    setRejectedIds([]);
     setSelectedIds([]);
     setStatusFilter("");
     setDeptFilter("");
@@ -164,320 +395,443 @@ export default function ApprovalPage() {
     setCurrentPage(1);
     setSelectedDetail(null);
     setBulkConfirmOpen(false);
+    void loadPendingRequests();
   };
 
-  const filtered = REQUESTS.filter((r) => {
-    if (statusFilter === "overdue" && r.status !== "overdue") return false;
-    if (statusFilter === "hr" && r.status !== "hr_confirm") return false;
-    if (deptFilter && r.employee.dept !== deptFilter) return false;
-    if (typeFilter && r.leaveType.code !== typeFilter) return false;
-    if (searchInput && !r.employee.name.toLowerCase().includes(searchInput.toLowerCase())) return false;
-    return true;
-  });
+  const handleView = async (id: string) => {
+    setDetailLoadingId(id);
+
+    try {
+      const response = await apiClient.get<LeaveRequestItem>(`/api/leave-requests/${id}`);
+      setSelectedDetail(toDetailData(response.data));
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Không tải được chi tiết yêu cầu."
+      );
+    } finally {
+      setDetailLoadingId(null);
+    }
+  };
+
+  const visiblePages = getVisiblePages(meta.page, meta.totalPages);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#D3F2E7" }}>
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            style={{ background: "#D3F2E7" }}
+          >
             <CheckCircle2 size={18} style={{ color: "#0E474E" }} />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>Duyệt yêu cầu nghỉ phép</h1>
+          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>
+            Duyệt yêu cầu nghỉ phép
+          </h1>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => selectedIds.length > 0 && setBulkConfirmOpen(true)}
-            disabled={selectedIds.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={selectedIds.length === 0 || actionLoadingId === "bulk"}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ borderColor: "#1DB87A", color: "#1DB87A" }}
           >
             <CheckCircle size={14} />
             Duyệt hàng loạt
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 ? (
               <span
-                className="ml-1 px-1.5 py-0.5 rounded-full text-xs text-white font-bold"
+                className="ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold text-white"
                 style={{ background: "#1DB87A" }}
               >
                 {selectedIds.length}
               </span>
-            )}
+            ) : null}
           </button>
-          <button onClick={handleRefresh}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border transition-colors hover:bg-gray-50"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button
+            onClick={handleRefresh}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-gray-50"
+            style={{ borderColor: "#e2ede9", color: "#203430" }}
+          >
             <RefreshCw size={14} /> Làm mới
           </button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div
+        className="rounded-xl border px-4 py-3 text-sm"
+        style={{
+          borderColor: "#bfdbfe",
+          background: "#eff6ff",
+          color: "#1d4ed8",
+        }}
+      >
+        Backend hiện chỉ trả trạng thái chuẩn `PENDING`, `APPROVED`, `REJECTED`. Trang
+        này suy ra `quá hạn` nếu yêu cầu chờ hơn 2 ngày, còn luồng `HR confirm` riêng
+        chưa có endpoint nên đang được giản lược an toàn.
+      </div>
+
+      {error ? (
+        <div
+          className="rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: "#fecaca",
+            background: "#fef2f2",
+            color: "#b91c1c",
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
-          { label: "Chờ duyệt", value: "8", icon: Clock, color: "#f59e0b", bg: "#fffbeb" },
-          { label: "Quá hạn duyệt", value: "3", icon: AlertTriangle, color: "#ef4444", bg: "#fef2f2" },
-          { label: "Đã duyệt tuần này", value: "25", icon: CheckCircle, color: "#1DB87A", bg: "#f0fdf9" },
-          { label: "Cần HR xác nhận", value: "2", icon: Users, color: "#3b82f6", bg: "#eff6ff" },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl p-4 border" style={{ borderColor: "#e2ede9" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ background: s.bg }}>
-              <s.icon size={18} style={{ color: s.color }} />
+          {
+            label: "Chờ duyệt",
+            value: pendingCount,
+            icon: Clock,
+            color: "#f59e0b",
+            bg: "#fffbeb",
+          },
+          {
+            label: "Quá hạn trên trang",
+            value: overduePageCount,
+            icon: AlertTriangle,
+            color: "#ef4444",
+            bg: "#fef2f2",
+          },
+          {
+            label: "Đã duyệt tuần này",
+            value: summary?.weekApproved ?? 0,
+            icon: CheckCircle,
+            color: "#1DB87A",
+            bg: "#f0fdf9",
+          },
+          {
+            label: "Luồng HR riêng",
+            value: 0,
+            icon: Users,
+            color: "#3b82f6",
+            bg: "#eff6ff",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border bg-white p-4"
+            style={{ borderColor: "#e2ede9" }}
+          >
+            <div
+              className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg"
+              style={{ background: stat.bg }}
+            >
+              <stat.icon size={18} style={{ color: stat.color }} />
             </div>
-            <p className="text-2xl font-bold" style={{ color: "#203430" }}>{s.value}</p>
-            <p className="text-xs mt-0.5" style={{ color: "#6b7f78" }}>{s.label}</p>
+            <p className="text-2xl font-bold" style={{ color: "#203430" }}>
+              {stat.value}
+            </p>
+            <p className="mt-0.5 text-xs" style={{ color: "#6b7f78" }}>
+              {stat.label}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Filter bar */}
-      <div className="bg-white rounded-xl border p-4" style={{ borderColor: "#e2ede9" }}>
-        <div className="flex flex-wrap gap-3 items-end">
+      <div
+        className="rounded-xl border bg-white p-4"
+        style={{ borderColor: "#e2ede9" }}
+      >
+        <div className="flex flex-wrap items-end gap-3">
           {[
-            { id: "status", label: "Trạng thái", value: statusFilter, setter: setStatusFilter,
-              opts: [["", "Tất cả"], ["overdue", "Quá hạn"], ["hr", "Cần HR"]] },
-            { id: "dept", label: "Phòng ban", value: deptFilter, setter: setDeptFilter,
-              opts: [["", "Tất cả phòng ban"], ["IT", "IT"], ["Marketing", "Marketing"], ["HR", "HR"], ["Sales", "Sales"]] },
-            { id: "type", label: "Loại nghỉ", value: typeFilter, setter: setTypeFilter,
-              opts: [["", "Tất cả loại"], ["AL", "Phép năm"], ["SL", "Phép ốm"], ["WFH", "WFH"], ["ML", "Thai sản"]] },
-            { id: "priority", label: "Độ ưu tiên", value: priorityFilter, setter: setPriorityFilter,
-              opts: [["", "Tất cả"], ["high", "Ưu tiên cao"], ["normal", "Bình thường"]] },
-          ].map((f) => (
-            <div key={f.id} className="flex flex-col gap-1">
-              <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{f.label}</label>
+            {
+              id: "status",
+              label: "Trạng thái",
+              value: statusFilter,
+              setter: setStatusFilter,
+              options: [
+                ["", "Tất cả"],
+                ["pending", "Chờ duyệt"],
+                ["overdue", "Quá hạn"],
+              ],
+            },
+            {
+              id: "dept",
+              label: "Phòng ban",
+              value: deptFilter,
+              setter: setDeptFilter,
+              options: [
+                ["", "Tất cả phòng ban"],
+                ...departmentOptions.map((department) => [department, department]),
+              ],
+            },
+            {
+              id: "type",
+              label: "Loại nghỉ",
+              value: typeFilter,
+              setter: setTypeFilter,
+              options: [
+                ["", "Tất cả loại"],
+                ...leaveTypes.map((type) => [type.code, `${type.code} - ${type.name}`]),
+              ],
+            },
+            {
+              id: "priority",
+              label: "Độ ưu tiên",
+              value: priorityFilter,
+              setter: setPriorityFilter,
+              options: [
+                ["", "Tất cả"],
+                ["high", "Ưu tiên cao"],
+                ["normal", "Bình thường"],
+              ],
+            },
+          ].map((filter) => (
+            <div key={filter.id} className="flex flex-col gap-1">
+              <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                {filter.label}
+              </label>
               <Select
-                value={f.value || `all-${f.id}`}
-                onValueChange={(value) => f.setter(value.startsWith("all-") ? "" : value)}
+                value={filter.value || `all-${filter.id}`}
+                onValueChange={(value) =>
+                  filter.setter(value.startsWith("all-") ? "" : value)
+                }
               >
                 <SelectTrigger className="min-w-[150px]">
-                  <SelectValue placeholder={f.label} />
+                  <SelectValue placeholder={filter.label} />
                 </SelectTrigger>
                 <SelectContent>
-                  {f.opts.map(([v, l], idx) => {
-                    const itemValue = v === "" ? `all-${f.id}` : v;
-                    return <SelectItem key={`${f.id}-${idx}`} value={itemValue}>{l}</SelectItem>;
+                  {filter.options.map(([value, label]) => {
+                    const itemValue = value === "" ? `all-${filter.id}` : value;
+                    return (
+                      <SelectItem key={`${filter.id}-${itemValue}`} value={itemValue}>
+                        {label}
+                      </SelectItem>
+                    );
                   })}
                 </SelectContent>
               </Select>
             </div>
           ))}
-          <div className="flex gap-2 items-end flex-1 min-w-[200px]">
+          <div className="flex min-w-[220px] flex-1 items-end gap-2">
             <div className="flex-1">
-              <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Tìm nhân viên</label>
+              <label
+                className="mb-1 block text-xs font-semibold"
+                style={{ color: "#6b7f78" }}
+              >
+                Tìm nhân viên
+              </label>
               <Input
                 type="text"
                 value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Tìm theo tên nhân viên..."
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Tìm theo tên hoặc mã nhân viên..."
               />
             </div>
-            <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
-              style={{ background: "#1DB87A" }}>
+            <button
+              className="flex items-center gap-1.5 rounded-lg px-4 py-2 font-semibold text-white"
+              style={{ background: "#1DB87A" }}
+            >
               <Search size={14} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Request cards grid */}
-      <div className="grid lg:grid-cols-2 gap-5">
-        {filtered.map((req) => {
-          const header = CARD_HEADER[req.status];
-          const isApproved = approvedIds.includes(req.id);
-          const isRejected = rejectedIds.includes(req.id);
-          return (
-            <div key={req.id}
-              className="bg-white rounded-xl border overflow-hidden transition-all hover:shadow-md"
-              style={{
-                borderColor: "#e2ede9",
-                opacity: isApproved || isRejected ? 0.7 : 1,
-                borderLeft: `4px solid ${header.bg}`,
-              }}>
-              {/* Card header */}
-              <div className="flex items-center justify-between px-4 py-3"
-                style={{ background: header.bg, color: header.text }}>
-                <div className="flex items-center gap-2">
-                  {header.icon}
-                  <span className="font-semibold text-sm">{header.label} - ID: #{req.id}</span>
-                  {req.overdueBy && (
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold animate-pulse"
-                      style={{ background: "rgba(255,255,255,0.25)" }}>
-                      Quá hạn {req.overdueBy} ngày
+      <div className="grid gap-5 lg:grid-cols-2">
+        {loading ? (
+          <div className="rounded-xl border bg-white p-6 text-sm text-muted-foreground lg:col-span-2">
+            Đang tải yêu cầu chờ duyệt từ API...
+          </div>
+        ) : filteredRequests.length === 0 ? (
+          <div className="rounded-xl border bg-white p-6 text-sm text-muted-foreground lg:col-span-2">
+            Không có yêu cầu chờ duyệt phù hợp với bộ lọc hiện tại.
+          </div>
+        ) : (
+          filteredRequests.map((request) => {
+            const derivedStatus = getDerivedStatus(request);
+            const header = CARD_HEADER[derivedStatus];
+            const requestId = String(request.id);
+            const fullName = request.user?.fullName || "Nhân viên";
+            const code = request.user?.username || "N/A";
+            const department = request.user?.department || "Chưa có phòng ban";
+            const noteValue = notes[requestId] || "";
+            const overdueDays = getOverdueDays(request);
+
+            return (
+              <div
+                key={requestId}
+                className="overflow-hidden rounded-xl border bg-white transition-all hover:shadow-md"
+                style={{
+                  borderColor: "#e2ede9",
+                  borderLeft: `4px solid ${header.bg}`,
+                }}
+              >
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ background: header.bg, color: header.text }}
+                >
+                  <div className="flex items-center gap-2">
+                    {header.icon}
+                    <span className="text-sm font-semibold">
+                      {header.label} - ID: #{requestId}
                     </span>
-                  )}
-                </div>
-                <Checkbox
-                  checked={selectedIds.includes(req.id)}
-                  onCheckedChange={() => toggleSelect(req.id)}
-                  className="border-white data-[state=checked]:bg-white data-[state=checked]:text-[#0E474E]"
-                />
-              </div>
-
-              <div className="p-4 space-y-3">
-                {/* Employee info */}
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                    style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}>
-                    {req.employee.initials}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm" style={{ color: "#203430" }}>
-                      {req.employee.name} ({req.employee.code})
-                    </p>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>
-                      {req.employee.team} | {req.employee.dept}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Leave details */}
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-xs text-white font-bold"
-                        style={{ background: req.leaveType.color }}>{req.leaveType.code}</span>
-                      <span className="font-semibold text-sm" style={{ color: "#203430" }}>
-                        {req.fromDate} {req.days > 1 ? `- ${req.toDate}` : ""} ({req.days} ngày)
+                    {derivedStatus === "overdue" && overdueDays > 0 ? (
+                      <span
+                        className="animate-pulse rounded-full px-2 py-0.5 text-xs font-bold"
+                        style={{ background: "rgba(255,255,255,0.25)" }}
+                      >
+                        Quá hạn {overdueDays} ngày
                       </span>
-                    </div>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>
-                      <strong style={{ color: "#203430" }}>Lý do:</strong> {req.reason}
-                    </p>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>
-                      <strong style={{ color: "#203430" }}>Người bàn giao:</strong> {req.handover}
-                    </p>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>Gửi: {req.submittedAt}</p>
-                    {req.fileAttachment && (
-                      <div className="flex items-center gap-1 text-xs" style={{ color: "#3b82f6" }}>
-                        <Download size={11} />
-                        <span>File đính kèm: {req.fileAttachment}</span>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
-                  {/* Balance info */}
-                  <div className="flex-shrink-0 text-center min-w-[80px]">
-                    {req.leaveBalance && (
-                      <>
-                        <p className="text-xs" style={{ color: "#6b7f78" }}>Phép còn lại</p>
-                        <p className="text-lg font-bold" style={{ color: "#1DB87A" }}>{req.leaveBalance} ngày</p>
-                        <p className="text-xs" style={{ color: "#6b7f78" }}>Đã dùng năm nay</p>
-                        <p className="text-base font-semibold" style={{ color: "#203430" }}>{req.usedThisYear} ngày</p>
-                      </>
-                    )}
-                    {req.wfhUsed && (
-                      <>
-                        <p className="text-xs" style={{ color: "#6b7f78" }}>WFH đã dùng</p>
-                        <p className="text-lg font-bold" style={{ color: "#1DB87A" }}>{req.wfhUsed}/{req.wfhMax} ngày</p>
-                        <p className="text-xs" style={{ color: "#6b7f78" }}>Lần WFH gần nhất</p>
-                        <p className="text-xs font-medium" style={{ color: "#203430" }}>{req.lastWFH}</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Approved by (for HR confirm) */}
-                {req.approvedBy && (
-                  <p className="text-xs" style={{ color: "#1DB87A" }}>
-                    Đã duyệt bởi: {req.approvedBy} ({req.approvedAt})
-                  </p>
-                )}
-
-                {/* HR note */}
-                {req.needsHRNote && (
-                  <div className="p-2.5 rounded-lg text-xs" style={{ background: "#f0fdf9", color: "#0E474E", border: "1px solid #D3F2E7" }}>
-                    {req.needsHRNote}
-                  </div>
-                )}
-
-                {/* Note textarea */}
-                <div>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>
-                    {req.status === "hr_confirm" ? "Ghi chú HR:" : "Ghi chú duyệt:"}
-                  </label>
-                  <Textarea
-                    rows={2}
-                    placeholder={req.status === "hr_confirm" ? "Nhập ghi chú xác nhận..." : "Nhập ghi chú (tùy chọn)..."}
-                    value={req.status === "hr_confirm" ? (hrNotes[req.id] || "") : (notes[req.id] || "")}
-                    onChange={(e) => req.status === "hr_confirm"
-                      ? setHrNotes((p) => ({ ...p, [req.id]: e.target.value }))
-                      : setNotes((p) => ({ ...p, [req.id]: e.target.value }))}
-                    className="text-xs resize-none"
+                  <Checkbox
+                    checked={selectedIds.includes(requestId)}
+                    onCheckedChange={() => toggleSelect(requestId)}
+                    className="border-white data-[state=checked]:bg-white data-[state=checked]:text-[#0E474E]"
                   />
                 </div>
 
-                {/* Action buttons */}
-                {isApproved ? (
-                  <div className="text-sm font-semibold text-center py-2 rounded-lg" style={{ background: "#D3F2E7", color: "#0E474E" }}>
-                    Đã duyệt
+                <div className="space-y-3 p-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                      style={{
+                        background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)",
+                      }}
+                    >
+                      {getEmployeeInitials(fullName)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "#203430" }}>
+                        {fullName} ({code})
+                      </p>
+                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                        {department}
+                      </p>
+                    </div>
                   </div>
-                ) : isRejected ? (
-                  <div className="text-sm font-semibold text-center py-2 rounded-lg" style={{ background: "#fef2f2", color: "#ef4444" }}>
-                    Đã từ chối
+
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="rounded px-2 py-0.5 text-xs font-bold text-white"
+                          style={{ background: request.leaveType?.color || "#6b7280" }}
+                        >
+                          {request.leaveType?.code || "-"}
+                        </span>
+                        <span className="text-sm font-semibold" style={{ color: "#203430" }}>
+                          {formatDateVN(request.fromDate)}
+                          {numberValue(request.totalDays) > 1
+                            ? ` - ${formatDateVN(request.toDate)}`
+                            : ""}
+                          {` (${numberValue(request.totalDays)} ngày)`}
+                        </span>
+                      </div>
+                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                        <strong style={{ color: "#203430" }}>Lý do:</strong>{" "}
+                        {getPrimaryReason(request.reason)}
+                      </p>
+                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                        <strong style={{ color: "#203430" }}>Người bàn giao:</strong>{" "}
+                        {extractHandover(request.reason)}
+                      </p>
+                      <p className="text-xs" style={{ color: "#6b7f78" }}>
+                        Gửi: {formatDateTimeVN(request.createdAt)}
+                      </p>
+                      {request.attachmentUrl ? (
+                        <div className="flex items-center gap-1 text-xs" style={{ color: "#3b82f6" }}>
+                          <Download size={11} />
+                          <span>File đính kèm: {request.attachmentUrl}</span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                ) : (
+
+                  {derivedStatus === "overdue" ? (
+                    <div
+                      className="rounded-lg p-2.5 text-xs"
+                      style={{
+                        background: "#fef2f2",
+                        color: "#991b1b",
+                        border: "1px solid #fecaca",
+                      }}
+                    >
+                      Yêu cầu này đang chờ xử lý quá 2 ngày nên được gắn mức ưu tiên cao.
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <label
+                      className="mb-1 block text-xs font-semibold"
+                      style={{ color: "#6b7f78" }}
+                    >
+                      Ghi chú duyệt
+                    </label>
+                    <Textarea
+                      rows={2}
+                      placeholder="Nhập ghi chú (tùy chọn)..."
+                      value={noteValue}
+                      onChange={(event) =>
+                        setNotes((previous) => ({
+                          ...previous,
+                          [requestId]: event.target.value,
+                        }))
+                      }
+                      className="resize-none text-xs"
+                    />
+                  </div>
+
                   <div className="flex items-center gap-2">
-                    {req.status === "hr_confirm" ? (
-                      <>
-                        <button onClick={() => handleHRConfirm(req.id)}
-                          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
-                          style={{ background: "#1DB87A" }}>
-                          <CheckCircle size={14} /> HR Xác nhận
-                        </button>
-                        <button onClick={() => handleHRReject(req.id)}
-                          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
-                          style={{ background: "#ef4444" }}>
-                          HR Từ chối
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={() => handleApprove(req.id)}
-                          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
-                          style={{ background: "#1DB87A" }}>
-                          <CheckCircle size={14} /> Duyệt
-                        </button>
-                        <button onClick={() => handleReject(req.id)}
-                          className="flex-1 py-2 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
-                          style={{ background: "#ef4444" }}>
-                          Từ chối
-                        </button>
-                      </>
-                    )}
                     <button
-                      onClick={() => setSelectedDetail(toDetailData(req))}
-                      className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-blue-50 transition-colors flex-shrink-0"
+                      onClick={() => void handleApprove(requestId)}
+                      disabled={!!actionLoadingId}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ background: "#1DB87A" }}
+                    >
+                      <CheckCircle size={14} /> Duyệt
+                    </button>
+                    <button
+                      onClick={() => void handleReject(requestId)}
+                      disabled={!!actionLoadingId}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ background: "#ef4444" }}
+                    >
+                      Từ chối
+                    </button>
+                    <button
+                      onClick={() => void handleView(requestId)}
+                      disabled={detailLoadingId === requestId}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-blue-50 disabled:opacity-50"
                       style={{ borderColor: "#e2ede9" }}
                       title="Xem chi tiết"
                     >
                       <Eye size={15} style={{ color: "#3b82f6" }} />
                     </button>
-                    <button
-                      className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
-                      style={{ borderColor: "#e2ede9" }}
-                      title="Ghi chú"
-                    >
-                      <MessageSquare size={15} style={{ color: "#6b7f78" }} />
-                    </button>
-                    {req.fileAttachment && (
+                    {request.attachmentUrl ? (
                       <button
-                        className="w-9 h-9 rounded-lg border flex items-center justify-center hover:bg-emerald-50 transition-colors flex-shrink-0"
+                        onClick={() =>
+                          window.open(
+                            `${getApiBaseUrl()}/uploads/${request.attachmentUrl}`,
+                            "_blank",
+                            "noopener,noreferrer"
+                          )
+                        }
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-emerald-50"
                         style={{ borderColor: "#e2ede9" }}
                         title="Tải file đính kèm"
                       >
                         <Download size={15} style={{ color: "#1DB87A" }} />
                       </button>
-                    )}
+                    ) : null}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
-      {/* Leave detail modal */}
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
 
-      {/* Bulk approve confirm */}
       <ConfirmDialog
         open={bulkConfirmOpen}
         title="Duyệt hàng loạt"
@@ -487,21 +841,35 @@ export default function ApprovalPage() {
         onCancel={() => setBulkConfirmOpen(false)}
       />
 
-      {/* Pagination */}
       <div className="flex items-center justify-center gap-1">
-        <button className="flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-gray-50"
-          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
+        <button
+          onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+          disabled={meta.page === 1}
+          className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+        >
           <ChevronLeft size={14} /> Trước
         </button>
-        {[1, 2, 3].map((p) => (
-          <button key={p} onClick={() => setCurrentPage(p)}
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-medium border transition-colors"
-            style={{ borderColor: p === currentPage ? "#1DB87A" : "#e2ede9", background: p === currentPage ? "#1DB87A" : undefined, color: p === currentPage ? "white" : "#6b7f78" }}>
-            {p}
+        {visiblePages.map((page) => (
+          <button
+            key={page}
+            onClick={() => setCurrentPage(page)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border text-sm font-medium transition-colors"
+            style={{
+              borderColor: page === meta.page ? "#1DB87A" : "#e2ede9",
+              background: page === meta.page ? "#1DB87A" : undefined,
+              color: page === meta.page ? "white" : "#6b7f78",
+            }}
+          >
+            {page}
           </button>
         ))}
-        <button className="flex items-center gap-1 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-gray-50"
-          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}>
+        <button
+          onClick={() => setCurrentPage((page) => Math.min(meta.totalPages, page + 1))}
+          disabled={meta.page === meta.totalPages}
+          className="flex items-center gap-1 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ borderColor: "#e2ede9", color: "#6b7f78" }}
+        >
           Sau <ChevronRight size={14} />
         </button>
       </div>

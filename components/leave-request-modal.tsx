@@ -35,29 +35,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const LEAVE_TYPES = [
-  { value: "AL", label: "AL - Nghỉ phép năm" },
-  { value: "SL", label: "SL - Nghỉ ốm" },
-  { value: "CSL", label: "CSL - Nghỉ chăm con ốm" },
-  { value: "ML", label: "ML - Nghỉ thai sản" },
-  { value: "UL", label: "UL - Nghỉ không lương" },
-  { value: "CO", label: "CO - Nghỉ bù (Comp-off)" },
-  { value: "WFH", label: "WFH - Làm việc tại nhà" },
-  { value: "BT", label: "BT - Công tác" },
-  { value: "PL", label: "PL - Nghỉ việc riêng có lương" },
-];
-
-const HANDOVER_PERSONS = [
-  { value: "TRANBH", label: "Trần Bình" },
-  { value: "NGUYENA", label: "Nguyễn An" },
-  { value: "LEVB", label: "Lê Văn Bình" },
-  { value: "PHAMTC", label: "Phạm Thị Cúc" },
-];
+import { apiRequest, apiClient } from "@/lib/api-client";
+import { numberValue, toIsoDateTime } from "@/lib/hr-utils";
 
 type DurationMode = "FULL_DAY" | "HALF_DAY" | "HOURLY";
 
-const LEAVE_BALANCE = { granted: 12, used: 1, remaining: 11, compOffHours: 16.5 };
+interface LeaveTypeOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface LeaveBalanceRecord {
+  id: string;
+  totalDays: number | string;
+  usedDays: number | string;
+  leaveType: {
+    code: string;
+    name: string;
+    color?: string;
+  };
+}
+
+interface UserDropdownItem {
+  id: string;
+  fullName: string;
+  username: string;
+  department?: string | null;
+}
 
 function countWorkingDays(fromDate: string, toDate: string): number {
   if (!fromDate || !toDate) return 0;
@@ -109,6 +114,10 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
 export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, editData }: LeaveRequestModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
+  const [balances, setBalances] = useState<LeaveBalanceRecord[]>([]);
+  const [handoverPersons, setHandoverPersons] = useState<UserDropdownItem[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   const isEditMode = !!editData?.id;
   const initialFormState = getInitialFormState(editData);
@@ -124,6 +133,31 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "saving" | "submitting" | "success">("idle");
   const [alert, setAlert] = useState<{ type: "warning" | "info" | "success"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setLoadingOptions(true);
+
+    Promise.all([
+      apiClient.get<LeaveTypeOption[]>("/api/leave-types"),
+      apiClient.get<LeaveBalanceRecord[]>("/api/leave-balances"),
+      apiClient.get<UserDropdownItem[]>("/api/users/dropdown"),
+    ])
+      .then(([leaveTypeRes, balanceRes, handoverRes]) => {
+        setLeaveTypes(leaveTypeRes.data);
+        setBalances(balanceRes.data);
+        setHandoverPersons(handoverRes.data);
+      })
+      .catch((err) => {
+        setAlert({
+          type: "warning",
+          message:
+            err instanceof Error ? err.message : "Không tải được dữ liệu biểu mẫu.",
+        });
+      })
+      .finally(() => setLoadingOptions(false));
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -158,14 +192,25 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
   };
 
   const days = calcDays();
+  const selectedLeaveType = leaveTypes.find((item) => item.code === leaveType);
+  const annualBalance = balances.find((item) => item.leaveType.code === "AL");
+  const compOffBalance = balances.find((item) => item.leaveType.code === "CO");
+  const leaveBalanceSummary = {
+    granted: numberValue(annualBalance?.totalDays),
+    used: numberValue(annualBalance?.usedDays),
+    remaining:
+      numberValue(annualBalance?.totalDays) - numberValue(annualBalance?.usedDays),
+    compOffHours:
+      (numberValue(compOffBalance?.totalDays) - numberValue(compOffBalance?.usedDays)) * 8,
+  };
 
   const checkBalance = () => {
-    if (!leaveType || days === 0) return null;
-    if (leaveType === "AL" && days > LEAVE_BALANCE.remaining) {
-      return `Cảnh báo: Bạn chỉ còn ${LEAVE_BALANCE.remaining} ngày phép năm. Yêu cầu ${days} ngày sẽ vượt quá số phép hiện có.`;
+    if (!selectedLeaveType || days === 0) return null;
+    if (selectedLeaveType.code === "AL" && days > leaveBalanceSummary.remaining) {
+      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.remaining} ngày phép năm. Yêu cầu ${days} ngày sẽ vượt quá số phép hiện có.`;
     }
-    if (leaveType === "CO" && days * 8 > LEAVE_BALANCE.compOffHours) {
-      return `Cảnh báo: Bạn chỉ còn ${LEAVE_BALANCE.compOffHours} giờ comp-off. Yêu cầu ${days * 8} giờ sẽ vượt quá.`;
+    if (selectedLeaveType.code === "CO" && days * 8 > leaveBalanceSummary.compOffHours) {
+      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.compOffHours} giờ comp-off. Yêu cầu ${days * 8} giờ sẽ vượt quá.`;
     }
     return null;
   };
@@ -195,56 +240,73 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
     handleFileSelect(file);
   }, []);
 
-  const handleSubmit = (mode: "draft" | "submit") => {
-    if (mode === "submit") {
-      if (!leaveType || !fromDate || !toDate || !reason.trim()) {
-        setAlert({ type: "warning", message: "Vui lòng điền đầy đủ các trường bắt buộc (*)." });
-        return;
-      }
+  const handleSubmit = async () => {
+    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim()) {
+      setAlert({
+        type: "warning",
+        message: "Vui lòng điền đầy đủ các trường bắt buộc (*).",
+      });
+      return;
     }
-    setAlert(null);
-    setSubmitState(mode === "draft" ? "saving" : "submitting");
 
-    setTimeout(() => {
-      try {
-        const typeLabel = LEAVE_TYPES.find((t) => t.value === leaveType)?.label ?? leaveType;
-        const newRequest = {
-          id: Date.now().toString(36),
-          typeCode: leaveType,
-          typeLabel,
-          fromDate,
-          toDate,
-          days,
-          reason,
-          handoverPerson: handoverPerson || "-",
-          status: mode === "draft" ? "draft" : "pending",
-          submittedAt: new Date().toLocaleString("vi-VN"),
-        };
-        const existing = JSON.parse(localStorage.getItem("hr_leave_requests") ?? "[]");
-        existing.push(newRequest);
-        localStorage.setItem("hr_leave_requests", JSON.stringify(existing));
-      } catch {
-        // localStorage unavailable — silently skip
-      }
+    const handoverName =
+      handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? "";
+
+    const composedReason = [
+      reason.trim(),
+      durationMode !== "FULL_DAY"
+        ? `Hình thức nghỉ: ${
+            durationMode === "HALF_DAY" ? "Nửa ngày" : "Theo giờ"
+          }`
+        : null,
+      durationMode === "HOURLY" ? `Khung giờ: ${fromTime} - ${toTime}` : null,
+      handoverName ? `Người bàn giao: ${handoverName}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const formData = new FormData();
+    formData.append("leaveTypeId", selectedLeaveType.id);
+    formData.append("fromDate", toIsoDateTime(fromDate));
+    formData.append("toDate", toIsoDateTime(toDate, true));
+    formData.append("totalDays", String(days));
+    formData.append("reason", composedReason);
+    if (attachedFile) {
+      formData.append("attachment", attachedFile);
+    }
+
+    setAlert(null);
+    setSubmitState("submitting");
+
+    try {
+      await apiRequest({
+        url: "/api/leave-requests",
+        method: "POST",
+        data: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
       setSubmitState("success");
       setAlert({
         type: "success",
-        message: mode === "draft"
-          ? "Đã lưu nháp thành công! Bạn có thể tiếp tục chỉnh sửa sau."
-          : "Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.",
+        message: "Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.",
       });
 
-      if (mode === "submit") {
-        setTimeout(() => {
-          resetForm();
-          onClose();
-          onSubmitSuccess?.();
-        }, 1500);
-      } else {
-        setSubmitState("idle");
-      }
-    }, 1000);
+      setTimeout(() => {
+        resetForm();
+        onClose();
+        onSubmitSuccess?.();
+      }, 1200);
+    } catch (err) {
+      setSubmitState("idle");
+      setAlert({
+        type: "warning",
+        message:
+          err instanceof Error ? err.message : "Không thể gửi yêu cầu nghỉ phép.",
+      });
+    }
   };
 
   const resetForm = () => {
@@ -308,7 +370,7 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
           </div>
           <button
             onClick={handleClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors flex-shrink-0"
+            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors shrink-0"
             style={{ color: "#6b7f78" }}
           >
             <X size={16} />
@@ -325,10 +387,10 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Phép năm được cấp", value: LEAVE_BALANCE.granted },
-                { label: "Đã sử dụng", value: LEAVE_BALANCE.used },
-                { label: "Còn lại", value: LEAVE_BALANCE.remaining },
-                { label: "Comp-off (giờ)", value: LEAVE_BALANCE.compOffHours },
+                { label: "Phép năm được cấp", value: leaveBalanceSummary.granted },
+                { label: "Đã sử dụng", value: leaveBalanceSummary.used },
+                { label: "Còn lại", value: leaveBalanceSummary.remaining },
+                { label: "Comp-off (giờ)", value: leaveBalanceSummary.compOffHours },
               ].map((item) => (
                 <div key={item.label} className="text-center">
                   <p className="text-2xl font-bold" style={{ color: "#1DB87A" }}>{item.value}</p>
@@ -350,7 +412,7 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
                   : { background: "#dbeafe", border: "1px solid #93c5fd", color: "#1e3a8a" }
               }
             >
-              {alert.type === "warning" ? <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" /> : <CheckCircle2 size={15} className="flex-shrink-0 mt-0.5" />}
+              {alert.type === "warning" ? <AlertTriangle size={15} className="shrink-0 mt-0.5" /> : <CheckCircle2 size={15} className="shrink-0 mt-0.5" />}
               {alert.message}
             </div>
           )}
@@ -365,14 +427,17 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <Select
                 value={leaveType || "placeholder"}
                 onValueChange={(value) => setLeaveType(value === "placeholder" ? "" : value)}
+                disabled={loadingOptions}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="-- Chọn loại nghỉ --" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="placeholder">-- Chọn loại nghỉ --</SelectItem>
-                  {LEAVE_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  {leaveTypes.map((t) => (
+                    <SelectItem key={t.id} value={t.code}>
+                      {`${t.code} - ${t.name}`}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -422,7 +487,7 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
                         className="hidden"
                       />
                       <span
-                        className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                        className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
                         style={{ borderColor: isSelected ? "#1DB87A" : "#c4d4cf" }}
                       >
                         {isSelected && <span className="w-2 h-2 rounded-full" style={{ background: "#1DB87A" }} />}
@@ -489,14 +554,17 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <Select
                 value={handoverPerson || "placeholder"}
                 onValueChange={(value) => setHandoverPerson(value === "placeholder" ? "" : value)}
+                disabled={loadingOptions}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="-- Chọn người bàn giao --" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="placeholder">-- Chọn người bàn giao --</SelectItem>
-                  {HANDOVER_PERSONS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  {handoverPersons.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.fullName}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -551,19 +619,19 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
         >
           <button
             type="button"
-            onClick={() => handleSubmit("draft")}
-            disabled={submitState !== "idle"}
+            onClick={resetForm}
+            disabled={submitState === "submitting" || submitState === "success"}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-70"
             style={{ background: "#f7f7f7", color: "#6b7f78", border: "1px solid #e2ede9" }}
           >
             <Save size={15} />
-            {submitState === "saving" ? "Đang lưu..." : "Lưu nháp"}
+            Đặt lại
           </button>
 
           <button
             type="button"
-            onClick={() => handleSubmit("submit")}
-            disabled={submitState !== "idle"}
+            onClick={handleSubmit}
+            disabled={submitState !== "idle" || loadingOptions}
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-70"
             style={{ background: "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}
           >

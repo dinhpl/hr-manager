@@ -11,6 +11,12 @@
 ```typescript
 // frontend/lib/api-client.ts
 
+import axios, {
+  AxiosError,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from "axios";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 function getToken(): string | null {
@@ -18,67 +24,88 @@ function getToken(): string | null {
   return localStorage.getItem("accessToken") ?? sessionStorage.getItem("accessToken");
 }
 
+export const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
 async function refreshAccessToken(): Promise<string | null> {
-  const res = await fetch(`${API_URL}/api/auth/refresh-token`, {
-    method: "POST",
-    credentials: "include",
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  const token = data.data?.accessToken;
-  if (token) {
-    // Re-save token
-    const storage = localStorage.getItem("userInfo") ? localStorage : sessionStorage;
-    storage.setItem("accessToken", token);
+  try {
+    const { data } = await axios.post(
+      `${API_URL}/api/auth/refresh-token`,
+      {},
+      { withCredentials: true }
+    );
+    const token = data.data?.accessToken;
+    if (token) {
+      // Re-save token
+      const storage = localStorage.getItem("userInfo") ? localStorage : sessionStorage;
+      storage.setItem("accessToken", token);
+    }
+    return token ?? null;
+  } catch {
+    return null;
   }
-  return token ?? null;
 }
 
-export async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<{ data: T; meta?: object; success: boolean }> {
-  let token = getToken();
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-  const makeRequest = async (t: string | null) =>
-    fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(t ? { Authorization: `Bearer ${t}` } : {}),
-        ...(options.headers ?? {}),
-      },
-    });
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError<{ error?: { message?: string } }>) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
-  let res = await makeRequest(token);
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalRequest);
+      }
 
-  // Auto refresh on 401
-  if (res.status === 401 && token) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      res = await makeRequest(newToken);
-    } else {
-      // Redirect to login
       window.location.href = "/";
       throw new Error("Session expired");
     }
-  }
 
-  const json = await res.json();
-  if (!json.success) throw new Error(json.error?.message ?? "API error");
-  return json;
+    throw new Error(
+      error.response?.data?.error?.message ?? error.message ?? "API error"
+    );
+  }
+);
+
+export async function apiRequest<T>(
+  config: AxiosRequestConfig
+): Promise<{ data: T; meta?: object; success: boolean }> {
+  const response = await api.request<{ data: T; meta?: object; success: boolean }>(config);
+  return response.data;
 }
 
 // Convenience methods
-export const api = {
-  get: <T>(url: string) => apiRequest<T>(url),
+export const apiClient = {
+  get: <T>(url: string) => apiRequest<T>({ url, method: "GET" }),
   post: <T>(url: string, body: unknown) =>
-    apiRequest<T>(url, { method: "POST", body: JSON.stringify(body) }),
+    apiRequest<T>({ url, method: "POST", data: body }),
   patch: <T>(url: string, body: unknown) =>
-    apiRequest<T>(url, { method: "PATCH", body: JSON.stringify(body) }),
-  delete: <T>(url: string) => apiRequest<T>(url, { method: "DELETE" }),
+    apiRequest<T>({ url, method: "PATCH", data: body }),
+  delete: <T>(url: string) => apiRequest<T>({ url, method: "DELETE" }),
 };
+```
+
+### Thêm dependency
+
+```bash
+npm install axios
 ```
 
 ### Thêm env variable
@@ -102,7 +129,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   setLoading(true);
   setError("");
   try {
-    const { data } = await api.post<{ accessToken: string; user: UserInfo }>(
+    const { data } = await apiClient.post<{ accessToken: string; user: UserInfo }>(
       "/api/auth/login",
       { username, password }
     );
@@ -124,14 +151,14 @@ const handleSubmit = async (e: React.FormEvent) => {
 **Sau:** Gọi `GET /api/auth/me` → dùng làm source of truth
 ```typescript
 useEffect(() => {
-  api.get<UserInfo>("/api/auth/me")
+  apiClient.get<UserInfo>("/api/auth/me")
     .then(({ data }) => setUserInfo(data))
     .catch(() => router.push("/"));
 }, []);
 
 // Logout: gọi API
 const handleLogout = async () => {
-  await api.post("/api/auth/logout", {});
+  await apiClient.post("/api/auth/logout", {});
   localStorage.clear();
   sessionStorage.clear();
   router.push("/");
@@ -148,9 +175,9 @@ const [recentRequests, setRecentRequests] = useState([]);
 
 useEffect(() => {
   Promise.all([
-    api.get("/api/dashboard/summary"),
-    api.get(`/api/dashboard/calendar?year=${year}&month=${month}`),
-    api.get("/api/dashboard/recent-requests"),
+    apiClient.get("/api/dashboard/summary"),
+    apiClient.get(`/api/dashboard/calendar?year=${year}&month=${month}`),
+    apiClient.get("/api/dashboard/recent-requests"),
   ]).then(([s, c, r]) => {
     setSummary(s.data);
     setCalendarData(c.data);
@@ -164,9 +191,9 @@ useEffect(() => {
 ```typescript
 // Load leave types từ API
 useEffect(() => {
-  api.get<LeaveType[]>("/api/leave-types").then(({ data }) => setLeaveTypes(data));
-  api.get<LeaveBalance[]>("/api/leave-balances").then(({ data }) => setBalances(data));
-  api.get<User[]>("/api/users/dropdown").then(({ data }) => setHandoverPersons(data));
+  apiClient.get<LeaveType[]>("/api/leave-types").then(({ data }) => setLeaveTypes(data));
+  apiClient.get<LeaveBalance[]>("/api/leave-balances").then(({ data }) => setBalances(data));
+  apiClient.get<User[]>("/api/users/dropdown").then(({ data }) => setHandoverPersons(data));
 }, []);
 
 // Submit — không còn DRAFT mode, luôn POST PENDING
@@ -180,14 +207,13 @@ const handleSubmit = async () => {
   formData.append("reason", reason);
   if (attachedFile) formData.append("attachment", attachedFile);
 
-  const res = await fetch(`${API_URL}/api/leave-requests`, {
+  // Không set Content-Type cứng, để axios/browser tự gắn multipart boundary
+  const { success } = await apiRequest({
+    url: "/api/leave-requests",
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    // Không set Content-Type — browser tự set multipart boundary
-    body: formData,
+    data: formData,
   });
-  const data = await res.json();
-  if (data.success) router.push("/dashboard/leave-history");
+  if (success) router.push("/dashboard/leave-history");
 };
 ```
 
@@ -199,7 +225,7 @@ const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
 
 useEffect(() => {
   const query = new URLSearchParams({ page: String(page), limit: "20", ...filters });
-  api.get(`/api/leave-requests?${query}`).then(({ data, meta }) => {
+  apiClient.get(`/api/leave-requests?${query}`).then(({ data, meta }) => {
     setRecords(data);
     setMeta(meta);
   });
@@ -207,7 +233,7 @@ useEffect(() => {
 
 // Cancel
 const handleCancel = (id: string) =>
-  api.patch(`/api/leave-requests/${id}/cancel`, {}).then(fetchData);
+  apiClient.patch(`/api/leave-requests/${id}/cancel`, {}).then(fetchData);
 ```
 
 ### 10.2.6 Approval Page (`app/dashboard/approval/page.tsx`)
@@ -216,18 +242,18 @@ const handleCancel = (id: string) =>
 // Load pending requests
 useEffect(() => {
   const query = new URLSearchParams({ status: "PENDING", ...filterParams });
-  api.get(`/api/leave-requests?${query}`).then(({ data }) => setRequests(data));
+  apiClient.get(`/api/leave-requests?${query}`).then(({ data }) => setRequests(data));
 }, [filterParams]);
 
 // Approve/Reject
 const handleApprove = async (id: string) => {
-  await api.patch(`/api/leave-requests/${id}/approve`, { note: notes[id] });
+  await apiClient.patch(`/api/leave-requests/${id}/approve`, { note: notes[id] });
   refetch();
 };
 
 // Bulk approve
 const executeBulkApprove = async () => {
-  await api.post("/api/leave-requests/bulk-approve", { ids: selectedIds });
+  await apiClient.post("/api/leave-requests/bulk-approve", { ids: selectedIds });
   refetch();
 };
 ```
@@ -237,15 +263,15 @@ const executeBulkApprove = async () => {
 ```typescript
 useEffect(() => {
   Promise.all([
-    api.get("/api/overtime?limit=10"),
-    api.get("/api/comp-off?limit=5&sortBy=expiry_asc"),
-    api.get("/api/overtime/summary"),
+    apiClient.get("/api/overtime?limit=10"),
+    apiClient.get("/api/comp-off?limit=5&sortBy=expiry_asc"),
+    apiClient.get("/api/overtime/summary"),
   ]).then(([ot, co, stats]) => { ... });
 }, []);
 
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
-  await api.post("/api/overtime", { date: workDate, hours: calc?.otHrs, reason });
+  await apiClient.post("/api/overtime", { date: workDate, hours: calc?.otHrs, reason });
   setSubmitted(true);
 };
 ```
@@ -255,8 +281,8 @@ const handleSubmit = async (e: React.FormEvent) => {
 ```typescript
 useEffect(() => {
   const query = new URLSearchParams({ status: statusFilter, sortBy });
-  api.get(`/api/comp-off?${query}`).then(({ data }) => setItems(data));
-  api.get("/api/comp-off/summary").then(({ data }) => setSummary(data));
+  apiClient.get(`/api/comp-off?${query}`).then(({ data }) => setItems(data));
+  apiClient.get("/api/comp-off/summary").then(({ data }) => setSummary(data));
 }, [statusFilter, sortBy]);
 ```
 
@@ -265,15 +291,15 @@ useEffect(() => {
 ```typescript
 useEffect(() => {
   const query = new URLSearchParams({ search, department, role, page: String(page) });
-  api.get(`/api/users?${query}`).then(({ data, meta }) => {
+  apiClient.get(`/api/users?${query}`).then(({ data, meta }) => {
     setEmployees(data);
     setMeta(meta);
   });
 }, [search, department, role, page]);
 
-const handleCreate = (data: CreateEmployeeData) => api.post("/api/users", data);
-const handleUpdate = (id: string, data: Partial<Employee>) => api.patch(`/api/users/${id}`, data);
-const handleDelete = (id: string) => api.delete(`/api/users/${id}`);
+const handleCreate = (data: CreateEmployeeData) => apiClient.post("/api/users", data);
+const handleUpdate = (id: string, data: Partial<Employee>) => apiClient.patch(`/api/users/${id}`, data);
+const handleDelete = (id: string) => apiClient.delete(`/api/users/${id}`);
 ```
 
 ### 10.2.10 Reports Page (`app/dashboard/reports/page.tsx`)
@@ -281,9 +307,9 @@ const handleDelete = (id: string) => api.delete(`/api/users/${id}`);
 ```typescript
 useEffect(() => {
   Promise.all([
-    api.get(`/api/reports/leave?year=${selectedYear}`),
-    api.get(`/api/reports/department?year=${selectedYear}`),
-    api.get(`/api/reports/top-users?year=${selectedYear}`),
+    apiClient.get(`/api/reports/leave?year=${selectedYear}`),
+    apiClient.get(`/api/reports/department?year=${selectedYear}`),
+    apiClient.get(`/api/reports/top-users?year=${selectedYear}`),
   ]).then(([trend, dept, top]) => {
     setTrendData(trend.data);
     setDeptData(dept.data);
@@ -297,8 +323,8 @@ useEffect(() => {
 ```typescript
 useEffect(() => {
   Promise.all([
-    api.get("/api/settings/leave-policy"),
-    api.get("/api/settings/approval-flow"),
+    apiClient.get("/api/settings/leave-policy"),
+    apiClient.get("/api/settings/approval-flow"),
   ]).then(([policy, flow]) => {
     setLeavePolicy(policy.data);
     setApprovalFlow(flow.data);
@@ -306,7 +332,7 @@ useEffect(() => {
 }, []);
 
 const handleSaveLeavePolicy = async () => {
-  await api.patch("/api/settings/leave-policy", leavePolicy);
+  await apiClient.patch("/api/settings/leave-policy", leavePolicy);
 };
 ```
 
@@ -317,7 +343,7 @@ const handleSaveLeavePolicy = async () => {
 ```typescript
 // Dùng toast hoặc alert state để show lỗi API
 try {
-  await api.post(...);
+  await apiClient.post(...);
   toast.success("Thành công");
 } catch (err) {
   toast.error(err instanceof Error ? err.message : "Có lỗi xảy ra");
@@ -335,7 +361,7 @@ const [error, setError] = useState<string | null>(null);
 
 // Trong useEffect
 setIsLoading(true);
-api.get(...).then(...).catch((err) => setError(err.message)).finally(() => setIsLoading(false));
+apiClient.get(...).then(...).catch((err) => setError(err.message)).finally(() => setIsLoading(false));
 ```
 
 Frontend đã có `Spinner`, `Empty` components để dùng.

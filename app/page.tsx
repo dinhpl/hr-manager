@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Building2,
@@ -17,6 +17,11 @@ import {
   Shield,
   CheckCircle2,
 } from "lucide-react";
+import {
+  apiClient,
+  getStoredToken,
+  setAuthSession,
+} from "@/lib/api-client";
 
 type Role = "employee" | "manager" | "hr" | "admin";
 
@@ -68,32 +73,49 @@ export default function LoginPage() {
     setTimeout(() => setCopiedIndex(null), 1200);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (getStoredToken()) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    setTimeout(() => {
-      const valid = DEMO_ACCOUNTS.find(
-        (a) => a.username === username && a.password === password,
-      );
-      if (valid) {
-        const userInfo = {
-          username,
-          role: valid.role,
-          loginTime: new Date().toISOString(),
+    try {
+      const { data } = await apiClient.post<{
+        accessToken: string;
+        user: {
+          id: string;
+          username: string;
+          email: string;
+          fullName: string;
+          role: string;
+          department?: string | null;
+          position?: string | null;
+          avatar?: string | null;
         };
-        if (rememberMe) {
-          localStorage.setItem("userInfo", JSON.stringify(userInfo));
-        } else {
-          sessionStorage.setItem("userInfo", JSON.stringify(userInfo));
-        }
-        router.push("/dashboard");
-      } else {
-        setError("Tên đăng nhập hoặc mật khẩu không đúng.");
-      }
+      }>("/api/auth/login", {
+        username,
+        password,
+      });
+
+      setAuthSession(
+        {
+          accessToken: data.accessToken,
+          user: data.user,
+        },
+        rememberMe
+      );
+
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Đăng nhập thất bại.");
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -139,7 +161,7 @@ export default function LoginPage() {
                 className="flex items-center gap-4 text-white/90"
               >
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: "rgba(255,255,255,0.15)" }}
                 >
                   {f.icon}

@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
-  Users, UserCheck, CalendarOff, Cake,
-  UserPlus, FileDown, Upload, RefreshCw,
-  Search, Eye, Pencil, Trash2, Shield,
-  ChevronLeft, ChevronRight, LayoutGrid, Table2,
-  Building2, Clock, X, Check,
+  Building2,
+  Cake,
+  CalendarOff,
+  Check,
+  Clock,
+  Eye,
+  FileDown,
+  Pencil,
+  RefreshCw,
+  Search,
+  Shield,
+  Table2,
+  Trash2,
+  Upload,
+  UserCheck,
+  UserPlus,
+  Users,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,217 +39,456 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiClient } from "@/lib/api-client";
+import { buildQuery, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from "@/lib/hr-utils";
 
-// Types based on users table schema
-interface Employee {
-  id: string;
+type UserRole = "EMPLOYEE" | "MANAGER" | "HR" | "ADMIN";
+type EmployeeStatus = "active" | "inactive";
+
+interface EmployeeApiItem {
+  id: string | number;
   email: string;
-  first_name: string;
-  last_name: string;
-  profile_image_url: string | null;
-  system_role: string;
-  team_id: number;
-  status: "active" | "inactive" | "terminated";
-  role_id: number | null;
-  role?: string | null;
-  created_at: string;
-  updated_at: string;
-  is_countable: boolean;
-  company_join_date: string | null;
+  username?: string | null;
+  fullName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: UserRole | null;
+  department?: string | null;
+  position?: string | null;
+  avatar?: string | null;
+  teamId?: number | null;
+  isCountable?: boolean;
+  companyJoinDate?: string | null;
+  isActive: boolean;
+  createdAt: string;
 }
 
-// Mock data matching the database schema
-const MOCK_EMPLOYEES: Employee[] = [
-  {
-    id: "c5643cfe-c036-431d-b47c-b9e6f905999e",
-    email: "minhlq.ot@gmail.com",
-    first_name: "Minh",
-    last_name: "Le Quang",
-    profile_image_url: null,
-    system_role: "member",
-    team_id: 3,
-    status: "active",
-    role: "Senior Developer",
-    role_id: 1,
-    created_at: "2026-02-04 09:06:32.522555",
-    updated_at: "2026-02-24 07:55:06.098",
-    is_countable: true,
-    company_join_date: "2024-03-15",
-  },
-  {
-    id: "a1234567-89ab-cdef-1234-567890abcdef",
-    email: "dang.tv@company.com",
-    first_name: "Trần",
-    last_name: "Văn Đăng",
-    profile_image_url: null,
-    system_role: "member",
-    team_id: 2,
-    status: "active",
-    role: "Marketing Manager",
-    role_id: 2,
-    created_at: "2026-01-10 10:00:00",
-    updated_at: "2026-02-20 15:30:00",
-    is_countable: true,
-    company_join_date: "2023-07-01",
-  },
-  {
-    id: "b2345678-90ab-cdef-2345-678901abcdef",
-    email: "anh.nt@company.com",
-    first_name: "Nguyễn",
-    last_name: "Thị Anh",
-    profile_image_url: null,
-    system_role: "member",
-    team_id: 4,
-    status: "active",
-    role: "HR Specialist",
-    role_id: 3,
-    created_at: "2026-01-01 08:00:00",
-    updated_at: "2026-02-10 12:00:00",
-    is_countable: true,
-    company_join_date: "2024-01-10",
-  },
+interface EmployeeDropdownItem {
+  id: string | number;
+  fullName?: string | null;
+  username?: string | null;
+  department?: string | null;
+}
+
+interface EmployeeRow {
+  id: string;
+  email: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  profileImageUrl: string | null;
+  role: UserRole;
+  department: string;
+  status: EmployeeStatus;
+  companyJoinDate: string | null;
+}
+
+interface EmployeeFormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  department: string;
+  companyJoinDate: string;
+  status: EmployeeStatus;
+}
+
+const DEFAULT_DEPARTMENTS = ["Engineering", "Marketing", "Operations", "HR", "Sales"];
+
+const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
+  { value: "EMPLOYEE", label: "Nhân viên" },
+  { value: "MANAGER", label: "Quản lý" },
+  { value: "HR", label: "HR" },
+  { value: "ADMIN", label: "Admin" },
 ];
 
-// Team mapping
-const TEAMS: Record<number, string> = {
-  1: "Engineering",
-  2: "Marketing",
-  3: "Operations",
-  4: "HR",
-  5: "Sales",
+const STATUS_CONFIG: Record<EmployeeStatus, { label: string; badge: string }> = {
+  active: {
+    label: "Đang làm việc",
+    badge: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+  },
+  inactive: {
+    label: "Tạm nghỉ",
+    badge: "bg-gray-100 text-gray-600 border border-gray-200",
+  },
 };
 
-// Role mapping
-const ROLES: Record<number, string> = {
-  1: "Senior Developer",
-  2: "Marketing Manager",
-  3: "HR Specialist",
-  4: "Junior Developer",
-  5: "Product Manager",
+const DEPARTMENT_COLORS: Record<string, { color: string; bg: string }> = {
+  Engineering: { color: "#3b82f6", bg: "#eff6ff" },
+  Marketing: { color: "#f59e0b", bg: "#fffbeb" },
+  Operations: { color: "#1DB87A", bg: "#f0fdf9" },
+  HR: { color: "#06b6d4", bg: "#ecfeff" },
+  Sales: { color: "#8b5cf6", bg: "#f5f3ff" },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  active: { label: "Đang làm việc", badge: "bg-emerald-100 text-emerald-700 border border-emerald-200" },
-  inactive: { label: "Tạm nghỉ", badge: "bg-gray-100 text-gray-600 border border-gray-200" },
-  terminated: { label: "Đã nghỉ việc", badge: "bg-red-100 text-red-600 border border-red-200" },
-};
+function buildUsernameFromEmail(email: string) {
+  return email
+    .trim()
+    .toLowerCase()
+    .split("@")[0]
+    .replace(/[^a-z0-9._-]/g, ".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.+|\.+$/g, "") || `user.${Date.now()}`;
+}
 
-const TEAM_COLORS: Record<number, { color: string; bg: string }> = {
-  1: { color: "#3b82f6", bg: "#eff6ff" },
-  2: { color: "#f59e0b", bg: "#fffbeb" },
-  3: { color: "#1DB87A", bg: "#f0fdf9" },
-  4: { color: "#06b6d4", bg: "#ecfeff" },
-  5: { color: "#8b5cf6", bg: "#f5f3ff" },
-};
-const DEPT_DIST = [
-  { label: "Công nghệ thông tin", code: "IT", count: 45, pct: 29, color: "#3b82f6" },
-  { label: "Marketing", code: "Marketing", count: 32, pct: 21, color: "#f59e0b" },
-  { label: "Kinh doanh", code: "Sales", count: 28, pct: 18, color: "#1DB87A" },
-  { label: "Nhân sự", code: "HR", count: 15, pct: 10, color: "#06b6d4" },
-];
+function splitFullName(fullName: string) {
+  const normalized = fullName.trim().replace(/\s+/g, " ");
+  if (!normalized) return { firstName: "", lastName: "" };
 
-const ACTIVITIES = [
-  { icon: UserPlus, color: "#1DB87A", time: "Hôm nay, 09:30", text: "Nguyễn Văn Newbie đã được thêm vào hệ thống" },
-  { icon: Cake, color: "#f59e0b", time: "Hôm nay", text: "Sinh nhật Trần Văn Đăng" },
-  { icon: CalendarOff, color: "#06b6d4", time: "Hôm qua, 14:20", text: "Nguyễn Thị Anh bắt đầu nghỉ thai sản" },
-  { icon: Pencil, color: "#6b7f78", time: "2 ngày trước", text: "Cập nhật thông tin Phạm Long Đĩnh" },
-];
+  const parts = normalized.split(" ");
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: "" };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts.at(-1) ?? "",
+  };
+}
+
+function mapEmployee(item: EmployeeApiItem): EmployeeRow {
+  const fullName = getFullName({
+    fullName: item.fullName,
+    firstName: item.firstName,
+    lastName: item.lastName,
+    username: item.username,
+  });
+  const { firstName, lastName } = splitFullName(
+    [item.firstName, item.lastName].filter(Boolean).join(" ").trim() || fullName
+  );
+
+  return {
+    id: String(item.id),
+    email: item.email,
+    fullName,
+    firstName,
+    lastName,
+    profileImageUrl: item.avatar ?? null,
+    role: item.role ?? "EMPLOYEE",
+    department: item.department?.trim() || "Chưa phân bổ",
+    status: item.isActive ? "active" : "inactive",
+    companyJoinDate: item.companyJoinDate ?? null,
+  };
+}
+
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>(MOCK_EMPLOYEES);
+  const [employees, setEmployees] = useState<EmployeeRow[]>([]);
+  const [departments, setDepartments] = useState<string[]>(DEFAULT_DEPARTMENTS);
   const [statusFilter, setStatusFilter] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<"role_id" | "team_id" | null>(null);
+  const [editingField, setEditingField] = useState<"role" | "department" | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; message: string } | null>(null);
 
-  const filtered = employees.filter((e) => {
-    if (statusFilter && e.status !== statusFilter) return false;
-    if (teamFilter && e.team_id !== parseInt(teamFilter)) return false;
-    if (searchInput) {
-      const q = searchInput.toLowerCase();
-      const fullName = `${e.first_name} ${e.last_name}`.toLowerCase();
-      if (!fullName.includes(q) && !e.email.toLowerCase().includes(q)) return false;
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<EmployeeDropdownItem[]>("/api/users/dropdown");
+      const dropdownDepartments = data
+        .map((item) => item.department?.trim())
+        .filter((department): department is string => Boolean(department));
+      const nextDepartments = Array.from(
+        new Set([
+          ...DEFAULT_DEPARTMENTS,
+          ...dropdownDepartments,
+        ])
+      );
+      setDepartments(nextDepartments);
+    } catch {
+      setDepartments(DEFAULT_DEPARTMENTS);
     }
-    return true;
-  });
+  }, []);
 
-  const toggleSelect = (id: string) =>
-    setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
-  const toggleAll = () =>
-    setSelectedIds(selectedIds.length === filtered.length ? [] : filtered.map((e) => e.id));
+  const fetchEmployees = useCallback(
+    async (showInitialLoader = false) => {
+      if (showInitialLoader) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
 
-  const handleCellEdit = (empId: string, field: "role_id" | "team_id", value: string) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === empId
-          ? { ...emp, [field]: parseInt(value) }
-          : emp
-      )
-    );
+      try {
+        const query = buildQuery({
+          search: searchQuery || undefined,
+          department: teamFilter || undefined,
+          status: statusFilter || undefined,
+          page: 1,
+          limit: 100,
+        });
+        const url = query ? `/api/users?${query}` : "/api/users";
+        const { data } = await apiClient.get<EmployeeApiItem[]>(url);
+        const mappedEmployees = data.map(mapEmployee);
+
+        setEmployees(mappedEmployees);
+        setSelectedIds((prev) => prev.filter((id) => mappedEmployees.some((item) => item.id === id)));
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "Không thể tải danh sách nhân viên.",
+        });
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [searchQuery, statusFilter, teamFilter]
+  );
+
+  useEffect(() => {
+    void fetchDepartments();
+  }, [fetchDepartments]);
+
+  useEffect(() => {
+    void fetchEmployees(true);
+  }, [fetchEmployees]);
+
+  const departmentDistribution = useMemo(() => {
+    if (!employees.length) return [];
+
+    const total = employees.length;
+    const grouped = employees.reduce<Record<string, number>>((acc, employee) => {
+      acc[employee.department] = (acc[employee.department] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .sort(([, countA], [, countB]) => countB - countA)
+      .map(([department, count], index) => {
+        const palette =
+          DEPARTMENT_COLORS[department] ??
+          Object.values(DEPARTMENT_COLORS)[index % Object.values(DEPARTMENT_COLORS).length];
+        const pct = Math.round((count / total) * 100);
+
+        return {
+          label: department,
+          code: department.slice(0, 10).toUpperCase(),
+          count,
+          pct,
+          color: palette.color,
+        };
+      });
+  }, [employees]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const toggleAll = () => {
+    setSelectedIds(selectedIds.length === employees.length ? [] : employees.map((employee) => employee.id));
+  };
+
+  const closeInlineEdit = () => {
     setEditingCellId(null);
     setEditingField(null);
+    setEditingValue("");
+  };
+
+  const handleSearch = () => {
+    setSearchQuery(searchInput.trim());
+  };
+
+  const handleCellEdit = async (employeeId: string, field: "role" | "department", value: string) => {
+    if (!value) return;
+
+    setIsMutating(true);
+    try {
+      await apiClient.patch(`/api/users/${employeeId}`, field === "role" ? { role: value } : { department: value });
+      closeInlineEdit();
+      setFeedback({
+        type: "success",
+        message: field === "role" ? "Đã cập nhật vai trò." : "Đã cập nhật phòng ban.",
+      });
+      await Promise.all([fetchEmployees(), fetchDepartments()]);
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Không thể cập nhật nhân viên.",
+      });
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleCreateEmployee = async (formData: EmployeeFormData) => {
+    setIsMutating(true);
+    try {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      const created = await apiClient.post<EmployeeApiItem>("/api/users", {
+        email: formData.email.trim(),
+        username: buildUsernameFromEmail(formData.email),
+        password: formData.password,
+        fullName,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        role: formData.role,
+        department: formData.department || undefined,
+        position: getRoleLabel(formData.role),
+        companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : undefined,
+      });
+
+      if (formData.status === "inactive") {
+        await apiClient.patch(`/api/users/${created.data.id}`, { isActive: false });
+      }
+
+      setIsAddModalOpen(false);
+      setFeedback({ type: "success", message: "Đã tạo nhân viên mới." });
+      await Promise.all([fetchEmployees(), fetchDepartments()]);
+    } catch (error) {
+      throw error instanceof Error ? error : new Error("Không thể tạo nhân viên mới.");
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
+  const handleDeleteEmployee = async (employeeId: string, fullName: string) => {
+    if (!window.confirm(`Xóa nhân viên "${fullName}"? Tài khoản sẽ được chuyển sang trạng thái không hoạt động.`)) {
+      return;
+    }
+
+    setIsMutating(true);
+    try {
+      await apiClient.delete(`/api/users/${employeeId}`);
+      setFeedback({ type: "success", message: "Đã chuyển nhân viên sang trạng thái không hoạt động." });
+      await fetchEmployees();
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Không thể xóa nhân viên.",
+      });
+    } finally {
+      setIsMutating(false);
+    }
   };
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#D3F2E7" }}>
+          <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: "#D3F2E7" }}>
             <Users size={18} style={{ color: "#0E474E" }} />
           </div>
-          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>Quản lý nhân viên</h1>
+          <h1 className="text-xl font-bold" style={{ color: "#203430" }}>
+            Quản lý nhân viên
+          </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setIsAddModalOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white"
-            style={{ background: "#1DB87A" }}>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+            style={{ background: "#1DB87A" }}
+            disabled={isMutating}
+          >
             <UserPlus size={14} /> Thêm nhân viên
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button
+            type="button"
+            disabled
+            title="Backend chưa hỗ trợ import Excel"
+            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold opacity-50"
+            style={{ borderColor: "#e2ede9", color: "#203430" }}
+          >
             <Upload size={14} /> Import Excel
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold border hover:bg-gray-50"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}>
+          <button
+            type="button"
+            disabled
+            title="Backend chưa hỗ trợ export nhân viên"
+            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold opacity-50"
+            style={{ borderColor: "#e2ede9", color: "#203430" }}
+          >
             <FileDown size={14} /> Export
           </button>
         </div>
       </div>
 
-      {/* Stats */}
+      {feedback && (
+        <div
+          className="rounded-lg p-3 text-sm font-medium"
+          style={{
+            background:
+              feedback.type === "success"
+                ? "#D3F2E7"
+                : feedback.type === "error"
+                  ? "#fee2e2"
+                  : "#eff6ff",
+            color:
+              feedback.type === "success"
+                ? "#0E474E"
+                : feedback.type === "error"
+                  ? "#991b1b"
+                  : "#1d4ed8",
+          }}
+        >
+          {feedback.message}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Tổng nhân viên", value: employees.length.toString(), icon: Users, color: "#3b82f6", bg: "#eff6ff" },
-          { label: "Đang làm việc", value: employees.filter((e) => e.status === "active").length.toString(), icon: UserCheck, color: "#1DB87A", bg: "#f0fdf9" },
-          { label: "Nghỉ phép hôm nay", value: 2, icon: CalendarOff, color: "#f59e0b", bg: "#fffbeb" },
-          { label: "Sinh nhật tháng này", value: '12', icon: Cake, color: "#06b6d4", bg: "#ecfeff" },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl p-4 border flex items-center gap-4"
-            style={{ borderColor: "#e2ede9" }}>
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: s.bg }}>
-              <s.icon size={22} style={{ color: s.color }} />
+          {
+            label: "Tổng nhân viên",
+            value: employees.length.toString(),
+            icon: Users,
+            color: "#3b82f6",
+            bg: "#eff6ff",
+          },
+          {
+            label: "Đang làm việc",
+            value: employees.filter((employee) => employee.status === "active").length.toString(),
+            icon: UserCheck,
+            color: "#1DB87A",
+            bg: "#f0fdf9",
+          },
+          {
+            label: "Nghỉ phép hôm nay",
+            value: "—",
+            icon: CalendarOff,
+            color: "#f59e0b",
+            bg: "#fffbeb",
+          },
+          {
+            label: "Sinh nhật tháng này",
+            value: "—",
+            icon: Cake,
+            color: "#06b6d4",
+            bg: "#ecfeff",
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-white rounded-xl p-4 border flex items-center gap-4"
+            style={{ borderColor: "#e2ede9" }}
+          >
+            <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: stat.bg }}>
+              <stat.icon size={22} style={{ color: stat.color }} />
             </div>
             <div>
-              <p className="text-2xl font-bold" style={{ color: "#203430" }}>{s.value}</p>
-              <p className="text-xs mt-0.5" style={{ color: "#6b7f78" }}>{s.label}</p>
+              <p className="text-2xl font-bold" style={{ color: "#203430" }}>
+                {stat.value}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "#6b7f78" }}>
+                {stat.label}
+              </p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl border p-4" style={{ borderColor: "#e2ede9" }}>
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Trạng thái</label>
-            <Select
-              value={statusFilter || "all-status"}
-              onValueChange={(value) => setStatusFilter(value === "all-status" ? "" : value)}
-            >
+            <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>
+              Trạng thái
+            </label>
+            <Select value={statusFilter || "all-status"} onValueChange={(value) => setStatusFilter(value === "all-status" ? "" : value)}>
               <SelectTrigger className="min-w-[150px]">
                 <SelectValue placeholder="Trạng thái" />
               </SelectTrigger>
@@ -244,56 +496,81 @@ export default function EmployeesPage() {
                 <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
                 <SelectItem value="active">Đang làm việc</SelectItem>
                 <SelectItem value="inactive">Tạm nghỉ</SelectItem>
-                <SelectItem value="terminated">Đã nghỉ việc</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Phòng ban</label>
-            <Select
-              value={teamFilter || "all-team"}
-              onValueChange={(value) => setTeamFilter(value === "all-team" ? "" : value)}
-            >
+            <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>
+              Phòng ban
+            </label>
+            <Select value={teamFilter || "all-team"} onValueChange={(value) => setTeamFilter(value === "all-team" ? "" : value)}>
               <SelectTrigger className="min-w-[150px]">
                 <SelectValue placeholder="Phòng ban" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
-                {Object.entries(TEAMS).map(([id, name]) => (
-                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                {departments.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="flex gap-2 items-end flex-1 min-w-[200px]">
+          <div className="flex gap-2 items-end flex-1 min-w-[220px]">
             <div className="flex-1">
-              <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Tìm kiếm</label>
+              <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>
+                Tìm kiếm
+              </label>
               <Input
                 type="text"
                 value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
+                onChange={(event) => setSearchInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleSearch();
+                  }
+                }}
                 placeholder="Tìm theo tên, email..."
               />
             </div>
-            <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
-              style={{ background: "#1DB87A" }}>
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
+              style={{ background: "#1DB87A" }}
+            >
               <Search size={14} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border overflow-hidden" style={{ borderColor: "#e2ede9" }}>
         <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: "#e2ede9" }}>
           <div className="flex items-center gap-2">
             <Table2 size={15} style={{ color: "#1DB87A" }} />
-            <h2 className="font-semibold text-sm" style={{ color: "#203430" }}>Danh sách nhân viên ({filtered.length})</h2>
+            <h2 className="font-semibold text-sm" style={{ color: "#203430" }}>
+              Danh sách nhân viên ({employees.length})
+            </h2>
           </div>
           <div className="flex gap-1">
-            <button onClick={() => { }} className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50"
-              style={{ borderColor: "#e2ede9" }}>
-              <RefreshCw size={13} style={{ color: "#6b7f78" }} />
+            <button
+              onClick={() => void fetchEmployees()}
+              className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: "#e2ede9" }}
+              disabled={isRefreshing || isMutating}
+              title="Tải lại danh sách"
+            >
+              <RefreshCw
+                size={13}
+                style={{
+                  color: "#6b7f78",
+                  transform: isRefreshing ? "rotate(180deg)" : "none",
+                  transition: "transform 0.3s ease",
+                }}
+              />
             </button>
           </div>
         </div>
@@ -304,194 +581,264 @@ export default function EmployeesPage() {
               <tr style={{ background: "#203430" }}>
                 <th className="px-3 py-3">
                   <Checkbox
-                    checked={selectedIds.length === filtered.length && filtered.length > 0}
+                    checked={selectedIds.length === employees.length && employees.length > 0}
                     onCheckedChange={toggleAll}
                     aria-label="Chọn tất cả nhân viên"
                   />
                 </th>
-                {["Avatar", "Họ tên", "Email", "Phòng ban", "Chức vụ", "Ngày tham gia", "Trạng thái", "Thao tác"].map((h) => (
-                  <th key={h} className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap">{h}</th>
+                {["Avatar", "Họ tên", "Email", "Phòng ban", "Vai trò", "Ngày tham gia", "Trạng thái", "Thao tác"].map((heading) => (
+                  <th key={heading} className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap">
+                    {heading}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((emp) => {
-                const isSelected = selectedIds.includes(emp.id);
-                const initials = (emp.first_name.charAt(0) + emp.last_name.charAt(0)).toUpperCase();
-                const teamColor = TEAM_COLORS[emp.team_id] || { color: "#6b7f78", bg: "#f3f4f6" };
+              {isLoading ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm" style={{ color: "#6b7f78" }}>
+                    Đang tải dữ liệu nhân viên...
+                  </td>
+                </tr>
+              ) : employees.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-8 text-center text-sm" style={{ color: "#6b7f78" }}>
+                    Không có nhân viên phù hợp với bộ lọc hiện tại.
+                  </td>
+                </tr>
+              ) : (
+                employees.map((employee) => {
+                  const isSelected = selectedIds.includes(employee.id);
+                  const initials = `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`.trim().toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
+                  const departmentColor = DEPARTMENT_COLORS[employee.department] ?? { color: "#6b7f78", bg: "#f3f4f6" };
 
-                return (
-                  <tr key={emp.id}
-                    className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
-                    style={{ background: isSelected ? "#f0fdf9" : undefined, opacity: emp.status === "terminated" ? 0.65 : 1 }}
-                    onClick={() => toggleSelect(emp.id)}>
-                    <td className="px-3 py-3">
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleSelect(emp.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Chọn nhân viên ${emp.first_name} ${emp.last_name}`}
-                      />
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                        style={{ background: emp.profile_image_url ? `url(${emp.profile_image_url})` : "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)" }}>
-                        {!emp.profile_image_url && initials}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div>
+                  return (
+                    <tr
+                      key={employee.id}
+                      className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
+                      style={{ background: isSelected ? "#f0fdf9" : undefined, opacity: employee.status === "inactive" ? 0.75 : 1 }}
+                      onClick={() => toggleSelect(employee.id)}
+                    >
+                      <td className="px-3 py-3">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(employee.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Chọn nhân viên ${employee.fullName}`}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                          style={{
+                            background: employee.profileImageUrl
+                              ? `url(${employee.profileImageUrl})`
+                              : "linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)",
+                          }}
+                        >
+                          {!employee.profileImageUrl && initials}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
                         <p className="font-semibold whitespace-nowrap" style={{ color: "#203430" }}>
-                          {emp.first_name} {emp.last_name}
+                          {employee.fullName}
                         </p>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-xs" style={{ color: "#6b7f78" }}>{emp.email}</td>
-                    <td className="px-3 py-3 min-w-[140px]">
-                      {editingCellId === emp.id && editingField === "team_id" ? (
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <select value={editingValue} onChange={(e) => setEditingValue(e.target.value)}
-                            className="px-2 py-1 rounded border text-xs flex-1"
-                            style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                            {Object.entries(TEAMS).map(([id, name]) => (
-                              <option key={id} value={id}>{name}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => handleCellEdit(emp.id, "team_id", editingValue)}
-                            className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors">
-                            <Check size={12} style={{ color: "#059669" }} />
+                      </td>
+                      <td className="px-3 py-3 text-xs" style={{ color: "#6b7f78" }}>
+                        {employee.email}
+                      </td>
+                      <td className="px-3 py-3 min-w-[160px]">
+                        {editingCellId === employee.id && editingField === "department" ? (
+                          <div className="flex gap-1" onClick={(event) => event.stopPropagation()}>
+                            <select
+                              value={editingValue}
+                              onChange={(event) => setEditingValue(event.target.value)}
+                              className="px-2 py-1 rounded border text-xs flex-1"
+                              style={{ borderColor: "#e2ede9", color: "#203430" }}
+                            >
+                              {departments.map((department) => (
+                                <option key={department} value={department}>
+                                  {department}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => void handleCellEdit(employee.id, "department", editingValue)}
+                              className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                            >
+                              <Check size={12} style={{ color: "#059669" }} />
+                            </button>
+                            <button
+                              onClick={closeInlineEdit}
+                              className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                            >
+                              <X size={12} style={{ color: "#6b7f78" }} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingCellId(employee.id);
+                              setEditingField("department");
+                              setEditingValue(employee.department);
+                            }}
+                            className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
+                            style={{ background: departmentColor.bg }}
+                          >
+                            <span className="text-xs font-semibold" style={{ color: departmentColor.color }}>
+                              {employee.department}
+                            </span>
+                            <Pencil size={10} style={{ color: departmentColor.color }} />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 min-w-[140px]">
+                        {editingCellId === employee.id && editingField === "role" ? (
+                          <div className="flex gap-1" onClick={(event) => event.stopPropagation()}>
+                            <select
+                              value={editingValue}
+                              onChange={(event) => setEditingValue(event.target.value)}
+                              className="px-2 py-1 rounded border text-xs flex-1"
+                              style={{ borderColor: "#e2ede9", color: "#203430" }}
+                            >
+                              {ROLE_OPTIONS.map((role) => (
+                                <option key={role.value} value={role.value}>
+                                  {role.label}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => void handleCellEdit(employee.id, "role", editingValue)}
+                              className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
+                            >
+                              <Check size={12} style={{ color: "#059669" }} />
+                            </button>
+                            <button
+                              onClick={closeInlineEdit}
+                              className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
+                            >
+                              <X size={12} style={{ color: "#6b7f78" }} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingCellId(employee.id);
+                              setEditingField("role");
+                              setEditingValue(employee.role);
+                            }}
+                            className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
+                            style={{ color: "#203430" }}
+                          >
+                            {getRoleLabel(employee.role)}
+                            <Pencil size={10} style={{ color: "#3b82f6" }} />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-xs whitespace-nowrap" style={{ color: "#6b7f78" }}>
+                        {formatDateVN(employee.companyJoinDate)}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[employee.status].badge}`}>
+                          {STATUS_CONFIG[employee.status].label}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            disabled
+                            title="Chưa có màn hình chi tiết dùng API"
+                            className="w-6 h-6 rounded flex items-center justify-center cursor-not-allowed opacity-40"
+                          >
+                            <Eye size={13} style={{ color: "#3b82f6" }} />
                           </button>
-                          <button onClick={() => setEditingCellId(null)}
-                            className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors">
-                            <X size={12} style={{ color: "#6b7f78" }} />
+                          <button
+                            type="button"
+                            disabled
+                            title="Chỉnh sửa hiện hỗ trợ inline ở phòng ban và vai trò"
+                            className="w-6 h-6 rounded flex items-center justify-center cursor-not-allowed opacity-40"
+                          >
+                            <Pencil size={13} style={{ color: "#f59e0b" }} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteEmployee(employee.id, employee.fullName)}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                            title="Xóa"
+                          >
+                            <Trash2 size={13} style={{ color: "#ef4444" }} />
                           </button>
                         </div>
-                      ) : (
-                        <div onClick={(e) => { e.stopPropagation(); setEditingCellId(emp.id); setEditingField("team_id"); setEditingValue(emp.team_id.toString()); }}
-                          className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
-                          style={{ background: teamColor.bg }}>
-                          <span className="text-xs font-semibold" style={{ color: teamColor.color }}>
-                            {TEAMS[emp.team_id]}
-                          </span>
-                          <Pencil size={10} style={{ color: teamColor.color }} />
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 min-w-[140px]">
-                      {editingCellId === emp.id && editingField === "role_id" ? (
-                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                          <select value={editingValue} onChange={(e) => setEditingValue(e.target.value)}
-                            className="px-2 py-1 rounded border text-xs flex-1"
-                            style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                            {Object.entries(ROLES).map(([id, name]) => (
-                              <option key={id} value={id}>{name}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => handleCellEdit(emp.id, "role_id", editingValue)}
-                            className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors">
-                            <Check size={12} style={{ color: "#059669" }} />
-                          </button>
-                          <button onClick={() => setEditingCellId(null)}
-                            className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors">
-                            <X size={12} style={{ color: "#6b7f78" }} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div onClick={(e) => { e.stopPropagation(); setEditingCellId(emp.id); setEditingField("role_id"); setEditingValue((emp.role_id || 1).toString()); }}
-                          className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
-                          style={{ color: "#203430" }}>
-                          {ROLES[emp.role_id || 1]}
-                          <Pencil size={10} style={{ color: "#3b82f6" }} />
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-3 text-xs whitespace-nowrap" style={{ color: "#6b7f78" }}>
-                      {emp.company_join_date ? new Date(emp.company_join_date).toLocaleDateString('vi-VN') : "—"}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[emp.status].badge}`}>
-                        {STATUS_CONFIG[emp.status].label}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-blue-50" title="Xem">
-                          <Eye size={13} style={{ color: "#3b82f6" }} />
-                        </button>
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50" title="Sửa">
-                          <Pencil size={13} style={{ color: "#f59e0b" }} />
-                        </button>
-                        <button className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50" title="Xóa">
-                          <Trash2 size={13} style={{ color: "#ef4444" }} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
-      {/* Bottom: department distribution + activity feed */}
+
       <div className="grid lg:grid-cols-2 gap-5">
-        {/* Department distribution */}
         <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
           <div className="flex items-center gap-2 mb-4">
             <Building2 size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Phân bố theo phòng ban</h3>
+            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>
+              Phân bố theo phòng ban
+            </h3>
           </div>
-          <div className="space-y-3">
-            {DEPT_DIST.map((d) => (
-              <div key={d.code} className="flex items-center gap-3">
-                <span className="text-xs font-bold text-white px-2 py-0.5 rounded w-20 text-center flex-shrink-0"
-                  style={{ background: d.color }}>
-                  {d.code}
-                </span>
-                <div className="flex-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span style={{ color: "#203430" }}>{d.label}</span>
-                    <span className="font-semibold" style={{ color: "#6b7f78" }}>{d.count} người ({d.pct}%)</span>
-                  </div>
-                  <div className="h-2 rounded-full overflow-hidden" style={{ background: "#f0f4f2" }}>
-                    <div className="h-full rounded-full" style={{ width: `${d.pct * 3}%`, background: d.color }} />
+          {departmentDistribution.length > 0 ? (
+            <div className="space-y-3">
+              {departmentDistribution.map((department) => (
+                <div key={department.label} className="flex items-center gap-3">
+                  <span
+                    className="text-xs font-bold text-white px-2 py-0.5 rounded w-20 text-center shrink-0"
+                    style={{ background: department.color }}
+                  >
+                    {department.code}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span style={{ color: "#203430" }}>{department.label}</span>
+                      <span className="font-semibold" style={{ color: "#6b7f78" }}>
+                        {department.count} người ({department.pct}%)
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden" style={{ background: "#f0f4f2" }}>
+                      <div className="h-full rounded-full" style={{ width: `${department.pct}%`, background: department.color }} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: "#6b7f78" }}>
+              Chưa có dữ liệu phòng ban để hiển thị.
+            </p>
+          )}
         </div>
 
-        {/* Recent activity */}
         <div className="bg-white rounded-xl border p-5" style={{ borderColor: "#e2ede9" }}>
           <div className="flex items-center gap-2 mb-4">
             <Clock size={15} style={{ color: "#1DB87A" }} />
-            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>Hoạt động gần đây</h3>
+            <h3 className="font-semibold text-sm" style={{ color: "#203430" }}>
+              Hoạt động gần đây
+            </h3>
           </div>
-          <div className="relative pl-5">
-            <div className="absolute left-2 top-0 bottom-0 w-0.5" style={{ background: "#e2ede9" }} />
-            {ACTIVITIES.map((a, i) => (
-              <div key={i} className="relative mb-4 last:mb-0">
-                <div className="absolute -left-3.5 top-1 w-3 h-3 rounded-full border-2 border-white"
-                  style={{ background: a.color }} />
-                <p className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{a.time}</p>
-                <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#203430" }}>{a.text}</p>
-              </div>
-            ))}
+          <div className="rounded-xl border border-dashed p-4 text-sm" style={{ borderColor: "#d6e5df", color: "#6b7f78" }}>
+            Backend hiện chưa có feed hoạt động cho trang này, nên khu vực này đang được giữ ở trạng thái an toàn.
           </div>
         </div>
       </div>
 
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
-        >
+        <DialogContent showCloseButton={false} className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl">
           <DialogHeader className="sr-only">
             <DialogTitle>Thêm nhân viên</DialogTitle>
-            <DialogDescription>
-              Tạo hồ sơ nhân viên mới và bổ sung thông tin cơ bản.
-            </DialogDescription>
+            <DialogDescription>Tạo hồ sơ nhân viên mới và bổ sung thông tin cơ bản.</DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center justify-between border-b bg-white px-6 py-4" style={{ borderColor: "#e2ede9" }}>
@@ -500,7 +847,9 @@ export default function EmployeesPage() {
                 <UserPlus size={20} style={{ color: "#1DB87A" }} />
               </div>
               <div>
-                <h2 className="text-base font-bold" style={{ color: "#203430" }}>Thêm nhân viên mới</h2>
+                <h2 className="text-base font-bold" style={{ color: "#203430" }}>
+                  Thêm nhân viên mới
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   Điền thông tin cơ bản để tạo hồ sơ nhân sự trong hệ thống
                 </p>
@@ -517,11 +866,10 @@ export default function EmployeesPage() {
 
           <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
             <AddEmployeeForm
-              onSuccess={() => {
-                setIsAddModalOpen(false);
-                // Reload data would happen here
-              }}
+              departments={departments}
+              onSubmit={handleCreateEmployee}
               onClose={() => setIsAddModalOpen(false)}
+              isSubmitting={isMutating}
             />
           </div>
         </DialogContent>
@@ -530,61 +878,86 @@ export default function EmployeesPage() {
   );
 }
 
-// Add Employee Form Component
-function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClose: () => void }) {
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
+function AddEmployeeForm({
+  departments,
+  onSubmit,
+  onClose,
+  isSubmitting,
+}: {
+  departments: string[];
+  onSubmit: (data: EmployeeFormData) => Promise<void>;
+  onClose: () => void;
+  isSubmitting: boolean;
+}) {
+  const [formData, setFormData] = useState<EmployeeFormData>({
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
-    role_id: "1",
-    team_id: "1",
-    company_join_date: "",
+    role: "EMPLOYEE",
+    department: departments[0] ?? DEFAULT_DEPARTMENTS[0],
+    companyJoinDate: "",
     status: "active",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string>("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      department: prev.department || departments[0] || DEFAULT_DEPARTMENTS[0],
+    }));
+  }, [departments]);
+
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
+    if (submitError) setSubmitError("");
   };
 
-  const handleFieldChange = (name: keyof typeof formData, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  const handleFieldChange = (name: keyof EmployeeFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value as EmployeeFormData[keyof EmployeeFormData] }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
+    if (submitError) setSubmitError("");
   };
 
   const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.first_name.trim()) newErrors.first_name = "Họ là bắt buộc";
-    if (!formData.last_name.trim()) newErrors.last_name = "Tên là bắt buộc";
-    if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) newErrors.email = "Email không hợp lệ";
-    if (!formData.password) newErrors.password = "Mật khẩu là bắt buộc";
-    if (formData.password.length < 6) newErrors.password = "Mật khẩu phải ít nhất 6 ký tự";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const nextErrors: Record<string, string> = {};
+
+    if (!formData.firstName.trim()) nextErrors.firstName = "Họ là bắt buộc";
+    if (!formData.lastName.trim()) nextErrors.lastName = "Tên là bắt buộc";
+    if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) nextErrors.email = "Email không hợp lệ";
+    if (!formData.password) nextErrors.password = "Mật khẩu là bắt buộc";
+    if (formData.password.length < 6) nextErrors.password = "Mật khẩu phải ít nhất 6 ký tự";
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateForm()) {
-      console.log("[v0] Submitting new employee:", formData);
-      // Here you would normally call an API to create the user
-      onSuccess();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validateForm()) return;
+
+    try {
+      await onSubmit({
+        ...formData,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+      });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Không thể tạo nhân viên mới.");
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 p-6">
-      <div
-        className="rounded-xl border px-4 py-4"
-        style={{ background: "#f0f9f5", borderColor: "#D3F2E7" }}
-      >
+      <div className="rounded-xl border px-4 py-4" style={{ background: "#f0f9f5", borderColor: "#D3F2E7" }}>
         <div className="mb-3 flex items-center gap-2">
           <Shield size={15} style={{ color: "#1DB87A" }} />
           <span className="text-sm font-semibold" style={{ color: "#0E474E" }}>
@@ -593,49 +966,61 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[
-            { label: "Trạng thái mặc định", value: "Đang làm việc" },
-            { label: "Vai trò hệ thống", value: "Nhân viên nội bộ" },
+            { label: "Trạng thái khi tạo", value: formData.status === "active" ? "Đang làm việc" : "Tạm nghỉ" },
+            { label: "Vai trò hệ thống", value: getRoleLabel(formData.role) },
             { label: "Đăng nhập", value: "Email công ty" },
             { label: "Bảo mật", value: "Mật khẩu tối thiểu 6 ký tự" },
           ].map((item) => (
             <div key={item.label} className="text-center">
-              <p className="text-sm font-bold" style={{ color: "#1DB87A" }}>{item.value}</p>
+              <p className="text-sm font-bold" style={{ color: "#1DB87A" }}>
+                {item.value}
+              </p>
               <p className="text-xs leading-relaxed text-muted-foreground">{item.label}</p>
             </div>
           ))}
         </div>
       </div>
 
+      {submitError && (
+        <div className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{submitError}</div>
+      )}
+
       <div className="space-y-5">
         <div>
           <div className="mb-3 flex items-center gap-2">
             <Users size={14} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin cá nhân</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+              Thông tin cá nhân
+            </h3>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Họ</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Họ
+              </label>
               <Input
                 type="text"
-                name="first_name"
-                value={formData.first_name}
+                name="firstName"
+                value={formData.firstName}
                 onChange={handleChange}
                 placeholder="Ví dụ: Phạm"
-                className={errors.first_name ? "border-red-500" : undefined}
+                className={errors.firstName ? "border-red-500" : undefined}
               />
-              {errors.first_name && <p className="mt-1 text-xs text-red-500">{errors.first_name}</p>}
+              {errors.firstName && <p className="mt-1 text-xs text-red-500">{errors.firstName}</p>}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Tên</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Tên
+              </label>
               <Input
                 type="text"
-                name="last_name"
-                value={formData.last_name}
+                name="lastName"
+                value={formData.lastName}
                 onChange={handleChange}
                 placeholder="Ví dụ: Long Đĩnh"
-                className={errors.last_name ? "border-red-500" : undefined}
+                className={errors.lastName ? "border-red-500" : undefined}
               />
-              {errors.last_name && <p className="mt-1 text-xs text-red-500">{errors.last_name}</p>}
+              {errors.lastName && <p className="mt-1 text-xs text-red-500">{errors.lastName}</p>}
             </div>
           </div>
         </div>
@@ -643,11 +1028,15 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
         <div>
           <div className="mb-3 flex items-center gap-2">
             <Shield size={14} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin tài khoản</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+              Thông tin tài khoản
+            </h3>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Email</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Email
+              </label>
               <Input
                 type="email"
                 name="email"
@@ -660,7 +1049,9 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Mật khẩu</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Mật khẩu
+              </label>
               <Input
                 type="password"
                 name="password"
@@ -677,44 +1068,58 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
         <div>
           <div className="mb-3 flex items-center gap-2">
             <Building2 size={14} style={{ color: "#1DB87A" }} />
-            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin tổ chức</h3>
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>
+              Thông tin tổ chức
+            </h3>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Chức vụ</label>
-              <Select value={formData.role_id} onValueChange={(value) => handleFieldChange("role_id", value)}>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Vai trò
+              </label>
+              <Select value={formData.role} onValueChange={(value) => handleFieldChange("role", value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn chức vụ" />
+                  <SelectValue placeholder="Chọn vai trò" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ROLES).map(([id, name]) => (
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  {ROLE_OPTIONS.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Phòng ban</label>
-              <Select value={formData.team_id} onValueChange={(value) => handleFieldChange("team_id", value)}>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Phòng ban
+              </label>
+              <Select value={formData.department} onValueChange={(value) => handleFieldChange("department", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TEAMS).map(([id, name]) => (
-                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  {departments.map((department) => (
+                    <SelectItem key={department} value={department}>
+                      {department}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Ngày tham gia công ty</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Ngày tham gia công ty
+              </label>
               <DatePicker
-                value={formData.company_join_date}
-                onChange={(value) => handleFieldChange("company_join_date", value)}
+                value={formData.companyJoinDate}
+                onChange={(value) => handleFieldChange("companyJoinDate", value)}
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Trạng thái</label>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>
+                Trạng thái
+              </label>
               <Select value={formData.status} onValueChange={(value) => handleFieldChange("status", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn trạng thái" />
@@ -722,7 +1127,6 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
                 <SelectContent>
                   <SelectItem value="active">Đang làm việc</SelectItem>
                   <SelectItem value="inactive">Tạm nghỉ</SelectItem>
-                  <SelectItem value="terminated">Đã nghỉ việc</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -731,22 +1135,17 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
       </div>
 
       <div className="flex items-center gap-3 border-t pt-4" style={{ borderColor: "#e2ede9" }}>
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-1"
-          onClick={onClose}
-          style={{ color: "#203430" }}
-        >
+        <Button type="button" variant="outline" className="flex-1" onClick={onClose} style={{ color: "#203430" }}>
           Hủy
         </Button>
         <Button
           type="submit"
-          className="flex-1 text-white"
+          className="flex-1 text-white disabled:opacity-70"
           style={{ background: "#1DB87A" }}
+          disabled={isSubmitting}
         >
           <UserPlus size={15} />
-          Thêm nhân viên
+          {isSubmitting ? "Đang tạo..." : "Thêm nhân viên"}
         </Button>
       </div>
     </form>
