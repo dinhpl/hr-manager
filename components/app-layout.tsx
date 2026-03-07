@@ -52,7 +52,12 @@ const NAV_ITEMS = [
     key: "approval",
   },
   // [MVP-HIDDEN] Quản lý nhân viên - not in MVP scope
-  // { href: "/dashboard/employees", label: "Quản lý nhân viên", icon: Users, key: "employees" },
+  {
+    href: "/dashboard/employees",
+    label: "Quản lý nhân viên",
+    icon: Users,
+    key: "employees",
+  },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
   // { href: "/dashboard/reports", label: "Báo cáo", icon: BarChart3, key: "reports" },
   {
@@ -254,12 +259,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   className="absolute right-0 mt-2 w-80 bg-white rounded-xl border shadow-lg z-20"
                   style={{ borderColor: "#e2ede9" }}
                 >
-                  <div className="px-3 py-2 border-b" style={{ borderColor: "#e2ede9" }}>
-                    <p className="text-sm font-semibold" style={{ color: "#203430" }}>Thông báo</p>
+                  <div
+                    className="px-3 py-2 border-b"
+                    style={{ borderColor: "#e2ede9" }}
+                  >
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "#203430" }}
+                    >
+                      Thông báo
+                    </p>
                   </div>
                   <div className="py-1">
                     {notifications.map((item, idx) => (
-                      <div key={idx} className="px-3 py-2 text-sm" style={{ color: "#6b7f78" }}>
+                      <div
+                        key={idx}
+                        className="px-3 py-2 text-sm"
+                        style={{ color: "#6b7f78" }}
+                      >
                         {item}
                       </div>
                     ))}
@@ -290,9 +307,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   className="absolute right-0 mt-2 w-56 bg-white rounded-xl border shadow-lg z-20 overflow-hidden"
                   style={{ borderColor: "#e2ede9" }}
                 >
-                  <div className="px-3 py-2 border-b" style={{ borderColor: "#e2ede9" }}>
-                    <p className="text-sm font-semibold" style={{ color: "#203430" }}>{displayName}</p>
-                    <p className="text-xs" style={{ color: "#6b7f78" }}>{roleTitle}</p>
+                  <div
+                    className="px-3 py-2 border-b"
+                    style={{ borderColor: "#e2ede9" }}
+                  >
+                    <p
+                      className="text-sm font-semibold"
+                      style={{ color: "#203430" }}
+                    >
+                      {displayName}
+                    </p>
+                    <p className="text-xs" style={{ color: "#6b7f78" }}>
+                      {roleTitle}
+                    </p>
                   </div>
                   <button
                     onClick={() => setProfileOpen(false)}
