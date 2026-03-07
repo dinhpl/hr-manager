@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   X,
   Tag,
@@ -18,6 +18,23 @@ import {
   FileText,
   Info,
 } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const LEAVE_TYPES = [
   { value: "AL", label: "AL - Nghỉ phép năm" },
@@ -76,23 +93,55 @@ interface LeaveRequestModalProps {
   editData?: LeaveRequestData | null;
 }
 
+function getInitialFormState(editData?: LeaveRequestData | null) {
+  return {
+    leaveType: editData?.typeCode || "",
+    fromDate: editData?.fromDate || "",
+    toDate: editData?.toDate || "",
+    durationMode: editData?.durationMode || "FULL_DAY",
+    fromTime: editData?.fromTime || "08:00",
+    toTime: editData?.toTime || "17:00",
+    reason: editData?.reason || "",
+    handoverPerson: editData?.handoverPerson || "",
+  } as const;
+}
+
 export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, editData }: LeaveRequestModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
   const isEditMode = !!editData?.id;
+  const initialFormState = getInitialFormState(editData);
   
-  const [leaveType, setLeaveType] = useState(editData?.typeCode || "");
-  const [fromDate, setFromDate] = useState(editData?.fromDate || "");
-  const [toDate, setToDate] = useState(editData?.toDate || "");
-  const [durationMode, setDurationMode] = useState<DurationMode>(editData?.durationMode || "FULL_DAY");
-  const [fromTime, setFromTime] = useState(editData?.fromTime || "08:00");
-  const [toTime, setToTime] = useState(editData?.toTime || "17:00");
-  const [reason, setReason] = useState(editData?.reason || "");
-  const [handoverPerson, setHandoverPerson] = useState(editData?.handoverPerson || "");
+  const [leaveType, setLeaveType] = useState(initialFormState.leaveType);
+  const [fromDate, setFromDate] = useState(initialFormState.fromDate);
+  const [toDate, setToDate] = useState(initialFormState.toDate);
+  const [durationMode, setDurationMode] = useState<DurationMode>(initialFormState.durationMode);
+  const [fromTime, setFromTime] = useState(initialFormState.fromTime);
+  const [toTime, setToTime] = useState(initialFormState.toTime);
+  const [reason, setReason] = useState(initialFormState.reason);
+  const [handoverPerson, setHandoverPerson] = useState(initialFormState.handoverPerson);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "saving" | "submitting" | "success">("idle");
   const [alert, setAlert] = useState<{ type: "warning" | "info" | "success"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const nextState = getInitialFormState(editData);
+    setLeaveType(nextState.leaveType);
+    setFromDate(nextState.fromDate);
+    setToDate(nextState.toDate);
+    setDurationMode(nextState.durationMode);
+    setFromTime(nextState.fromTime);
+    setToTime(nextState.toTime);
+    setReason(nextState.reason);
+    setHandoverPerson(nextState.handoverPerson);
+    setAttachedFile(null);
+    setDragging(false);
+    setSubmitState("idle");
+    setAlert(null);
+  }, [isOpen, editData]);
 
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
@@ -208,6 +257,8 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
     setReason("");
     setHandoverPerson("");
     setAttachedFile(null);
+    setDragging(false);
+    setSubmitState("idle");
     setAlert(null);
   };
 
@@ -216,21 +267,27 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
     onClose();
   };
 
-  if (!isOpen) return null;
-
-  const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-all";
-  const inputStyle = { borderColor: "#e2ede9", background: "#fff", color: "#203430" };
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      style={{ background: "rgba(14,71,78,0.45)" }}
-      onClick={handleClose}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
     >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        showCloseButton={false}
+        className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>
+            {isEditMode ? "Chỉnh sửa yêu cầu nghỉ phép" : "Đăng ký nghỉ phép mới"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEditMode
+              ? "Cập nhật thông tin yêu cầu nghỉ phép của bạn"
+              : "Điền đầy đủ thông tin để gửi yêu cầu nghỉ phép"}
+          </DialogDescription>
+        </DialogHeader>
         {/* Header */}
         <div
           className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10"
@@ -305,17 +362,20 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                 <Tag size={14} style={{ color: "#1DB87A" }} /> Loại nghỉ phép <span style={{ color: "#ef4444" }}>*</span>
               </label>
-              <select
-                value={leaveType}
-                onChange={(e) => setLeaveType(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
+              <Select
+                value={leaveType || "placeholder"}
+                onValueChange={(value) => setLeaveType(value === "placeholder" ? "" : value)}
               >
-                <option value="">-- Chọn loại nghỉ --</option>
-                {LEAVE_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="-- Chọn loại nghỉ --" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="placeholder">-- Chọn loại nghỉ --</SelectItem>
+                  {LEAVE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Date range */}
@@ -324,25 +384,13 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
                 <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                   <CalendarDays size={14} style={{ color: "#1DB87A" }} /> Từ ngày <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <input
-                  type="date"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className={inputClass}
-                  style={inputStyle}
-                />
+                <DatePicker value={fromDate} onChange={setFromDate} />
               </div>
               <div>
                 <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                   <CalendarDays size={14} style={{ color: "#1DB87A" }} /> Đến ngày <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <input
-                  type="date"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className={inputClass}
-                  style={inputStyle}
-                />
+                <DatePicker value={toDate} onChange={setToDate} />
               </div>
             </div>
 
@@ -391,11 +439,11 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <div className="grid grid-cols-2 gap-4 p-4 rounded-lg" style={{ background: "#f7f7f7", border: "1px dashed #D3F2E7" }}>
                 <div>
                   <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#203430" }}>Từ giờ</label>
-                  <input type="time" value={fromTime} onChange={(e) => setFromTime(e.target.value)} className={inputClass} style={inputStyle} />
+                  <TimePicker value={fromTime} onChange={setFromTime} />
                 </div>
                 <div>
                   <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#203430" }}>Đến giờ</label>
-                  <input type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} className={inputClass} style={inputStyle} />
+                  <TimePicker value={toTime} onChange={setToTime} />
                 </div>
               </div>
             )}
@@ -424,13 +472,12 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                 <MessageSquare size={14} style={{ color: "#1DB87A" }} /> Lý do nghỉ <span style={{ color: "#ef4444" }}>*</span>
               </label>
-              <textarea
+              <Textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
                 placeholder="Nhập lý do nghỉ phép..."
-                className={`${inputClass} resize-none`}
-                style={inputStyle}
+                className="resize-none"
               />
             </div>
 
@@ -439,12 +486,20 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
               <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                 <Users2 size={14} style={{ color: "#1DB87A" }} /> Người bàn giao/hỗ trợ khi cần
               </label>
-              <select value={handoverPerson} onChange={(e) => setHandoverPerson(e.target.value)} className={inputClass} style={inputStyle}>
-                <option value="">-- Chọn người bàn giao --</option>
-                {HANDOVER_PERSONS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
+              <Select
+                value={handoverPerson || "placeholder"}
+                onValueChange={(value) => setHandoverPerson(value === "placeholder" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="-- Chọn người bàn giao --" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="placeholder">-- Chọn người bàn giao --</SelectItem>
+                  {HANDOVER_PERSONS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* File attachment */}
@@ -525,7 +580,7 @@ export default function LeaveRequestModal({ isOpen, onClose, onSubmitSuccess, ed
             <X size={15} /> Hủy
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

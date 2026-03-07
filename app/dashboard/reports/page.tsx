@@ -10,6 +10,14 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell, Tooltip as PieTooltip,
 } from "recharts";
+import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const TREND_DATA = [
   { month: "Jan", annual: 42, sick: 18, wfh: 12 },
@@ -108,53 +116,64 @@ export default function ReportsPage() {
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Loại báo cáo</label>
-            <select value={reportType} onChange={(e) => setReportType(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[200px]"
-              style={{ borderColor: "#e2ede9", color: "#203430" }}>
-              <option value="leave-summary">Tổng quan nghỉ phép</option>
-              <option value="leave-detail">Chi tiết nghỉ phép</option>
-              <option value="overtime-summary">Tổng quan overtime</option>
-              <option value="department-analysis">Phân tích theo phòng ban</option>
-              <option value="employee-performance">Hiệu suất nhân viên</option>
-              <option value="leave-trend">Xu hướng nghỉ phép</option>
-            </select>
+            <Select value={reportType} onValueChange={setReportType}>
+              <SelectTrigger className="min-w-[200px]">
+                <SelectValue placeholder="Chọn loại báo cáo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="leave-summary">Tổng quan nghỉ phép</SelectItem>
+                <SelectItem value="leave-detail">Chi tiết nghỉ phép</SelectItem>
+                <SelectItem value="overtime-summary">Tổng quan overtime</SelectItem>
+                <SelectItem value="department-analysis">Phân tích theo phòng ban</SelectItem>
+                <SelectItem value="employee-performance">Hiệu suất nhân viên</SelectItem>
+                <SelectItem value="leave-trend">Xu hướng nghỉ phép</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Từ ngày</label>
-            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
-              style={{ borderColor: "#e2ede9", color: "#203430" }} />
+            <DatePicker value={fromDate} onChange={setFromDate} />
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Đến ngày</label>
-            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none"
-              style={{ borderColor: "#e2ede9", color: "#203430" }} />
+            <DatePicker value={toDate} onChange={setToDate} />
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Phòng ban</label>
-            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[130px]"
-              style={{ borderColor: "#e2ede9", color: "#203430" }}>
-              <option value="">Tất cả</option>
-              <option value="IT">IT</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Sales">Sales</option>
-              <option value="HR">HR</option>
-              <option value="Finance">Finance</option>
-            </select>
+            <Select
+              value={deptFilter || "all"}
+              onValueChange={(value) => setDeptFilter(value === "all" ? "" : value)}
+            >
+              <SelectTrigger className="min-w-[130px]">
+                <SelectValue placeholder="Chọn phòng ban" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="IT">IT</SelectItem>
+                <SelectItem value="Marketing">Marketing</SelectItem>
+                <SelectItem value="Sales">Sales</SelectItem>
+                <SelectItem value="HR">HR</SelectItem>
+                <SelectItem value="Finance">Finance</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Nhóm</label>
-            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[130px]"
-              style={{ borderColor: "#e2ede9", color: "#203430" }}>
-              <option value="">Tất cả</option>
-              <option value="Backend">Backend Team</option>
-              <option value="Frontend">Frontend Team</option>
-              <option value="QA">QA Team</option>
-              <option value="Marketing">Marketing Team</option>
-            </select>
+            <Select
+              value={teamFilter || "all"}
+              onValueChange={(value) => setTeamFilter(value === "all" ? "" : value)}
+            >
+              <SelectTrigger className="min-w-[130px]">
+                <SelectValue placeholder="Chọn nhóm" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả</SelectItem>
+                <SelectItem value="Backend">Backend Team</SelectItem>
+                <SelectItem value="Frontend">Frontend Team</SelectItem>
+                <SelectItem value="QA">QA Team</SelectItem>
+                <SelectItem value="Marketing">Marketing Team</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white self-end"
             style={{ background: "#1DB87A" }}>

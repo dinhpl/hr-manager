@@ -6,6 +6,14 @@ import {
   Clock, CheckCircle, AlertTriangle, XCircle,
   History, BarChart3, ChevronRight,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CompoffItem {
   id: string;
@@ -221,11 +229,20 @@ export default function CompoffPage() {
           ].map((f) => (
             <div key={f.id} className="flex flex-col gap-1">
               <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{f.label}</label>
-              <select value={f.value} onChange={(e) => f.onChange(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[160px]"
-                style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                {f.options.map(([val, lbl]) => <option key={val} value={val}>{lbl}</option>)}
-              </select>
+              <Select
+                value={f.value || `all-${f.id}`}
+                onValueChange={(value) => f.onChange(value.startsWith("all-") ? "" : value)}
+              >
+                <SelectTrigger className="min-w-[160px]">
+                  <SelectValue placeholder={f.label} />
+                </SelectTrigger>
+                <SelectContent>
+                  {f.options.map(([val, lbl], idx) => {
+                    const itemValue = val === "" ? `all-${f.id}` : val;
+                    return <SelectItem key={`${f.id}-${idx}`} value={itemValue}>{lbl}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           ))}
           <div className="ml-auto self-end">
@@ -348,20 +365,28 @@ export default function CompoffPage() {
             <div className="space-y-3">
               <div>
                 <label className="block text-xs mb-1" style={{ color: "rgba(255,255,255,0.8)" }}>Giờ overtime</label>
-                <input type="number" step="0.5" min="0" value={calcHours} onChange={(e) => setCalcHours(e.target.value)}
+                <Input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={calcHours}
+                  onChange={(e) => setCalcHours(e.target.value)}
                   placeholder="Nhập số giờ OT"
-                  className="w-full px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "white" }} />
+                  className="border-white/30 bg-white/15 text-white placeholder:text-white/60"
+                />
               </div>
               <div>
                 <label className="block text-xs mb-1" style={{ color: "rgba(255,255,255,0.8)" }}>Loại ngày</label>
-                <select value={calcType} onChange={(e) => setCalcType(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "white" }}>
-                  <option value="weekday" style={{ color: "#203430" }}>Ngày thường (×1.0)</option>
-                  <option value="weekend" style={{ color: "#203430" }}>Cuối tuần (×1.5)</option>
-                  <option value="holiday" style={{ color: "#203430" }}>Ngày lễ (×2.0)</option>
-                </select>
+                <Select value={calcType} onValueChange={setCalcType}>
+                  <SelectTrigger className="border-white/30 bg-white/15 text-white">
+                    <SelectValue placeholder="Chọn loại ngày" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekday">Ngày thường (×1.0)</SelectItem>
+                    <SelectItem value="weekend">Cuối tuần (×1.5)</SelectItem>
+                    <SelectItem value="holiday">Ngày lễ (×2.0)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="py-2">
                 <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>Comp-off nhận được:</p>

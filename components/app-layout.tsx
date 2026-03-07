@@ -52,7 +52,6 @@ const NAV_ITEMS = [
     icon: CheckCircle2,
     key: "approval",
   },
-  // [MVP-HIDDEN] Quản lý nhân viên - not in MVP scope
   {
     href: "/dashboard/employees",
     label: "Quản lý nhân viên",

@@ -11,6 +11,16 @@ import {
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
 import LeaveRequestModal, { LeaveRequestData } from "@/components/leave-request-modal";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /** Leave type code → color mapping (used for localStorage-sourced records) */
 const TYPE_COLORS: Record<string, string> = {
@@ -367,96 +377,136 @@ export default function LeaveHistoryPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Trạng thái</label>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="">Tất cả</option>
-                  <option value="draft">Nháp</option>
-                  <option value="pending">Chờ duyệt</option>
-                  <option value="approved">Đã duyệt</option>
-                  <option value="hr_confirm">HR xác nhận</option>
-                  <option value="rejected">Từ chối</option>
-                </select>
+                <Select
+                  value={statusFilter || "all-status"}
+                  onValueChange={(value) => setStatusFilter(value === "all-status" ? "" : value)}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-status">Tất cả</SelectItem>
+                    <SelectItem value="draft">Nháp</SelectItem>
+                    <SelectItem value="pending">Chờ duyệt</SelectItem>
+                    <SelectItem value="approved">Đã duyệt</SelectItem>
+                    <SelectItem value="hr_confirm">HR xác nhận</SelectItem>
+                    <SelectItem value="rejected">Từ chối</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Loại nghỉ</label>
-                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="">Tất cả</option>
-                  <option value="AL">Phép năm</option>
-                  <option value="SL">Phép ốm</option>
-                  <option value="ML">Thai sản</option>
-                  <option value="CO">Nghỉ bù</option>
-                  <option value="WFH">WFH</option>
-                  <option value="PL">Việc riêng</option>
-                </select>
+                <Select
+                  value={typeFilter || "all-type"}
+                  onValueChange={(value) => setTypeFilter(value === "all-type" ? "" : value)}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Loại nghỉ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-type">Tất cả</SelectItem>
+                    <SelectItem value="AL">Phép năm</SelectItem>
+                    <SelectItem value="SL">Phép ốm</SelectItem>
+                    <SelectItem value="ML">Thai sản</SelectItem>
+                    <SelectItem value="CO">Nghỉ bù</SelectItem>
+                    <SelectItem value="WFH">WFH</SelectItem>
+                    <SelectItem value="PL">Việc riêng</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Thời gian</label>
-                <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="thisWeek">Tuần này</option>
-                  <option value="thisMonth">Tháng này</option>
-                  <option value="lastMonth">Tháng trước</option>
-                  <option value="thisYear">Năm nay</option>
-                  <option value="">Tùy chọn</option>
-                </select>
+                <Select value={periodFilter || "custom"} onValueChange={setPeriodFilter}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Thời gian" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="thisWeek">Tuần này</SelectItem>
+                    <SelectItem value="thisMonth">Tháng này</SelectItem>
+                    <SelectItem value="lastMonth">Tháng trước</SelectItem>
+                    <SelectItem value="thisYear">Năm nay</SelectItem>
+                    <SelectItem value="custom">Tùy chọn</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Từ ngày</label>
-                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }} />
+                <DatePicker value={fromDate} onChange={setFromDate} className="text-xs" />
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Đến ngày</label>
-                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }} />
+                <DatePicker value={toDate} onChange={setToDate} className="text-xs" />
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Số ngày</label>
-                <select className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="">Tất cả</option>
-                  <option value="1">1 ngày</option>
-                  <option value="2-3">2-3 ngày</option>
-                  <option value="4-7">4-7 ngày</option>
-                  <option value="8+">8+ ngày</option>
-                </select>
+                <Select defaultValue="all-days">
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Số ngày" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-days">Tất cả</SelectItem>
+                    <SelectItem value="1">1 ngày</SelectItem>
+                    <SelectItem value="2-3">2-3 ngày</SelectItem>
+                    <SelectItem value="4-7">4-7 ngày</SelectItem>
+                    <SelectItem value="8+">8+ ngày</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Tìm kiếm</label>
-                <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+                <Input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   placeholder="Tìm theo ID, lý do, người duyệt..."
-                  className="w-full px-3 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }} />
+                  className="text-xs"
+                />
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Người duyệt</label>
-                <select value={approverFilter} onChange={(e) => setApproverFilter(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="">Tất cả</option>
-                  <option value="TRUONGDAT">Trương Hữu Đạt</option>
-                  <option value="LETHIBINH">Lê Thị Bình</option>
-                </select>
+                <Select
+                  value={approverFilter || "all-approver"}
+                  onValueChange={(value) => setApproverFilter(value === "all-approver" ? "" : value)}
+                >
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Người duyệt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-approver">Tất cả</SelectItem>
+                    <SelectItem value="TRUONGDAT">Trương Hữu Đạt</SelectItem>
+                    <SelectItem value="LETHIBINH">Lê Thị Bình</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Sắp xếp</label>
-                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="date_desc">Ngày gửi (mới nhất)</option>
-                  <option value="date_asc">Ngày gửi (cũ nhất)</option>
-                  <option value="status">Trạng thái</option>
-                </select>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="text-xs">
+                    <SelectValue placeholder="Sắp xếp" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date_desc">Ngày gửi (mới nhất)</SelectItem>
+                    <SelectItem value="date_asc">Ngày gửi (cũ nhất)</SelectItem>
+                    <SelectItem value="status">Trạng thái</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Hiển thị</label>
-                <select value={pageSize} onChange={(e) => setPageSize(e.target.value)}
-                  className="px-2 py-1.5 rounded-lg border text-xs focus:outline-none" style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                  <option value="10">10 dòng</option>
-                  <option value="25">25 dòng</option>
-                  <option value="50">50 dòng</option>
-                </select>
+                <Select value={pageSize} onValueChange={setPageSize}>
+                  <SelectTrigger className="w-[100px] text-xs">
+                    <SelectValue placeholder="Số dòng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10 dòng</SelectItem>
+                    <SelectItem value="25">25 dòng</SelectItem>
+                    <SelectItem value="50">50 dòng</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <span className="text-xs" style={{ color: "#6b7f78" }}>
                 Bộ lọc áp dụng theo thời gian thực
@@ -495,8 +545,11 @@ export default function LeaveHistoryPage() {
             <thead>
               <tr style={{ background: "#203430" }}>
                 <th className="px-3 py-3 text-left">
-                  <input type="checkbox" checked={selectedIds.length === pagedRows.length && pagedRows.length > 0}
-                    onChange={toggleAll} className="accent-[#1DB87A]" />
+                  <Checkbox
+                    checked={selectedIds.length === pagedRows.length && pagedRows.length > 0}
+                    onCheckedChange={toggleAll}
+                    aria-label="Chọn tất cả yêu cầu"
+                  />
                 </th>
                 {["ID", "Loại", "Từ ngày", "Đến ngày", "Số ngày", "Lý do", "Người bàn giao", "Trạng thái", "Ngày gửi", "Người duyệt", "Ngày duyệt", "Thao tác"].map((h) => (
                   <th key={h} className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap">{h}</th>
@@ -508,8 +561,12 @@ export default function LeaveHistoryPage() {
                 <tr key={row.id} style={{ background: ROW_BG[row.status] }}
                   className="border-b last:border-0 hover:brightness-95 transition-all" onClick={() => toggleSelect(row.id)}>
                   <td className="px-3 py-3">
-                    <input type="checkbox" checked={selectedIds.includes(row.id)}
-                      onChange={() => toggleSelect(row.id)} onClick={(e) => e.stopPropagation()} className="accent-[#1DB87A]" />
+                    <Checkbox
+                      checked={selectedIds.includes(row.id)}
+                      onCheckedChange={() => toggleSelect(row.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Chọn yêu cầu ${row.id}`}
+                    />
                   </td>
                   <td className="px-3 py-3 font-bold" style={{ color: "#203430" }}>#{row.id}</td>
                   <td className="px-3 py-3">
@@ -787,11 +844,11 @@ export default function LeaveHistoryPage() {
 
       {/* Confirm Dialog */}
       <ConfirmDialog
-        isOpen={!!confirmAction}
+        open={!!confirmAction}
         title={`Xác nhận ${confirmAction?.label || ""}`}
         message={`Bạn có chắc chắn muốn ${confirmAction?.label || ""}?`}
-        confirmText="Xác nhận"
-        cancelText="Hủy"
+        confirmLabel="Xác nhận"
+        cancelLabel="Hủy"
         onConfirm={executeConfirm}
         onCancel={() => setConfirmAction(null)}
       />

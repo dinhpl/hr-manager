@@ -8,6 +8,16 @@ import {
   Lock, Mail, Phone, Zap, AlertTriangle,
   HardDrive, Activity, Info, Eye, EyeOff,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface AnnualLeaveRule {
   fromYear: number;
@@ -81,6 +91,7 @@ export default function SettingsPage() {
     escalateTo: "Manager",
     status: "active",
   });
+  const [carryOverExpiryDate, setCarryOverExpiryDate] = useState("2026-03-31");
 
   useEffect(() => {
     try {
@@ -282,12 +293,16 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Phép tăng theo thâm niên</label>
-                    <select className="w-full px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                      <option>Không tăng</option>
-                      <option selected>Tăng theo năm</option>
-                      <option>Tăng theo mốc</option>
-                    </select>
+                    <Select defaultValue="yearly">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn quy tắc tăng phép" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Không tăng</SelectItem>
+                        <SelectItem value="yearly">Tăng theo năm</SelectItem>
+                        <SelectItem value="milestone">Tăng theo mốc</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Phép tối đa</label>
@@ -410,7 +425,7 @@ export default function SettingsPage() {
                       <p className="text-sm font-medium" style={{ color: "#203430" }}>Cho phép chuyển phép</p>
                       <p className="text-xs" style={{ color: "#6b7f78" }}>Nhân viên có thể chuyển phép sang năm tiếp theo</p>
                     </div>
-                    <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-500" />
+                    <Checkbox defaultChecked aria-label="Cho phép chuyển phép" />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Số ngày tối đa có thể chuyển</label>
@@ -423,8 +438,7 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Hạn sử dụng</label>
                     <div className="flex items-center gap-2">
-                      <input type="date" defaultValue="2026-03-31" className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: "#e2ede9", color: "#203430" }} />
+                      <DatePicker value={carryOverExpiryDate} onChange={setCarryOverExpiryDate} className="flex-1" />
                     </div>
                   </div>
                   <div>
@@ -610,17 +624,20 @@ export default function SettingsPage() {
                           </td>
                           <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>
                             {editingEscalationIndex === i ? (
-                              <select
+                              <Select
                                 value={escalationDraft.escalateTo}
-                                onChange={(e) => setEscalationDraft((p) => ({ ...p, escalateTo: e.target.value }))}
-                                className="px-2 py-1 rounded border text-xs"
-                                style={{ borderColor: "#e2ede9" }}
+                                onValueChange={(value) => setEscalationDraft((p) => ({ ...p, escalateTo: value }))}
                               >
-                                <option value="Tự động">Tự động</option>
-                                <option value="Manager">Manager</option>
-                                <option value="Manager + HR">Manager + HR</option>
-                                <option value="HR">HR</option>
-                              </select>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Chọn nơi escalation" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Tự động">Tự động</SelectItem>
+                                  <SelectItem value="Manager">Manager</SelectItem>
+                                  <SelectItem value="Manager + HR">Manager + HR</SelectItem>
+                                  <SelectItem value="HR">HR</SelectItem>
+                                </SelectContent>
+                              </Select>
                             ) : (
                               rule.escalateTo
                             )}
@@ -752,15 +769,15 @@ export default function SettingsPage() {
                       {NOTIFICATION_TEMPLATES.map((t, i) => (
                         <tr key={i} className="border-b last:border-0" style={{ borderColor: "#f0f4f2" }}>
                           <td className="px-3 py-3 text-xs" style={{ color: "#203430" }}>{t.event}</td>
-                          <td className="px-3 py-3"><input type="checkbox" defaultChecked={t.email} className="w-4 h-4 accent-blue-500" /></td>
-                          <td className="px-3 py-3"><input type="checkbox" defaultChecked={t.sms} className="w-4 h-4 accent-blue-500" /></td>
-                          <td className="px-3 py-3"><input type="checkbox" defaultChecked={t.inApp} className="w-4 h-4 accent-blue-500" /></td>
+                          <td className="px-3 py-3"><Checkbox defaultChecked={t.email} aria-label={`Bật email cho ${t.event}`} /></td>
+                          <td className="px-3 py-3"><Checkbox defaultChecked={t.sms} aria-label={`Bật SMS cho ${t.event}`} /></td>
+                          <td className="px-3 py-3"><Checkbox defaultChecked={t.inApp} aria-label={`Bật in-app cho ${t.event}`} /></td>
                           <td className="px-3 py-3 text-xs" style={{ color: "#6b7f78" }}>{t.recipients}</td>
                           <td className="px-3 py-3">
                             <button className="text-xs font-semibold" style={{ color: "#3b82f6" }}>Sửa</button>
                           </td>
                           <td className="px-3 py-3">
-                            <input type="checkbox" defaultChecked={t.enabled} className="w-4 h-4 accent-blue-500" />
+                            <Checkbox defaultChecked={t.enabled} aria-label={`Kích hoạt mẫu ${t.event}`} />
                           </td>
                         </tr>
                       ))}
@@ -778,22 +795,24 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: "#203430" }}>Thông báo hàng ngày</label>
                     <div className="flex items-center gap-3">
-                      <input type="time" defaultValue="08:00"
-                        className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: "#e2ede9", color: "#203430" }} />
-                      <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-500" />
+                      <Input type="time" defaultValue="08:00" className="flex-1" />
+                      <Checkbox defaultChecked aria-label="Bật thông báo hàng ngày" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2" style={{ color: "#203430" }}>Thông báo hàng tuần</label>
                     <div className="flex items-center gap-3">
-                      <select className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                        style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                        <option>Thứ 2</option>
-                        <option selected>Thứ 5</option>
-                        <option>Thứ 6</option>
-                      </select>
-                      <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-500" />
+                      <Select defaultValue="thu-5">
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Chọn ngày" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="thu-2">Thứ 2</SelectItem>
+                          <SelectItem value="thu-5">Thứ 5</SelectItem>
+                          <SelectItem value="thu-6">Thứ 6</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Checkbox defaultChecked aria-label="Bật thông báo hàng tuần" />
                     </div>
                   </div>
                 </div>
@@ -818,24 +837,36 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Múi giờ</label>
-                    <select className="w-full px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                      <option selected>GMT+7 (Việt Nam)</option>
-                    </select>
+                    <Select defaultValue="gmt+7">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn múi giờ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gmt+7">GMT+7 (Việt Nam)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Ngôn ngữ mặc định</label>
-                    <select className="w-full px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                      <option selected>Tiếng Việt</option>
-                    </select>
+                    <Select defaultValue="vi">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn ngôn ngữ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="vi">Tiếng Việt</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold mb-2" style={{ color: "#6b7f78" }}>Định dạng ngày</label>
-                    <select className="w-full px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                      <option selected>DD/MM/YYYY</option>
-                    </select>
+                    <Select defaultValue="dd-mm-yyyy">
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn định dạng ngày" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dd-mm-yyyy">DD/MM/YYYY</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -861,7 +892,7 @@ export default function SettingsPage() {
                   ].map((item) => (
                     <div key={item.label} className="flex items-center justify-between">
                       <label className="text-sm" style={{ color: "#203430" }}>{item.label}</label>
-                      <input type="checkbox" defaultChecked={item.enabled} className="w-5 h-5 accent-blue-500" />
+                      <Checkbox defaultChecked={item.enabled} aria-label={item.label} />
                     </div>
                   ))}
                   <div>

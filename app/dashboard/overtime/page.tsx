@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { Clock, PlusCircle, Save, History, BedDouble, MinusCircle, Calculator } from "lucide-react";
 import Link from "next/link";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const OT_HISTORY = [
   { date: "25/02/2026", hours: "3.0h", type: "Ngày thường", status: "pending" },
@@ -116,56 +120,49 @@ export default function OvertimePage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold mb-1.5" style={{ color: "#203430" }}>Ngày làm việc *</label>
-              <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                style={{ borderColor: "#e2ede9", color: "#203430" }} required />
+              <DatePicker value={workDate} onChange={setWorkDate} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#203430" }}>Giờ bắt đầu *</label>
-                <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                  style={{ borderColor: "#e2ede9" }} required />
+                <TimePicker value={startTime} onChange={setStartTime} required />
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#203430" }}>Giờ kết thúc *</label>
-                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                  style={{ borderColor: "#e2ede9" }} required />
+                <TimePicker value={endTime} onChange={setEndTime} required />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Nghỉ trưa từ</label>
-                <input type="time" value={lunchStart} onChange={(e) => setLunchStart(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                  style={{ borderColor: "#e2ede9" }} />
+                <TimePicker value={lunchStart} onChange={setLunchStart} />
               </div>
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: "#6b7f78" }}>Nghỉ trưa đến</label>
-                <input type="time" value={lunchEnd} onChange={(e) => setLunchEnd(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                  style={{ borderColor: "#e2ede9" }} />
+                <TimePicker value={lunchEnd} onChange={setLunchEnd} />
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold mb-2" style={{ color: "#203430" }}>Loại overtime *</label>
-              <div className="flex gap-4">
+              <RadioGroup
+                value={otType}
+                onValueChange={setOtType}
+                className="flex flex-wrap gap-4"
+              >
                 {[
                   { val: "weekday", label: "Ngày thường" },
                   { val: "weekend", label: "Cuối tuần" },
                   { val: "holiday", label: "Ngày lễ" },
                 ].map((opt) => (
-                  <label key={opt.val} className="flex items-center gap-1.5 cursor-pointer text-sm" style={{ color: "#203430" }}>
-                    <input type="radio" name="otType" value={opt.val} checked={otType === opt.val}
-                      onChange={() => setOtType(opt.val)} className="accent-[#1DB87A]" />
+                  <label key={opt.val} className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: "#203430" }}>
+                    <RadioGroupItem value={opt.val} id={`ot-type-${opt.val}`} />
                     {opt.label}
                   </label>
                 ))}
-              </div>
+              </RadioGroup>
             </div>
 
             {/* Live calculation */}
@@ -191,10 +188,14 @@ export default function OvertimePage() {
 
             <div>
               <label className="block text-xs font-semibold mb-1.5" style={{ color: "#203430" }}>Lý do làm thêm giờ *</label>
-              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={3}
                 placeholder="Nhập lý do làm thêm giờ..."
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none resize-none"
-                style={{ borderColor: "#e2ede9", color: "#203430" }} required />
+                className="resize-none"
+                required
+              />
             </div>
 
             <div className="flex gap-3 pt-1">

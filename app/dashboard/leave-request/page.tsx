@@ -20,6 +20,16 @@ import {
   Calculator,
   FileText,
 } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const LEAVE_TYPES = [
   { value: "AL", label: "AL - Nghỉ phép năm" },
@@ -177,9 +187,6 @@ export default function LeaveRequestPage() {
     }, 1000);
   };
 
-  const inputClass = "w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-all";
-  const inputStyle = { borderColor: "#e2ede9", background: "#fff", color: "#203430" };
-
   return (
     <div className="max-w-3xl mx-auto">
       {/* Page header */}
@@ -239,17 +246,20 @@ export default function LeaveRequestPage() {
             <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
               <Tag size={14} style={{ color: "#1DB87A" }} /> Loại nghỉ phép <span style={{ color: "#ef4444" }}>*</span>
             </label>
-            <select
-              value={leaveType}
-              onChange={(e) => setLeaveType(e.target.value)}
-              className={inputClass}
-              style={inputStyle}
+            <Select
+              value={leaveType || "placeholder"}
+              onValueChange={(value) => setLeaveType(value === "placeholder" ? "" : value)}
             >
-              <option value="">-- Chọn loại nghỉ --</option>
-              {LEAVE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+              <SelectTrigger>
+                <SelectValue placeholder="-- Chọn loại nghỉ --" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="placeholder">-- Chọn loại nghỉ --</SelectItem>
+                {LEAVE_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Date range */}
@@ -258,25 +268,13 @@ export default function LeaveRequestPage() {
               <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                 <CalendarDays size={14} style={{ color: "#1DB87A" }} /> Từ ngày <span style={{ color: "#ef4444" }}>*</span>
               </label>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-              />
+              <DatePicker value={fromDate} onChange={setFromDate} />
             </div>
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
                 <CalendarDays size={14} style={{ color: "#1DB87A" }} /> Đến ngày <span style={{ color: "#ef4444" }}>*</span>
               </label>
-              <input
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className={inputClass}
-                style={inputStyle}
-              />
+              <DatePicker value={toDate} onChange={setToDate} />
             </div>
           </div>
 
@@ -325,11 +323,11 @@ export default function LeaveRequestPage() {
             <div className="grid grid-cols-2 gap-4 p-4 rounded-lg" style={{ background: "#f7f7f7", border: "1px dashed #D3F2E7" }}>
               <div>
                 <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#203430" }}>Từ giờ</label>
-                <input type="time" value={fromTime} onChange={(e) => setFromTime(e.target.value)} className={inputClass} style={inputStyle} />
+                <TimePicker value={fromTime} onChange={setFromTime} />
               </div>
               <div>
                 <label className="text-xs font-semibold mb-1.5 block" style={{ color: "#203430" }}>Đến giờ</label>
-                <input type="time" value={toTime} onChange={(e) => setToTime(e.target.value)} className={inputClass} style={inputStyle} />
+                <TimePicker value={toTime} onChange={setToTime} />
               </div>
             </div>
           )}
@@ -358,13 +356,12 @@ export default function LeaveRequestPage() {
             <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
               <MessageSquare size={14} style={{ color: "#1DB87A" }} /> Lý do nghỉ <span style={{ color: "#ef4444" }}>*</span>
             </label>
-            <textarea
+            <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               placeholder="Nhập lý do nghỉ phép..."
-              className={`${inputClass} resize-none`}
-              style={inputStyle}
+              className="resize-none"
             />
           </div>
 
@@ -373,12 +370,20 @@ export default function LeaveRequestPage() {
             <label className="flex items-center gap-2 text-sm font-semibold mb-2" style={{ color: "#203430" }}>
               <Users2 size={14} style={{ color: "#1DB87A" }} /> Người bàn giao/hỗ trợ khi cần
             </label>
-            <select value={handoverPerson} onChange={(e) => setHandoverPerson(e.target.value)} className={inputClass} style={inputStyle}>
-              <option value="">-- Chọn người bàn giao --</option>
-              {HANDOVER_PERSONS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
+            <Select
+              value={handoverPerson || "placeholder"}
+              onValueChange={(value) => setHandoverPerson(value === "placeholder" ? "" : value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="-- Chọn người bàn giao --" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="placeholder">-- Chọn người bàn giao --</SelectItem>
+                {HANDOVER_PERSONS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* File attachment */}

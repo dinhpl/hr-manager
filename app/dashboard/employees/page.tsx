@@ -8,6 +8,24 @@ import {
   ChevronLeft, ChevronRight, LayoutGrid, Table2,
   Building2, Clock, X, Check,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Types based on users table schema
 interface Employee {
@@ -215,33 +233,47 @@ export default function EmployeesPage() {
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Trạng thái</label>
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[150px]"
-              style={{ borderColor: "#e2ede9", color: "#203430" }}>
-              <option value="">Tất cả trạng thái</option>
-              <option value="active">Đang làm việc</option>
-              <option value="inactive">Tạm nghỉ</option>
-              <option value="terminated">Đã nghỉ việc</option>
-            </select>
+            <Select
+              value={statusFilter || "all-status"}
+              onValueChange={(value) => setStatusFilter(value === "all-status" ? "" : value)}
+            >
+              <SelectTrigger className="min-w-[150px]">
+                <SelectValue placeholder="Trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
+                <SelectItem value="active">Đang làm việc</SelectItem>
+                <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                <SelectItem value="terminated">Đã nghỉ việc</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>Phòng ban</label>
-            <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[150px]"
-              style={{ borderColor: "#e2ede9", color: "#203430" }}>
-              <option value="">Tất cả phòng ban</option>
-              {Object.entries(TEAMS).map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
+            <Select
+              value={teamFilter || "all-team"}
+              onValueChange={(value) => setTeamFilter(value === "all-team" ? "" : value)}
+            >
+              <SelectTrigger className="min-w-[150px]">
+                <SelectValue placeholder="Phòng ban" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
+                {Object.entries(TEAMS).map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex gap-2 items-end flex-1 min-w-[200px]">
             <div className="flex-1">
               <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Tìm kiếm</label>
-              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              <Input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Tìm theo tên, email..."
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                style={{ borderColor: "#e2ede9", color: "#203430" }} />
+              />
             </div>
             <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
               style={{ background: "#1DB87A" }}>
@@ -271,9 +303,11 @@ export default function EmployeesPage() {
             <thead>
               <tr style={{ background: "#203430" }}>
                 <th className="px-3 py-3">
-                  <input type="checkbox"
+                  <Checkbox
                     checked={selectedIds.length === filtered.length && filtered.length > 0}
-                    onChange={toggleAll} className="accent-[#1DB87A]" />
+                    onCheckedChange={toggleAll}
+                    aria-label="Chọn tất cả nhân viên"
+                  />
                 </th>
                 {["Avatar", "Họ tên", "Email", "Phòng ban", "Chức vụ", "Ngày tham gia", "Trạng thái", "Thao tác"].map((h) => (
                   <th key={h} className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap">{h}</th>
@@ -292,10 +326,12 @@ export default function EmployeesPage() {
                     style={{ background: isSelected ? "#f0fdf9" : undefined, opacity: emp.status === "terminated" ? 0.65 : 1 }}
                     onClick={() => toggleSelect(emp.id)}>
                     <td className="px-3 py-3">
-                      <input type="checkbox" checked={isSelected}
-                        onChange={() => toggleSelect(emp.id)}
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(emp.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="accent-[#1DB87A]" />
+                        aria-label={`Chọn nhân viên ${emp.first_name} ${emp.last_name}`}
+                      />
                     </td>
                     <td className="px-3 py-3">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
@@ -446,24 +482,50 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {/* Add Employee Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setIsAddModalOpen(false)}>
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: "#e2ede9" }}>
-              <h2 className="font-bold text-base" style={{ color: "#203430" }}>Thêm nhân viên</h2>
-              <button onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X size={18} />
-              </button>
-            </div>
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Thêm nhân viên</DialogTitle>
+            <DialogDescription>
+              Tạo hồ sơ nhân viên mới và bổ sung thông tin cơ bản.
+            </DialogDescription>
+          </DialogHeader>
 
-            <AddEmployeeForm onSuccess={() => {
-              setIsAddModalOpen(false);
-              // Reload data would happen here
-            }} onClose={() => setIsAddModalOpen(false)} />
+          <div className="flex items-center justify-between border-b bg-white px-6 py-4" style={{ borderColor: "#e2ede9" }}>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "#D3F2E7" }}>
+                <UserPlus size={20} style={{ color: "#1DB87A" }} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold" style={{ color: "#203430" }}>Thêm nhân viên mới</h2>
+                <p className="text-xs text-muted-foreground">
+                  Điền thông tin cơ bản để tạo hồ sơ nhân sự trong hệ thống
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsAddModalOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-gray-100"
+              style={{ color: "#6b7f78" }}
+            >
+              <X size={16} />
+            </button>
           </div>
-        </div>
-      )}
+
+          <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
+            <AddEmployeeForm
+              onSuccess={() => {
+                setIsAddModalOpen(false);
+                // Reload data would happen here
+              }}
+              onClose={() => setIsAddModalOpen(false)}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -482,8 +544,15 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  const handleFieldChange = (name: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
@@ -511,96 +580,174 @@ function AddEmployeeForm({ onSuccess, onClose }: { onSuccess: () => void; onClos
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Họ</label>
-          <input type="text" name="first_name" value={formData.first_name} onChange={handleChange}
-            placeholder="Ví dụ: Phạm"
-            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-            style={{ borderColor: errors.first_name ? "#ef4444" : "#e2ede9", color: "#203430" }} />
-          {errors.first_name && <p className="text-xs text-red-500 mt-1">{errors.first_name}</p>}
+    <form onSubmit={handleSubmit} className="space-y-6 p-6">
+      <div
+        className="rounded-xl border px-4 py-4"
+        style={{ background: "#f0f9f5", borderColor: "#D3F2E7" }}
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <Shield size={15} style={{ color: "#1DB87A" }} />
+          <span className="text-sm font-semibold" style={{ color: "#0E474E" }}>
+            Thông tin tạo tài khoản
+          </span>
         </div>
-        <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Tên</label>
-          <input type="text" name="last_name" value={formData.last_name} onChange={handleChange}
-            placeholder="Ví dụ: Long Đĩnh"
-            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-            style={{ borderColor: errors.last_name ? "#ef4444" : "#e2ede9", color: "#203430" }} />
-          {errors.last_name && <p className="text-xs text-red-500 mt-1">{errors.last_name}</p>}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Email</label>
-        <input type="email" name="email" value={formData.email} onChange={handleChange}
-          placeholder="example@company.com"
-          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-          style={{ borderColor: errors.email ? "#ef4444" : "#e2ede9", color: "#203430" }} />
-        {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
-      </div>
-
-      <div>
-        <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Mật khẩu</label>
-        <input type="password" name="password" value={formData.password} onChange={handleChange}
-          placeholder="Tối thiểu 6 ký tự"
-          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-          style={{ borderColor: errors.password ? "#ef4444" : "#e2ede9", color: "#203430" }} />
-        {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Chức vụ</label>
-          <select name="role_id" value={formData.role_id} onChange={handleChange}
-            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}>
-            {Object.entries(ROLES).map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Phòng ban</label>
-          <select name="team_id" value={formData.team_id} onChange={handleChange}
-            className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-            style={{ borderColor: "#e2ede9", color: "#203430" }}>
-            {Object.entries(TEAMS).map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {[
+            { label: "Trạng thái mặc định", value: "Đang làm việc" },
+            { label: "Vai trò hệ thống", value: "Nhân viên nội bộ" },
+            { label: "Đăng nhập", value: "Email công ty" },
+            { label: "Bảo mật", value: "Mật khẩu tối thiểu 6 ký tự" },
+          ].map((item) => (
+            <div key={item.label} className="text-center">
+              <p className="text-sm font-bold" style={{ color: "#1DB87A" }}>{item.value}</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">{item.label}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Ngày tham gia công ty</label>
-        <input type="date" name="company_join_date" value={formData.company_join_date} onChange={handleChange}
-          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-          style={{ borderColor: "#e2ede9", color: "#203430" }} />
+      <div className="space-y-5">
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Users size={14} style={{ color: "#1DB87A" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin cá nhân</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Họ</label>
+              <Input
+                type="text"
+                name="first_name"
+                value={formData.first_name}
+                onChange={handleChange}
+                placeholder="Ví dụ: Phạm"
+                className={errors.first_name ? "border-red-500" : undefined}
+              />
+              {errors.first_name && <p className="mt-1 text-xs text-red-500">{errors.first_name}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Tên</label>
+              <Input
+                type="text"
+                name="last_name"
+                value={formData.last_name}
+                onChange={handleChange}
+                placeholder="Ví dụ: Long Đĩnh"
+                className={errors.last_name ? "border-red-500" : undefined}
+              />
+              {errors.last_name && <p className="mt-1 text-xs text-red-500">{errors.last_name}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Shield size={14} style={{ color: "#1DB87A" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin tài khoản</h3>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Email</label>
+              <Input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="example@company.com"
+                className={errors.email ? "border-red-500" : undefined}
+              />
+              {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Mật khẩu</label>
+              <Input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Tối thiểu 6 ký tự"
+                className={errors.password ? "border-red-500" : undefined}
+              />
+              {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Building2 size={14} style={{ color: "#1DB87A" }} />
+            <h3 className="text-sm font-semibold" style={{ color: "#203430" }}>Thông tin tổ chức</h3>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Chức vụ</label>
+              <Select value={formData.role_id} onValueChange={(value) => handleFieldChange("role_id", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn chức vụ" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLES).map(([id, name]) => (
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Phòng ban</label>
+              <Select value={formData.team_id} onValueChange={(value) => handleFieldChange("team_id", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn phòng ban" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TEAMS).map(([id, name]) => (
+                    <SelectItem key={id} value={id}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Ngày tham gia công ty</label>
+              <DatePicker
+                value={formData.company_join_date}
+                onChange={(value) => handleFieldChange("company_join_date", value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: "#6b7f78" }}>Trạng thái</label>
+              <Select value={formData.status} onValueChange={(value) => handleFieldChange("status", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Đang làm việc</SelectItem>
+                  <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                  <SelectItem value="terminated">Đã nghỉ việc</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Trạng thái</label>
-        <select name="status" value={formData.status} onChange={handleChange}
-          className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-          style={{ borderColor: "#e2ede9", color: "#203430" }}>
-          <option value="active">Đang làm việc</option>
-          <option value="inactive">Tạm nghỉ</option>
-          <option value="terminated">Đã nghỉ việc</option>
-        </select>
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button type="submit"
-          className="flex-1 px-4 py-2 rounded-lg font-semibold text-white transition-all hover:opacity-90"
-          style={{ background: "#1DB87A" }}>
-          Thêm nhân viên
-        </button>
-        <button type="button" onClick={onClose}
-          className="flex-1 px-4 py-2 rounded-lg font-semibold border"
-          style={{ borderColor: "#e2ede9", color: "#203430" }}>
+      <div className="flex items-center gap-3 border-t pt-4" style={{ borderColor: "#e2ede9" }}>
+        <Button
+          type="button"
+          variant="outline"
+          className="flex-1"
+          onClick={onClose}
+          style={{ color: "#203430" }}
+        >
           Hủy
-        </button>
+        </Button>
+        <Button
+          type="submit"
+          className="flex-1 text-white"
+          style={{ background: "#1DB87A" }}
+        >
+          <UserPlus size={15} />
+          Thêm nhân viên
+        </Button>
       </div>
     </form>
   );

@@ -7,6 +7,16 @@ import {
 } from "lucide-react";
 import LeaveDetailModal, { LeaveDetailData } from "@/components/leave-detail-modal";
 import ConfirmDialog from "@/components/confirm-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 interface ApprovalRequest {
   id: string;
@@ -234,20 +244,31 @@ export default function ApprovalPage() {
           ].map((f) => (
             <div key={f.id} className="flex flex-col gap-1">
               <label className="text-xs font-semibold" style={{ color: "#6b7f78" }}>{f.label}</label>
-              <select value={f.value} onChange={(e) => f.setter(e.target.value)}
-                className="px-3 py-2 rounded-lg border text-sm focus:outline-none min-w-[150px]"
-                style={{ borderColor: "#e2ede9", color: "#203430" }}>
-                {f.opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
+              <Select
+                value={f.value || `all-${f.id}`}
+                onValueChange={(value) => f.setter(value.startsWith("all-") ? "" : value)}
+              >
+                <SelectTrigger className="min-w-[150px]">
+                  <SelectValue placeholder={f.label} />
+                </SelectTrigger>
+                <SelectContent>
+                  {f.opts.map(([v, l], idx) => {
+                    const itemValue = v === "" ? `all-${f.id}` : v;
+                    return <SelectItem key={`${f.id}-${idx}`} value={itemValue}>{l}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
             </div>
           ))}
           <div className="flex gap-2 items-end flex-1 min-w-[200px]">
             <div className="flex-1">
               <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>Tìm nhân viên</label>
-              <input type="text" value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              <Input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Tìm theo tên nhân viên..."
-                className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none"
-                style={{ borderColor: "#e2ede9", color: "#203430" }} />
+              />
             </div>
             <button className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
               style={{ background: "#1DB87A" }}>
@@ -284,8 +305,11 @@ export default function ApprovalPage() {
                     </span>
                   )}
                 </div>
-                <input type="checkbox" checked={selectedIds.includes(req.id)}
-                  onChange={() => toggleSelect(req.id)} className="accent-white" />
+                <Checkbox
+                  checked={selectedIds.includes(req.id)}
+                  onCheckedChange={() => toggleSelect(req.id)}
+                  className="border-white data-[state=checked]:bg-white data-[state=checked]:text-[#0E474E]"
+                />
               </div>
 
               <div className="p-4 space-y-3">
@@ -369,15 +393,14 @@ export default function ApprovalPage() {
                   <label className="block text-xs font-semibold mb-1" style={{ color: "#6b7f78" }}>
                     {req.status === "hr_confirm" ? "Ghi chú HR:" : "Ghi chú duyệt:"}
                   </label>
-                  <textarea
+                  <Textarea
                     rows={2}
                     placeholder={req.status === "hr_confirm" ? "Nhập ghi chú xác nhận..." : "Nhập ghi chú (tùy chọn)..."}
                     value={req.status === "hr_confirm" ? (hrNotes[req.id] || "") : (notes[req.id] || "")}
                     onChange={(e) => req.status === "hr_confirm"
                       ? setHrNotes((p) => ({ ...p, [req.id]: e.target.value }))
                       : setNotes((p) => ({ ...p, [req.id]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg border text-xs focus:outline-none resize-none"
-                    style={{ borderColor: "#e2ede9", color: "#203430" }}
+                    className="text-xs resize-none"
                   />
                 </div>
 

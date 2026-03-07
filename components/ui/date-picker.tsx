@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { format } from 'date-fns';
+import { format, isValid, parse } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,19 @@ interface DatePickerProps {
   disabled?: boolean;
 }
 
+function parseDateValue(value?: string): Date | undefined {
+  if (!value) return undefined;
+
+  const isoDate = parse(value, 'yyyy-MM-dd', new Date());
+  if (isValid(isoDate)) return isoDate;
+
+  const displayDate = parse(value, 'dd/MM/yyyy', new Date());
+  if (isValid(displayDate)) return displayDate;
+
+  const fallbackDate = new Date(value);
+  return isValid(fallbackDate) ? fallbackDate : undefined;
+}
+
 export function DatePicker({ 
   value, 
   onChange, 
@@ -25,8 +38,8 @@ export function DatePicker({
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   
-  // Convert string date (YYYY-MM-DD) to Date object for Calendar
-  const selectedDate = value ? new Date(value) : undefined;
+  // Accept both ISO form values and display-formatted dates from older screens.
+  const selectedDate = parseDateValue(value);
   
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
@@ -50,7 +63,7 @@ export function DatePicker({
           )}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {value ? format(new Date(value), 'PPP') : placeholder}
+          {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : placeholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
