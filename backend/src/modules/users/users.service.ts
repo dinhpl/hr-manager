@@ -133,7 +133,7 @@ export async function deleteUser(id: bigint) {
 export async function getUsersDropdown() {
   return prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, fullName: true, username: true, department: true },
+    select: { id: true, fullName: true, username: true, department: true, role: true },
     orderBy: { fullName: 'asc' },
   });
 }

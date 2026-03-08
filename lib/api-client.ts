@@ -24,6 +24,19 @@ type ApiErrorPayload = {
   };
 };
 
+// Custom error class that preserves API response details
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string,
+    public readonly details?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 type RetriableRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
 };
@@ -146,15 +159,30 @@ api.interceptors.response.use(
       }
     }
 
+    const status = error.response?.status ?? 500;
+    const code = error.response?.data?.error?.code ?? 'UNKNOWN_ERROR';
     const message = error.response?.data?.error?.message ?? error.message ?? 'API error';
+    const details = error.response?.data?.error?.details;
 
-    throw new Error(message);
+    throw new ApiError(message, status, code, details);
   },
 );
 
 export async function apiRequest<T>(config: AxiosRequestConfig): Promise<ApiResponse<T>> {
-  const response = await api.request<ApiResponse<T>>(config);
-  return response.data;
+  try {
+    const response = await api.request<ApiResponse<T>>(config);
+    return response.data;
+  } catch (err) {
+    // Re-throw ApiError to preserve status/code for callers
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    // Handle non-Axios errors
+    if (err instanceof Error) {
+      throw new ApiError(err.message, 500, 'INTERNAL_ERROR');
+    }
+    throw new ApiError('Unknown error', 500, 'UNKNOWN_ERROR');
+  }
 }
 
 export const apiClient = {

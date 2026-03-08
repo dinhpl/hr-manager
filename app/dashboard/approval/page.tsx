@@ -27,7 +27,13 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
-import { buildQuery, formatDateTimeVN, formatDateVN, numberValue } from '@/lib/hr-utils';
+import {
+  buildQuery,
+  formatDateTimeVN,
+  formatDateVN,
+  getDateTimeValue,
+  numberValue,
+} from '@/lib/hr-utils';
 
 type DerivedStatus = 'pending' | 'overdue';
 
@@ -129,7 +135,7 @@ function getPrimaryReason(reason?: string | null) {
 }
 
 function isOverdue(request: LeaveRequestItem) {
-  return Date.now() - new Date(request.createdAt).getTime() > TWO_DAYS_MS;
+  return Date.now() - getDateTimeValue(request.createdAt) > TWO_DAYS_MS;
 }
 
 function getDerivedStatus(request: LeaveRequestItem): DerivedStatus {
@@ -137,7 +143,7 @@ function getDerivedStatus(request: LeaveRequestItem): DerivedStatus {
 }
 
 function getOverdueDays(request: LeaveRequestItem) {
-  const diff = Date.now() - new Date(request.createdAt).getTime();
+  const diff = Date.now() - getDateTimeValue(request.createdAt);
   return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)) - 1);
 }
 

@@ -17,7 +17,7 @@ import {
   Shield,
   CheckCircle2,
 } from 'lucide-react';
-import { apiClient, getStoredToken, setAuthSession } from '@/lib/api-client';
+import { apiClient, ApiError, getStoredToken, setAuthSession } from '@/lib/api-client';
 
 type Role = 'employee' | 'manager' | 'hr' | 'admin';
 
@@ -108,7 +108,16 @@ export default function LoginPage() {
 
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đăng nhập thất bại.');
+      if (err instanceof ApiError) {
+        // 401 = invalid credentials, 400 = bad request
+        if (err.status === 401 || err.status === 400) {
+          setError('Tên đăng nhập hoặc mật khẩu không đúng.');
+        } else {
+          setError(err.message || 'Đăng nhập thất bại.');
+        }
+      } else {
+        setError('Đăng nhập thất bại.');
+      }
     } finally {
       setLoading(false);
     }

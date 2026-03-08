@@ -176,7 +176,10 @@ export default function CalendarDayDetailModal({
                     <div className="flex items-center gap-2 mt-2">
                       <User size={14} style={{ color: '#6b7f78' }} />
                       <p className="text-xs" style={{ color: '#6b7f78' }}>
-                        Người duyệt: <span className="font-medium" style={{ color: '#203430' }}>{user.approver}</span>
+                        Người duyệt:{' '}
+                        <span className="font-medium" style={{ color: '#203430' }}>
+                          {user.approver}
+                        </span>
                       </p>
                     </div>
                   )}
@@ -187,7 +190,10 @@ export default function CalendarDayDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-6 py-4 border-t shrink-0" style={{ borderColor: '#e2ede9' }}>
+        <div
+          className="flex justify-end px-6 py-4 border-t shrink-0"
+          style={{ borderColor: '#e2ede9' }}
+        >
           <button
             onClick={onClose}
             className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50 border"

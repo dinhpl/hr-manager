@@ -31,9 +31,17 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { apiRequest, apiClient } from '@/lib/api-client';
-import { numberValue, toIsoDateTime } from '@/lib/hr-utils';
-
-type DurationMode = 'FULL_DAY' | 'HALF_DAY' | 'HOURLY';
+import {
+  countCalendarDays,
+  getDateTimeValue,
+  getLeaveRequestApiPayload,
+  HOURLY_LEAVE_TIME_MAX,
+  HOURLY_LEAVE_TIME_MIN,
+  HOURLY_LEAVE_TIME_STEP_SECONDS,
+  LEAVE_REQUEST_MODE_CONFIG,
+  numberValue,
+  type LeaveRequestMode,
+} from '@/lib/hr-utils';
 
 interface LeaveTypeOption {
   id: string;
@@ -60,17 +68,6 @@ interface UserDropdownItem {
   department?: string | null;
 }
 
-function countCalendarDays(fromDate: string, toDate: string): number {
-  if (!fromDate || !toDate) return 0;
-  const start = new Date(fromDate);
-  const end = new Date(toDate);
-  if (end < start) return 0;
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  const millisecondsPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
-}
-
 export default function LeaveRequestPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,9 +80,9 @@ export default function LeaveRequestPage() {
   const [leaveType, setLeaveType] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [durationMode, setDurationMode] = useState<DurationMode>('FULL_DAY');
+  const [durationMode, setDurationMode] = useState<LeaveRequestMode>('FULL_DAY');
   const [fromTime, setFromTime] = useState('08:00');
-  const [toTime, setToTime] = useState('17:00');
+  const [toTime, setToTime] = useState('17:15');
   const [reason, setReason] = useState('');
   const [handoverPerson, setHandoverPerson] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -121,12 +118,14 @@ export default function LeaveRequestPage() {
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
     const base = countCalendarDays(fromDate, toDate);
-    if (durationMode === 'HALF_DAY') return base * 0.5;
+    if (durationMode === 'MORNING_HALF_DAY' || durationMode === 'AFTERNOON_HALF_DAY') {
+      return base * 0.5;
+    }
     if (durationMode === 'HOURLY') {
       if (!fromTime || !toTime) return 0;
-      const start = new Date(`2000-01-01T${fromTime}`);
-      const end = new Date(`2000-01-01T${toTime}`);
-      const hours = (end.getTime() - start.getTime()) / 3600000;
+      const hours =
+        (getDateTimeValue(`2000-01-01 ${toTime}`) - getDateTimeValue(`2000-01-01 ${fromTime}`)) /
+        3600000;
       return Math.max(0, hours / 8);
     }
     return base;
@@ -156,6 +155,17 @@ export default function LeaveRequestPage() {
   };
 
   const balanceWarning = checkBalance();
+
+  useEffect(() => {
+    if (durationMode === 'HOURLY') {
+      setFromTime((current) => current || HOURLY_LEAVE_TIME_MIN);
+      setToTime((current) => current || HOURLY_LEAVE_TIME_MAX);
+      return;
+    }
+
+    setFromTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultFromTime);
+    setToTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultToTime);
+  }, [durationMode]);
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
@@ -195,7 +205,7 @@ export default function LeaveRequestPage() {
     setToDate('');
     setDurationMode('FULL_DAY');
     setFromTime('08:00');
-    setToTime('17:00');
+    setToTime('17:15');
     setReason('');
     setHandoverPerson('');
     setAttachedFile(null);
@@ -211,10 +221,21 @@ export default function LeaveRequestPage() {
       return;
     }
 
-    if (new Date(toDate) < new Date(fromDate)) {
+    if (toDate < fromDate) {
       setAlert({
         type: 'warning',
         message: 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
+      });
+      return;
+    }
+
+    if (
+      durationMode === 'HOURLY' &&
+      getDateTimeValue(`2000-01-01 ${toTime}`) <= getDateTimeValue(`2000-01-01 ${fromTime}`)
+    ) {
+      setAlert({
+        type: 'warning',
+        message: 'Giờ kết thúc phải lớn hơn giờ bắt đầu.',
       });
       return;
     }
@@ -232,7 +253,7 @@ export default function LeaveRequestPage() {
     const composedReason = [
       reason.trim(),
       durationMode !== 'FULL_DAY'
-        ? `Hình thức nghỉ: ${durationMode === 'HALF_DAY' ? 'Nửa ngày' : 'Theo giờ'}`
+        ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
         : null,
       durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
       handoverName ? `Người bàn giao: ${handoverName}` : null,
@@ -240,15 +261,21 @@ export default function LeaveRequestPage() {
       .filter(Boolean)
       .join('\n');
 
+    const leaveRequestPayload = getLeaveRequestApiPayload({
+      date: fromDate,
+      endDate: toDate,
+      mode: durationMode,
+      startTime: fromTime,
+      endTime: toTime,
+    });
+
     const formData = new FormData();
     formData.append('leaveTypeId', selectedLeaveType.id);
-    formData.append('fromDate', toIsoDateTime(fromDate));
-    formData.append('toDate', toIsoDateTime(toDate, true));
-    formData.append('durationMode', durationMode);
-    if (durationMode === 'HOURLY') {
-      formData.append('fromTime', fromTime);
-      formData.append('toTime', toTime);
-    }
+    formData.append('fromDate', leaveRequestPayload.fromDate);
+    formData.append('toDate', leaveRequestPayload.toDate);
+    formData.append('durationMode', leaveRequestPayload.durationMode);
+    formData.append('fromTime', leaveRequestPayload.fromTime);
+    formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
     if (attachedFile) {
@@ -418,12 +445,14 @@ export default function LeaveRequestPage() {
               <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="flex gap-3 flex-wrap">
-              {(['FULL_DAY', 'HALF_DAY', 'HOURLY'] as DurationMode[]).map((mode) => {
-                const labels: Record<DurationMode, string> = {
-                  FULL_DAY: 'Cả ngày',
-                  HALF_DAY: 'Nửa ngày',
-                  HOURLY: 'Theo giờ',
-                };
+              {(
+                [
+                  'FULL_DAY',
+                  'MORNING_HALF_DAY',
+                  'AFTERNOON_HALF_DAY',
+                  'HOURLY',
+                ] as LeaveRequestMode[]
+              ).map((mode) => {
                 const isSelected = durationMode === mode;
                 return (
                   <label
@@ -455,7 +484,7 @@ export default function LeaveRequestPage() {
                         <span className="w-2 h-2 rounded-full" style={{ background: '#1DB87A' }} />
                       )}
                     </span>
-                    {labels[mode]}
+                    {LEAVE_REQUEST_MODE_CONFIG[mode].label}
                   </label>
                 );
               })}
@@ -472,13 +501,25 @@ export default function LeaveRequestPage() {
                 <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#203430' }}>
                   Từ giờ
                 </label>
-                <TimePicker value={fromTime} onChange={setFromTime} />
+                <TimePicker
+                  value={fromTime}
+                  onChange={setFromTime}
+                  min={HOURLY_LEAVE_TIME_MIN}
+                  max={HOURLY_LEAVE_TIME_MAX}
+                  step={HOURLY_LEAVE_TIME_STEP_SECONDS}
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#203430' }}>
                   Đến giờ
                 </label>
-                <TimePicker value={toTime} onChange={setToTime} />
+                <TimePicker
+                  value={toTime}
+                  onChange={setToTime}
+                  min={HOURLY_LEAVE_TIME_MIN}
+                  max={HOURLY_LEAVE_TIME_MAX}
+                  step={HOURLY_LEAVE_TIME_STEP_SECONDS}
+                />
               </div>
             </div>
           )}

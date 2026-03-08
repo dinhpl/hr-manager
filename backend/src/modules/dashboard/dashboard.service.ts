@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma';
 import { UserRole } from '@prisma/client';
+import { serializeLeaveRequestDates } from '../../utils/date-time';
 
 async function getEmployeeSummary(userId: bigint) {
   const year = new Date().getFullYear();
@@ -137,7 +138,7 @@ export async function getCalendarData(
 
 export async function getRecentRequests(user: { id: bigint; role: UserRole }, limit = 10) {
   const where = user.role === 'EMPLOYEE' ? { userId: user.id } : {};
-  return prisma.leaveRequest.findMany({
+  const requests = await prisma.leaveRequest.findMany({
     where,
     include: {
       user: { select: { id: true, fullName: true } },
@@ -146,4 +147,6 @@ export async function getRecentRequests(user: { id: bigint; role: UserRole }, li
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
+
+  return requests.map(serializeLeaveRequestDates);
 }

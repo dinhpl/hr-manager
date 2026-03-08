@@ -21,7 +21,14 @@ import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-mod
 import CalendarDayDetailModal from '@/components/calendar-day-detail-modal';
 import LeaveRequestModal from '@/components/leave-request-modal';
 import { apiClient, clearAuthSession } from '@/lib/api-client';
-import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
+import {
+  formatDateTimeVN,
+  formatDateVN,
+  getDateTimeValue,
+  numberValue,
+  parseApiDateTime,
+  toFrontendRole,
+} from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
 
 type UserRole = FrontendRole;
@@ -249,7 +256,9 @@ function CalendarGrid({
               <div
                 key={`${cell.dateStr}-${index}`}
                 className={`flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors ${
-                  hasUsers && isCurrentMonth ? 'cursor-pointer hover:bg-green-50/50' : 'hover:bg-gray-50/50'
+                  hasUsers && isCurrentMonth
+                    ? 'cursor-pointer hover:bg-green-50/50'
+                    : 'hover:bg-gray-50/50'
                 }`}
                 onClick={() => {
                   if (hasUsers && isCurrentMonth && onDayClick) {
@@ -330,12 +339,11 @@ function EmployeeDashboard({
     return [...recentRequests]
       .filter((request) => {
         const status = normalizeStatus(request.status);
-        const fromDate = new Date(request.fromDate);
+        const fromDate = parseApiDateTime(request.fromDate);
+        if (!fromDate) return false;
         return fromDate >= today && status !== 'rejected' && status !== 'cancelled';
       })
-      .sort(
-        (left, right) => new Date(left.fromDate).getTime() - new Date(right.fromDate).getTime(),
-      )[0];
+      .sort((left, right) => getDateTimeValue(left.fromDate) - getDateTimeValue(right.fromDate))[0];
   }, [recentRequests]);
 
   const employeeStats = [

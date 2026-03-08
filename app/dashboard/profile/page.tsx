@@ -276,7 +276,11 @@ export default function ProfilePage() {
                           : 'border-transparent'
                       }`}
                     >
-                      <img src={avatar} alt="Preset avatar" className="w-full h-full object-cover" />
+                      <img
+                        src={avatar}
+                        alt="Preset avatar"
+                        className="w-full h-full object-cover"
+                      />
                       {selectedAvatar === avatar && (
                         <div className="absolute inset-0 bg-[#1DB87A]/20 flex items-center justify-center">
                           <Check size={16} className="text-white" />

@@ -3,6 +3,11 @@ import { deductBalance, restoreBalance } from '../leave-balances/leave-balances.
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
 import { UserRole } from '@prisma/client';
 import { GetLeaveRequestsQuery, CreateLeaveRequestDto } from './leave-requests.validation';
+import {
+  countInclusiveVietnamDates,
+  parseVietnamDateTime,
+  serializeLeaveRequestDates,
+} from '../../utils/date-time';
 
 const LEAVE_REQUEST_INCLUDE = {
   user: { select: { id: true, fullName: true, username: true, department: true } },
@@ -11,25 +16,13 @@ const LEAVE_REQUEST_INCLUDE = {
 } as const;
 
 function calculateTotalDays(data: CreateLeaveRequestDto) {
-  const startDate = new Date(data.fromDate);
-  const endDate = new Date(data.toDate);
+  const startDate = parseVietnamDateTime(data.fromDate);
+  const endDate = parseVietnamDateTime(data.toDate);
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     throw Object.assign(new Error('Invalid leave request dates'), { status: 400 });
   }
-
-  startDate.setUTCHours(0, 0, 0, 0);
-  endDate.setUTCHours(0, 0, 0, 0);
-
-  if (endDate < startDate) {
-    throw Object.assign(new Error('toDate must be greater than or equal to fromDate'), {
-      status: 400,
-    });
-  }
-
-  const millisecondsPerDay = 24 * 60 * 60 * 1000;
-  const inclusiveDays =
-    Math.floor((endDate.getTime() - startDate.getTime()) / millisecondsPerDay) + 1;
+  const inclusiveDays = countInclusiveVietnamDates(startDate, endDate);
   const durationMode = data.durationMode ?? 'FULL_DAY';
 
   if (durationMode === 'HALF_DAY') {
@@ -81,8 +74,8 @@ function buildScopeFilter(
     // merge with existing user filter
     where.user = { ...((where.user as object) ?? {}), department: query.department };
   }
-  if (query.fromDate) where.fromDate = { gte: new Date(query.fromDate) };
-  if (query.toDate) where.toDate = { lte: new Date(query.toDate) };
+  if (query.fromDate) where.fromDate = { gte: parseVietnamDateTime(query.fromDate) };
+  if (query.toDate) where.toDate = { lte: parseVietnamDateTime(query.toDate) };
 
   return where;
 }
@@ -105,7 +98,7 @@ export async function getLeaveRequests(
     prisma.leaveRequest.count({ where }),
   ]);
 
-  return { data: requests, meta: buildMeta(total, page, limit) };
+  return { data: requests.map(serializeLeaveRequestDates), meta: buildMeta(total, page, limit) };
 }
 
 export async function getLeaveRequestById(
@@ -124,7 +117,7 @@ export async function getLeaveRequestById(
     throw Object.assign(new Error('Access denied'), { status: 403 });
   }
 
-  return request;
+  return serializeLeaveRequestDates(request);
 }
 
 export async function createLeaveRequest(
@@ -143,12 +136,30 @@ export async function createLeaveRequest(
     canCreateForOtherUser && requestedUserId ? requestedUserId : requestingUser.id;
   const totalDays = data.durationMode ? calculateTotalDays(data) : data.totalDays;
 
-  return prisma.leaveRequest.create({
+  if (data.approverId) {
+    const approver = await prisma.user.findUnique({
+      where: { id: data.approverId },
+      select: { id: true, role: true, isActive: true },
+    });
+
+    if (!approver || !approver.isActive) {
+      throw Object.assign(new Error('Approver not found'), { status: 400 });
+    }
+
+    if (!['MANAGER', 'HR', 'ADMIN'].includes(approver.role)) {
+      throw Object.assign(new Error('Approver must have MANAGER, HR, or ADMIN role'), {
+        status: 400,
+      });
+    }
+  }
+
+  const request = await prisma.leaveRequest.create({
     data: {
       userId: targetUserId,
       leaveTypeId: data.leaveTypeId,
-      fromDate: new Date(data.fromDate),
-      toDate: new Date(data.toDate),
+      ...(data.approverId && { approverId: data.approverId }),
+      fromDate: parseVietnamDateTime(data.fromDate),
+      toDate: parseVietnamDateTime(data.toDate),
       totalDays,
       reason: data.reason,
       status: 'PENDING',
@@ -156,6 +167,8 @@ export async function createLeaveRequest(
     },
     include: LEAVE_REQUEST_INCLUDE,
   });
+
+  return serializeLeaveRequestDates(request);
 }
 
 export async function approveLeaveRequest(id: bigint, approverId: bigint, note?: string) {
@@ -181,7 +194,7 @@ export async function approveLeaveRequest(id: bigint, approverId: bigint, note?:
       new Date(request.fromDate).getFullYear(),
     );
 
-    return updated;
+    return serializeLeaveRequestDates(updated);
   });
 }
 
@@ -192,11 +205,13 @@ export async function rejectLeaveRequest(id: bigint, approverId: bigint, note?: 
     throw Object.assign(new Error('Only PENDING requests can be rejected'), { status: 400 });
   }
 
-  return prisma.leaveRequest.update({
+  const updatedRequest = await prisma.leaveRequest.update({
     where: { id },
     data: { status: 'REJECTED', approverId, approvedAt: new Date(), approvedNote: note },
     include: LEAVE_REQUEST_INCLUDE,
   });
+
+  return serializeLeaveRequestDates(updatedRequest);
 }
 
 export async function cancelLeaveRequest(
@@ -221,7 +236,7 @@ export async function cancelLeaveRequest(
       data: { status: 'CANCELLED' },
     });
 
-    return updated;
+    return serializeLeaveRequestDates(updated);
   });
 }
 

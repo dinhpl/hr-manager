@@ -36,9 +36,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { apiRequest, apiClient, getStoredUser } from '@/lib/api-client';
-import { numberValue, toFrontendRole, toIsoDateTime } from '@/lib/hr-utils';
-
-type DurationMode = 'FULL_DAY' | 'HALF_DAY' | 'HOURLY';
+import {
+  countCalendarDays,
+  getDateTimeValue,
+  getLeaveRequestApiPayload,
+  HOURLY_LEAVE_TIME_MAX,
+  HOURLY_LEAVE_TIME_MIN,
+  HOURLY_LEAVE_TIME_STEP_SECONDS,
+  LEAVE_REQUEST_MODE_CONFIG,
+  numberValue,
+  toFrontendRole,
+  type LeaveRequestMode,
+} from '@/lib/hr-utils';
 
 interface LeaveTypeOption {
   id: string;
@@ -62,6 +71,7 @@ interface UserDropdownItem {
   fullName: string;
   username: string;
   department?: string | null;
+  role?: string | null;
 }
 
 interface UserInfo {
@@ -69,27 +79,17 @@ interface UserInfo {
   role: string;
 }
 
-function countCalendarDays(fromDate: string, toDate: string): number {
-  if (!fromDate || !toDate) return 0;
-  const start = new Date(fromDate);
-  const end = new Date(toDate);
-  if (end < start) return 0;
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  const millisecondsPerDay = 24 * 60 * 60 * 1000;
-  return Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
-}
-
 export interface LeaveRequestData {
   id?: string;
   typeCode?: string;
   fromDate?: string;
   toDate?: string;
-  durationMode?: DurationMode;
+  durationMode?: LeaveRequestMode;
   fromTime?: string;
   toTime?: string;
   reason?: string;
   handoverPerson?: string;
+  approverId?: string;
 }
 
 interface LeaveRequestModalProps {
@@ -101,14 +101,15 @@ interface LeaveRequestModalProps {
 
 function getInitialFormState(editData?: LeaveRequestData | null) {
   return {
-    leaveType: editData?.typeCode || '',
+    leaveType: editData?.typeCode || 'AL',
     fromDate: editData?.fromDate || '',
     toDate: editData?.toDate || '',
     durationMode: editData?.durationMode || 'FULL_DAY',
     fromTime: editData?.fromTime || '08:00',
-    toTime: editData?.toTime || '17:00',
+    toTime: editData?.toTime || '17:15',
     reason: editData?.reason || '',
     handoverPerson: editData?.handoverPerson || '',
+    approverId: editData?.approverId || '',
   } as const;
 }
 
@@ -133,11 +134,12 @@ export default function LeaveRequestModal({
   const [leaveType, setLeaveType] = useState(initialFormState.leaveType);
   const [fromDate, setFromDate] = useState(initialFormState.fromDate);
   const [toDate, setToDate] = useState(initialFormState.toDate);
-  const [durationMode, setDurationMode] = useState<DurationMode>(initialFormState.durationMode);
+  const [durationMode, setDurationMode] = useState<LeaveRequestMode>(initialFormState.durationMode);
   const [fromTime, setFromTime] = useState(initialFormState.fromTime);
   const [toTime, setToTime] = useState(initialFormState.toTime);
   const [reason, setReason] = useState(initialFormState.reason);
   const [handoverPerson, setHandoverPerson] = useState(initialFormState.handoverPerson);
+  const [approverId, setApproverId] = useState(initialFormState.approverId);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [submitState, setSubmitState] = useState<'idle' | 'saving' | 'submitting' | 'success'>(
     'idle',
@@ -149,6 +151,9 @@ export default function LeaveRequestModal({
   const isAdmin = toFrontendRole(userInfo?.role) === 'admin';
   const effectiveUserId = requestForUserId || userInfo?.id || '';
   const requestForUser = handoverPersons.find((item) => item.id === effectiveUserId);
+  const approverOptions = handoverPersons.filter((item) =>
+    ['MANAGER', 'HR', 'ADMIN'].includes((item.role ?? '').toUpperCase()),
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -221,6 +226,7 @@ export default function LeaveRequestModal({
     setToTime(nextState.toTime);
     setReason(nextState.reason);
     setHandoverPerson(nextState.handoverPerson);
+    setApproverId(nextState.approverId);
     setRequestForUserId((currentValue) => currentValue || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
@@ -231,12 +237,14 @@ export default function LeaveRequestModal({
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
     const base = countCalendarDays(fromDate, toDate);
-    if (durationMode === 'HALF_DAY') return base * 0.5;
+    if (durationMode === 'MORNING_HALF_DAY' || durationMode === 'AFTERNOON_HALF_DAY') {
+      return base * 0.5;
+    }
     if (durationMode === 'HOURLY') {
       if (!fromTime || !toTime) return 0;
-      const start = new Date(`2000-01-01T${fromTime}`);
-      const end = new Date(`2000-01-01T${toTime}`);
-      const hours = (end.getTime() - start.getTime()) / 3600000;
+      const hours =
+        (getDateTimeValue(`2000-01-01 ${toTime}`) - getDateTimeValue(`2000-01-01 ${fromTime}`)) /
+        3600000;
       return Math.max(0, hours / 8);
     }
     return base;
@@ -266,6 +274,17 @@ export default function LeaveRequestModal({
   };
 
   const balanceWarning = checkBalance();
+
+  useEffect(() => {
+    if (durationMode === 'HOURLY') {
+      setFromTime((current) => current || HOURLY_LEAVE_TIME_MIN);
+      setToTime((current) => current || HOURLY_LEAVE_TIME_MAX);
+      return;
+    }
+
+    setFromTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultFromTime);
+    setToTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultToTime);
+  }, [durationMode]);
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
@@ -300,18 +319,29 @@ export default function LeaveRequestModal({
   }, []);
 
   const handleSubmit = async () => {
-    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim()) {
+    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim() || !approverId) {
       setAlert({
         type: 'warning',
-        message: 'Vui lòng điền đầy đủ các trường bắt buộc (*).',
+        message: 'Vui lòng điền đầy đủ các trường bắt buộc (*), bao gồm người duyệt.',
       });
       return;
     }
 
-    if (new Date(toDate) < new Date(fromDate)) {
+    if (toDate < fromDate) {
       setAlert({
         type: 'warning',
         message: 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
+      });
+      return;
+    }
+
+    if (
+      durationMode === 'HOURLY' &&
+      getDateTimeValue(`2000-01-01 ${toTime}`) <= getDateTimeValue(`2000-01-01 ${fromTime}`)
+    ) {
+      setAlert({
+        type: 'warning',
+        message: 'Giờ kết thúc phải lớn hơn giờ bắt đầu.',
       });
       return;
     }
@@ -329,7 +359,7 @@ export default function LeaveRequestModal({
     const composedReason = [
       reason.trim(),
       durationMode !== 'FULL_DAY'
-        ? `Hình thức nghỉ: ${durationMode === 'HALF_DAY' ? 'Nửa ngày' : 'Theo giờ'}`
+        ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
         : null,
       durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
       handoverName ? `Người bàn giao: ${handoverName}` : null,
@@ -337,18 +367,25 @@ export default function LeaveRequestModal({
       .filter(Boolean)
       .join('\n');
 
+    const leaveRequestPayload = getLeaveRequestApiPayload({
+      date: fromDate,
+      endDate: toDate,
+      mode: durationMode,
+      startTime: fromTime,
+      endTime: toTime,
+    });
+
     const formData = new FormData();
     formData.append('leaveTypeId', selectedLeaveType.id);
     if (isAdmin && effectiveUserId) {
       formData.append('userId', effectiveUserId);
     }
-    formData.append('fromDate', toIsoDateTime(fromDate));
-    formData.append('toDate', toIsoDateTime(toDate, true));
-    formData.append('durationMode', durationMode);
-    if (durationMode === 'HOURLY') {
-      formData.append('fromTime', fromTime);
-      formData.append('toTime', toTime);
-    }
+    formData.append('approverId', approverId);
+    formData.append('fromDate', leaveRequestPayload.fromDate);
+    formData.append('toDate', leaveRequestPayload.toDate);
+    formData.append('durationMode', leaveRequestPayload.durationMode);
+    formData.append('fromTime', leaveRequestPayload.fromTime);
+    formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
     if (attachedFile) {
@@ -389,14 +426,15 @@ export default function LeaveRequestModal({
   };
 
   const resetForm = () => {
-    setLeaveType('');
+    setLeaveType('AL');
     setFromDate('');
     setToDate('');
     setDurationMode('FULL_DAY');
     setFromTime('08:00');
-    setToTime('17:00');
+    setToTime('17:15');
     setReason('');
     setHandoverPerson('');
+    setApproverId('');
     setRequestForUserId(userInfo?.id ?? '');
     setAttachedFile(null);
     setDragging(false);
@@ -611,12 +649,14 @@ export default function LeaveRequestModal({
                 <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <div className="flex gap-3 flex-wrap">
-                {(['FULL_DAY', 'HALF_DAY', 'HOURLY'] as DurationMode[]).map((mode) => {
-                  const labels: Record<DurationMode, string> = {
-                    FULL_DAY: 'Cả ngày',
-                    HALF_DAY: 'Nửa ngày',
-                    HOURLY: 'Theo giờ',
-                  };
+                {(
+                  [
+                    'FULL_DAY',
+                    'MORNING_HALF_DAY',
+                    'AFTERNOON_HALF_DAY',
+                    'HOURLY',
+                  ] as LeaveRequestMode[]
+                ).map((mode) => {
                   const isSelected = durationMode === mode;
                   return (
                     <label
@@ -651,7 +691,7 @@ export default function LeaveRequestModal({
                           />
                         )}
                       </span>
-                      {labels[mode]}
+                      {LEAVE_REQUEST_MODE_CONFIG[mode].label}
                     </label>
                   );
                 })}
@@ -671,7 +711,13 @@ export default function LeaveRequestModal({
                   >
                     Từ giờ
                   </label>
-                  <TimePicker value={fromTime} onChange={setFromTime} />
+                  <TimePicker
+                    value={fromTime}
+                    onChange={setFromTime}
+                    min={HOURLY_LEAVE_TIME_MIN}
+                    max={HOURLY_LEAVE_TIME_MAX}
+                    step={HOURLY_LEAVE_TIME_STEP_SECONDS}
+                  />
                 </div>
                 <div>
                   <label
@@ -680,7 +726,13 @@ export default function LeaveRequestModal({
                   >
                     Đến giờ
                   </label>
-                  <TimePicker value={toTime} onChange={setToTime} />
+                  <TimePicker
+                    value={toTime}
+                    onChange={setToTime}
+                    min={HOURLY_LEAVE_TIME_MIN}
+                    max={HOURLY_LEAVE_TIME_MAX}
+                    step={HOURLY_LEAVE_TIME_STEP_SECONDS}
+                  />
                 </div>
               </div>
             )}
@@ -731,6 +783,33 @@ export default function LeaveRequestModal({
                 placeholder="Nhập lý do nghỉ phép..."
                 className="resize-none"
               />
+            </div>
+
+            <div>
+              <label
+                className="flex items-center gap-2 text-sm font-semibold mb-2"
+                style={{ color: '#203430' }}
+              >
+                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt{' '}
+                <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <Select
+                value={approverId || 'placeholder'}
+                onValueChange={(value) => setApproverId(value === 'placeholder' ? '' : value)}
+                disabled={loadingOptions}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="-- Chọn người duyệt --" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="placeholder">-- Chọn người duyệt --</SelectItem>
+                  {approverOptions.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      {person.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Handover person */}

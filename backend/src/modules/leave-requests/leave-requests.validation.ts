@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { LeaveRequestStatus } from '@prisma/client';
 
 const durationModeSchema = z.enum(['FULL_DAY', 'HALF_DAY', 'HOURLY']);
+const vietnamDateTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
 
 export const createLeaveRequestSchema = z.object({
   leaveTypeId: z.coerce.bigint(),
   userId: z.coerce.bigint().optional(),
-  fromDate: z.string().datetime(),
-  toDate: z.string().datetime(),
+  approverId: z.coerce.bigint().optional(),
+  fromDate: vietnamDateTimeSchema,
+  toDate: vietnamDateTimeSchema,
   durationMode: durationModeSchema.optional(),
   fromTime: z
     .string()
@@ -25,8 +27,8 @@ export const getLeaveRequestsQuerySchema = z.object({
   status: z.nativeEnum(LeaveRequestStatus).optional(),
   userId: z.coerce.bigint().optional(),
   leaveTypeId: z.coerce.bigint().optional(),
-  fromDate: z.string().optional(),
-  toDate: z.string().optional(),
+  fromDate: vietnamDateTimeSchema.optional(),
+  toDate: vietnamDateTimeSchema.optional(),
   department: z.string().optional(),
   page: z.coerce.number().min(1).default(1),
   limit: z.coerce.number().min(1).max(100).default(20),

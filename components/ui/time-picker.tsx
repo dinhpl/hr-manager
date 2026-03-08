@@ -11,6 +11,9 @@ interface TimePickerProps {
   className?: string;
   disabled?: boolean;
   required?: boolean;
+  min?: string;
+  max?: string;
+  step?: number;
 }
 
 export function TimePicker({
@@ -20,6 +23,9 @@ export function TimePicker({
   className,
   disabled = false,
   required = false,
+  min,
+  max,
+  step,
 }: TimePickerProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(e.target.value);
@@ -33,6 +39,9 @@ export function TimePicker({
       placeholder={placeholder}
       disabled={disabled}
       required={required}
+      min={min}
+      max={max}
+      step={step}
       className={cn('w-full', className)}
     />
   );

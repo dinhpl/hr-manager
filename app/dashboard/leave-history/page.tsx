@@ -34,12 +34,13 @@ import {
 } from '@/components/ui/select';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
 import {
+  buildApiDateTime,
   buildQuery,
   formatDateTimeVN,
   formatDateVN,
+  getDateTimeValue,
   numberValue,
   toDateInputValue,
-  toIsoDateTime,
 } from '@/lib/hr-utils';
 
 type StatusKey = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -225,7 +226,7 @@ function mapToRecord(item: LeaveRequestItem): LeaveRecord {
     handover: extractHandover(item.reason),
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
-    submittedAtValue: new Date(item.createdAt).getTime(),
+    submittedAtValue: getDateTimeValue(item.createdAt),
     approver: item.approver?.fullName || '-',
     approverRole: item.approver?.fullName ? 'Người duyệt' : '',
     approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : '-',
@@ -348,8 +349,8 @@ export default function LeaveHistoryPage() {
         limit: pageSizeNum,
         status: statusFilter || undefined,
         leaveTypeId,
-        fromDate: fromDate ? toIsoDateTime(fromDate) : undefined,
-        toDate: toDate ? toIsoDateTime(toDate, true) : undefined,
+        fromDate: fromDate ? buildApiDateTime(fromDate, '00:00') : undefined,
+        toDate: toDate ? buildApiDateTime(toDate, '23:59') : undefined,
         ...overrides,
       });
     },
@@ -1045,7 +1046,10 @@ export default function LeaveHistoryPage() {
                     <td className="px-3 py-3 font-bold" style={{ color: '#203430' }}>
                       #{row.id}
                     </td>
-                    <td className="max-w-[160px] truncate px-3 py-3 font-medium" style={{ color: '#203430' }}>
+                    <td
+                      className="max-w-[160px] truncate px-3 py-3 font-medium"
+                      style={{ color: '#203430' }}
+                    >
                       {row.userName}
                     </td>
                     <td className="px-3 py-3">
