@@ -20,8 +20,9 @@ import {
   CalendarDays,
   Gem,
   ChevronDown,
+  User,
 } from 'lucide-react';
-import { apiClient, clearAuthSession } from '@/lib/api-client';
+import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import { getRoleLabel, toFrontendRole } from '@/lib/hr-utils';
 
 const NAV_ITEMS = [
@@ -31,6 +32,12 @@ const NAV_ITEMS = [
     icon: LayoutDashboard,
     key: 'dashboard',
   },
+  // {
+  //   href: '/dashboard/profile',
+  //   label: 'Thông tin cá nhân',
+  //   icon: User,
+  //   key: 'profile',
+  // },
   // [MVP-HIDDEN] Đăng ký nghỉ phép - now accessible via modal in leave-history and dashboard
   // {
   //   href: "/dashboard/leave-request",
@@ -272,12 +279,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 }}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent transition-colors"
               >
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                  style={{ background: '#1DB87A' }}
-                >
-                  {displayName.charAt(0)}
-                </div>
+                {userInfo?.avatar ? (
+                  <img
+                    src={
+                      userInfo.avatar.startsWith('/uploads')
+                        ? getApiBaseUrl() + userInfo.avatar
+                        : userInfo.avatar
+                    }
+                    alt={displayName}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                    style={{ background: '#1DB87A' }}
+                  >
+                    {displayName.charAt(0)}
+                  </div>
+                )}
                 <ChevronDown size={14} className="text-muted-foreground" />
               </button>
               {profileOpen && (
@@ -294,7 +313,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </p>
                   </div>
                   <button
-                    onClick={() => setProfileOpen(false)}
+                    onClick={() => {
+                      setProfileOpen(false);
+                      router.push('/dashboard/profile');
+                    }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
                     style={{ color: '#203430' }}
                   >
@@ -310,7 +332,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
               )}
             </div>
-
+            {/* 
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-red-50"
@@ -318,7 +340,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <LogOut size={15} />
               <span className="hidden sm:inline">Đăng xuất</span>
-            </button>
+            </button> */}
           </div>
         </header>
 

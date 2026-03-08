@@ -302,7 +302,7 @@ export default function LoginPage() {
             </form>
 
             {/* Demo accounts */}
-            <div className="mt-8">
+            {/* <div className="mt-8">
               <div
                 className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2"
                 style={{ color: '#6b7f78' }}
@@ -335,7 +335,7 @@ export default function LoginPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

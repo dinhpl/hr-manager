@@ -741,16 +741,22 @@ export default function EmployeesPage() {
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
-                          style={{
-                            background: employee.profileImageUrl
-                              ? `url(${employee.profileImageUrl})`
-                              : 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
-                          }}
-                        >
-                          {!employee.profileImageUrl && initials}
-                        </div>
+                        {employee.profileImageUrl ? (
+                          <img
+                            src={employee.profileImageUrl}
+                            alt={employee.fullName}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                            style={{
+                              background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                            }}
+                          >
+                            {initials}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-3">
                         <p className="font-semibold whitespace-nowrap" style={{ color: '#203430' }}>

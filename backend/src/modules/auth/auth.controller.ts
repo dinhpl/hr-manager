@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as authService from './auth.service';
-import { loginSchema } from './auth.validation';
+import { loginSchema, updateProfileSchema, changePasswordSchema } from './auth.validation';
 import { sendSuccess } from '../../utils/response';
 
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
@@ -47,6 +47,39 @@ export async function logoutController(_req: Request, res: Response) {
 export async function meController(req: Request, res: Response, next: NextFunction) {
   try {
     const user = await authService.getMe(req.user!.id);
+    sendSuccess(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateProfileController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = updateProfileSchema.parse(req.body);
+    const user = await authService.updateProfile(req.user!.id, data);
+    sendSuccess(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function changePasswordController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = changePasswordSchema.parse(req.body);
+    const result = await authService.changePassword(req.user!.id, data);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function uploadAvatarController(req: Request, res: Response, next: NextFunction) {
+  try {
+    // req.file is set by multer middleware
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No file uploaded' } });
+    }
+    const user = await authService.uploadAvatar(req.user!.id, req.file.filename);
     sendSuccess(res, user);
   } catch (err) {
     next(err);

@@ -4,8 +4,12 @@ import {
   refreshController,
   logoutController,
   meController,
+  updateProfileController,
+  changePasswordController,
+  uploadAvatarController,
 } from './auth.controller';
 import { authMiddleware } from '../../middlewares/auth.middleware';
+import { uploadAvatar } from '../../utils/upload';
 
 export const authRouter: IRouter = Router();
 
@@ -60,3 +64,38 @@ authRouter.post('/logout', logoutController);
  *       - bearerAuth: []
  */
 authRouter.get('/me', authMiddleware, meController);
+
+/**
+ * @swagger
+ * /api/auth/profile:
+ *   patch:
+ *     summary: Cập nhật thông tin cá nhân
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ */
+authRouter.patch('/profile', authMiddleware, updateProfileController);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   patch:
+ *     summary: Đổi mật khẩu
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ */
+authRouter.patch('/change-password', authMiddleware, changePasswordController);
+
+/**
+ * @swagger
+ * /api/auth/avatar:
+ *   post:
+ *     summary: Upload avatar
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     consumes:
+ *       - multipart/form-data
+ */
+authRouter.post('/avatar', authMiddleware, uploadAvatar.single('avatar'), uploadAvatarController);

@@ -81,20 +81,35 @@ export async function getCalendarData(
   const requests = await prisma.leaveRequest.findMany({
     where,
     select: {
+      id: true,
       fromDate: true,
       toDate: true,
       status: true,
+      reason: true,
       // Include user info to show names on calendar cells
       user: { select: { fullName: true, username: true } },
+      leaveType: { select: { code: true, name: true, color: true } },
+      approver: { select: { fullName: true } },
     },
   });
 
-  // Build map: dateStr → list of { name, status } entries per user per day
-  const calendarMap: Record<string, { users: { name: string; status: 'approved' | 'pending' }[] }> = {};
+  // Build map: dateStr → list of { name, status, reason, leaveType, approver } entries per user per day
+  type CalendarUser = {
+    name: string;
+    status: 'approved' | 'pending';
+    reason?: string;
+    leaveType?: { code: string; name: string; color: string };
+    approver?: string;
+  };
+  const calendarMap: Record<string, { users: CalendarUser[] }> = {};
 
   for (const r of requests) {
     const userName = r.user?.fullName?.trim() || r.user?.username || 'NV';
     const status: 'approved' | 'pending' = r.status === 'APPROVED' ? 'approved' : 'pending';
+    const leaveType = r.leaveType
+      ? { code: r.leaveType.code, name: r.leaveType.name, color: r.leaveType.color }
+      : undefined;
+    const approver = r.approver?.fullName;
 
     const cur = new Date(r.fromDate);
     while (cur <= r.toDate) {
@@ -105,7 +120,13 @@ export async function getCalendarData(
         (u) => u.name === userName && u.status === status,
       );
       if (!alreadyAdded) {
-        calendarMap[key].users.push({ name: userName, status });
+        calendarMap[key].users.push({
+          name: userName,
+          status,
+          reason: r.reason || undefined,
+          leaveType,
+          approver,
+        });
       }
       cur.setDate(cur.getDate() + 1);
     }

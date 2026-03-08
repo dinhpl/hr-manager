@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
+import CalendarDayDetailModal from '@/components/calendar-day-detail-modal';
 import LeaveRequestModal from '@/components/leave-request-modal';
 import { apiClient, clearAuthSession } from '@/lib/api-client';
 import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
@@ -56,7 +57,18 @@ interface DashboardManagerSummary {
 }
 
 type DashboardSummary = DashboardEmployeeSummary | DashboardManagerSummary;
-type CalendarData = Record<string, { users: { name: string; status: 'approved' | 'pending' }[] }>;
+type CalendarData = Record<
+  string,
+  {
+    users: {
+      name: string;
+      status: 'approved' | 'pending';
+      reason?: string;
+      leaveType?: { code: string; name: string; color: string };
+      approver?: string;
+    }[];
+  }
+>;
 
 interface DashboardLeaveRequest {
   id: string;
@@ -91,6 +103,7 @@ interface SharedDashboardProps {
   recentRequests: DashboardLeaveRequest[];
   onNextMonth: () => void;
   onOpenDetail: (request: DashboardLeaveRequest) => void;
+  onOpenDayDetail: (date: string, users: CalendarData[string]['users']) => void;
   onOpenRequestModal: () => void;
   onPrevMonth: () => void;
 }
@@ -197,9 +210,11 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
 function CalendarGrid({
   calendarData,
   calendarDays,
+  onDayClick,
 }: {
   calendarData: CalendarData;
   calendarDays: ReturnType<typeof getCalendarDays>;
+  onDayClick?: (date: string, users: CalendarData[string]['users']) => void;
 }) {
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -229,10 +244,18 @@ function CalendarGrid({
             const isToday = cell.dateStr === todayStr;
             const isCurrentMonth = cell.month === 'current';
 
+            const hasUsers = users.length > 0;
             return (
               <div
                 key={`${cell.dateStr}-${index}`}
-                className="flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors hover:bg-gray-50/50"
+                className={`flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors ${
+                  hasUsers && isCurrentMonth ? 'cursor-pointer hover:bg-green-50/50' : 'hover:bg-gray-50/50'
+                }`}
+                onClick={() => {
+                  if (hasUsers && isCurrentMonth && onDayClick) {
+                    onDayClick(cell.dateStr, users);
+                  }
+                }}
               >
                 {/* Day number row */}
                 <div className="mb-0.5 flex items-start justify-between">
@@ -291,6 +314,7 @@ function EmployeeDashboard({
   summary,
   onNextMonth,
   onOpenDetail,
+  onOpenDayDetail,
   onOpenRequestModal,
   onPrevMonth,
 }: SharedDashboardProps & { summary: DashboardEmployeeSummary['stats'] }) {
@@ -430,7 +454,11 @@ function EmployeeDashboard({
             </div>
           </div>
 
-          <CalendarGrid calendarDays={calendarDays} calendarData={calendarData} />
+          <CalendarGrid
+            calendarDays={calendarDays}
+            calendarData={calendarData}
+            onDayClick={onOpenDayDetail}
+          />
         </div>
 
         <div className="space-y-4">
@@ -593,6 +621,7 @@ function AdminHRDashboard({
   userRole,
   onNextMonth,
   onOpenDetail,
+  onOpenDayDetail,
   onOpenRequestModal,
   onPrevMonth,
 }: SharedDashboardProps & {
@@ -743,7 +772,11 @@ function AdminHRDashboard({
             </div>
           </div>
 
-          <CalendarGrid calendarDays={calendarDays} calendarData={calendarData} />
+          <CalendarGrid
+            calendarDays={calendarDays}
+            calendarData={calendarData}
+            onDayClick={onOpenDayDetail}
+          />
         </div>
 
         <div className="space-y-4">
@@ -912,6 +945,10 @@ export default function DashboardPage() {
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(now.getMonth() + 1);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [selectedDayDetail, setSelectedDayDetail] = useState<{
+    date: string;
+    users: CalendarData[string]['users'];
+  } | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
@@ -1034,6 +1071,7 @@ export default function DashboardPage() {
           summary={summary.stats}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
+          onOpenDayDetail={(date, users) => setSelectedDayDetail({ date, users })}
           onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
           onPrevMonth={handlePrevMonth}
         />
@@ -1057,12 +1095,23 @@ export default function DashboardPage() {
           userRole={currentRole === 'employee' ? 'manager' : currentRole}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
+          onOpenDayDetail={(date, users) => setSelectedDayDetail({ date, users })}
           onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
           onPrevMonth={handlePrevMonth}
         />
       )}
 
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+      <CalendarDayDetailModal
+        date={selectedDayDetail?.date}
+        users={selectedDayDetail?.users}
+        onClose={() => setSelectedDayDetail(null)}
+        onViewDetail={() => {
+          // TODO: Implement view individual leave request detail
+          // For now, just close the modal
+          setSelectedDayDetail(null);
+        }}
+      />
 
       <LeaveRequestModal
         isOpen={isLeaveRequestModalOpen}

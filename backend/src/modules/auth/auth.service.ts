@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma';
-import { comparePassword } from '../../utils/hash';
+import { comparePassword, hashPassword } from '../../utils/hash';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt';
+import type { UpdateProfileDto, ChangePasswordDto } from './auth.validation';
 
 // Login: find user by username or email, verify password, return tokens + user info
 export async function login(username: string, password: string) {
@@ -78,6 +79,85 @@ export async function getMe(userId: bigint) {
   if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
 
   // Serialize BigInt to string for JSON
+  return {
+    ...user,
+    id: user.id.toString(),
+    manager: user.manager
+      ? { id: user.manager.id.toString(), fullName: user.manager.fullName }
+      : null,
+  };
+}
+
+// Update own profile (avatar, fullName, position)
+export async function updateProfile(userId: bigint, data: UpdateProfileDto) {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data,
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      fullName: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      department: true,
+      position: true,
+      avatar: true,
+      companyJoinDate: true,
+      manager: { select: { id: true, fullName: true } },
+    },
+  });
+
+  return {
+    ...user,
+    id: user.id.toString(),
+    manager: user.manager
+      ? { id: user.manager.id.toString(), fullName: user.manager.fullName }
+      : null,
+  };
+}
+
+// Change password
+export async function changePassword(userId: bigint, data: ChangePasswordDto) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw Object.assign(new Error('User not found'), { status: 404 });
+
+  const valid = await comparePassword(data.currentPassword, user.password);
+  if (!valid) {
+    throw Object.assign(new Error('Current password is incorrect'), { status: 400 });
+  }
+
+  const hashed = await hashPassword(data.newPassword);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: hashed },
+  });
+
+  return { message: 'Password changed successfully' };
+}
+
+// Upload avatar - save filename to user record
+export async function uploadAvatar(userId: bigint, filename: string) {
+  const avatarUrl = `/uploads/avatars/${filename}`;
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { avatar: avatarUrl },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      fullName: true,
+      role: true,
+      department: true,
+      position: true,
+      avatar: true,
+      companyJoinDate: true,
+      manager: { select: { id: true, fullName: true } },
+    },
+  });
+
   return {
     ...user,
     id: user.id.toString(),

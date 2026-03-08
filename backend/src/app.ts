@@ -27,22 +27,28 @@ export function createApp(): Application {
     typeof value === 'bigint' ? value.toString() : value,
   );
 
-  // Security headers
-  app.use(helmet());
+  // Security headers — cho phép frontend (origin khác) nhúng tài nguyên /uploads (avatar, file)
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // CORS — allow frontend origins (production port 5500 + dev port 3000)
   const allowedOrigins = [env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:5500'];
-  app.use(cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. curl, mobile apps) or matching allowed origins
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: origin ${origin} not allowed`));
-      }
-    },
-    credentials: true,
-  }));
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. curl, mobile apps) or matching allowed origins
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`CORS: origin ${origin} not allowed`));
+        }
+      },
+      credentials: true,
+    }),
+  );
 
   // Rate limiting: 200 requests per 1 minute per IP
   app.use(rateLimit({ windowMs: 1 * 60 * 1000, max: 200 }));
@@ -57,7 +63,7 @@ export function createApp(): Application {
   // Request logging
   app.use(pinoHttp());
 
-  // Serve uploaded files (leave attachments)
+  // Serve uploaded files (leave attachments + avatars)
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // Health check
