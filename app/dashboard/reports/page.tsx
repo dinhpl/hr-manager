@@ -526,7 +526,7 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={() => void loadReports()}
-            className="self-end rounded-lg px-4 py-2 text-sm font-semibold text-white"
+            className="self-end h-[36px] rounded-lg px-4 py-2 text-sm font-semibold text-white"
             style={{ background: '#1DB87A' }}
           >
             <Search size={14} />

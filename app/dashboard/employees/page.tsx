@@ -415,8 +415,7 @@ export default function EmployeesPage() {
     } catch (error) {
       setFeedback({
         type: 'error',
-        message:
-          error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.',
+        message: error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.',
       });
     } finally {
       setIsRecalculating(false);
@@ -616,7 +615,7 @@ export default function EmployeesPage() {
             <button
               type="button"
               onClick={handleSearch}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
+              className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
               style={{ background: '#1DB87A' }}
             >
               <Search size={14} />

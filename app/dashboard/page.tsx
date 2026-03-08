@@ -193,6 +193,96 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
   };
 }
 
+// Shared Google-Calendar-style calendar grid
+function CalendarGrid({
+  calendarData,
+  calendarDays,
+}: {
+  calendarData: CalendarData;
+  calendarDays: ReturnType<typeof getCalendarDays>;
+}) {
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[420px]">
+        {/* Week day headers */}
+        <div className="grid grid-cols-7 border-b border-gray-100">
+          {WEEK_DAYS.map((day) => (
+            <div
+              key={day}
+              className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-gray-400"
+            >
+              {day}
+            </div>
+          ))}
+        </div>
+        {/* Calendar cells */}
+        <div className="grid grid-cols-7 border-l border-t border-gray-100">
+          {calendarDays.map((cell, index) => {
+            const data = calendarData[cell.dateStr];
+            const users = data?.users ?? [];
+            const hasPending = users.some((u) => u.status === 'pending');
+            const isToday = cell.dateStr === todayStr;
+            const isCurrentMonth = cell.month === 'current';
+
+            return (
+              <div
+                key={`${cell.dateStr}-${index}`}
+                className="flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors hover:bg-gray-50/50"
+              >
+                {/* Day number row */}
+                <div className="mb-0.5 flex items-start justify-between">
+                  <span
+                    className={[
+                      'flex h-[22px] w-[22px] items-center justify-center rounded-full text-[11px] font-bold leading-none',
+                      isToday
+                        ? 'bg-[#1DB87A] text-white'
+                        : isCurrentMonth
+                          ? 'text-[#203430]'
+                          : 'text-gray-300',
+                    ].join(' ')}
+                  >
+                    {cell.day}
+                  </span>
+                  {hasPending && isCurrentMonth && (
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
+                  )}
+                </div>
+                {/* Event chips */}
+                {isCurrentMonth &&
+                  users.slice(0, 3).map((u, i) => (
+                    <div
+                      key={i}
+                      className="truncate rounded-[4px] px-1.5 py-[3px] text-[9px] font-semibold leading-none"
+                      style={{
+                        background: u.status === 'approved' ? '#dcfce7' : '#fef9c3',
+                        color: u.status === 'approved' ? '#15803d' : '#92400e',
+                        borderLeft: `2px solid ${u.status === 'approved' ? '#16a34a' : '#d97706'}`,
+                      }}
+                      title={u.name}
+                    >
+                      {u.name}
+                    </div>
+                  ))}
+                {/* Overflow */}
+                {isCurrentMonth && users.length > 3 && (
+                  <span className="pl-1 text-[9px] font-medium text-gray-400">
+                    +{users.length - 3} khác
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EmployeeDashboard({
   currentMonth,
   currentYear,
@@ -290,117 +380,57 @@ function EmployeeDashboard({
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Calendar card */}
         <div
           className="rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:col-span-2"
           style={{ border: '1px solid #e2ede9' }}
         >
-          <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+          {/* Navigation */}
+          <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold" style={{ color: '#203430' }}>
-              Lịch nghỉ phép — {MONTH_NAMES[currentMonth - 1]}/{currentYear}
+              Lịch nghỉ phép
             </h2>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="flex items-center gap-1">
               <button
                 onClick={onPrevMonth}
-                className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: '#1DB87A' }}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
               >
-                <ChevronLeft size={14} /> Trước
+                <ChevronLeft size={15} />
               </button>
+              <span
+                className="min-w-[130px] text-center text-sm font-semibold"
+                style={{ color: '#203430' }}
+              >
+                {MONTH_NAMES[currentMonth - 1]} {currentYear}
+              </span>
               <button
                 onClick={onNextMonth}
-                className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: '#1DB87A' }}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
               >
-                Sau <ChevronRight size={14} />
+                <ChevronRight size={15} />
               </button>
             </div>
           </div>
 
-          <div className="mb-4 flex flex-wrap gap-4">
+          {/* Legend */}
+          <div className="mb-3 flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d1fae5' }} />
-              <span className="text-xs text-muted-foreground">Đã duyệt</span>
+              <span
+                className="inline-block h-3 w-2.5 rounded-sm"
+                style={{ background: '#dcfce7', borderLeft: '2px solid #16a34a' }}
+              />
+              <span className="text-xs text-gray-500">Đã duyệt</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#fef3c7' }} />
-              <span className="text-xs text-muted-foreground">Chờ duyệt</span>
+              <span
+                className="inline-block h-3 w-2.5 rounded-sm"
+                style={{ background: '#fef9c3', borderLeft: '2px solid #d97706' }}
+              />
+              <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[320px]">
-              <div className="mb-1 grid grid-cols-7 gap-1">
-                {WEEK_DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="rounded-lg py-2 text-center text-xs font-bold"
-                    style={{ background: '#1DB87A', color: '#fff' }}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map((cell, index) => {
-                  const data = calendarData[cell.dateStr];
-                  const users = data?.users ?? [];
-                  // Determine cell background: pending overrides approved (pending = needs action)
-                  const hasPending = users.some((u) => u.status === 'pending');
-                  const hasApproved = users.some((u) => u.status === 'approved');
-                  let background = 'transparent';
-                  let dayColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
-                  if (hasApproved) {
-                    background = '#d1fae5';
-                    dayColor = '#059669';
-                  }
-                  if (hasPending) {
-                    background = '#fef3c7';
-                    dayColor = '#d97706';
-                  }
-
-                  return (
-                    <div
-                      key={`${cell.dateStr}-${index}`}
-                      className="flex min-h-[52px] flex-col gap-0.5 rounded-lg p-1 text-xs font-medium transition-colors hover:brightness-95"
-                      style={{ background: background || '#f8fafc' }}
-                    >
-                      {/* Day number */}
-                      <span
-                        className="text-center text-[11px] font-bold leading-none"
-                        style={{ color: dayColor }}
-                      >
-                        {cell.day}
-                      </span>
-                      {/* User name chips per day */}
-                      {cell.month === 'current' &&
-                        users.slice(0, 3).map((u, i) => (
-                          <span
-                            key={i}
-                            className="block truncate rounded px-0.5 text-[9px] font-semibold leading-tight"
-                            style={{
-                              background: u.status === 'approved' ? '#059669' : '#d97706',
-                              color: '#fff',
-                            }}
-                            title={u.name}
-                          >
-                            {u.name}
-                          </span>
-                        ))}
-                      {/* "+N more" indicator when > 3 users */}
-                      {cell.month === 'current' && users.length > 3 && (
-                        <span
-                          className="block text-center text-[9px] leading-tight"
-                          style={{ color: '#6b7280' }}
-                        >
-                          +{users.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <CalendarGrid calendarDays={calendarDays} calendarData={calendarData} />
         </div>
 
         <div className="space-y-4">
@@ -412,7 +442,7 @@ function EmployeeDashboard({
             <p className="mb-4 text-sm opacity-90">Tạo yêu cầu nghỉ phép mới cho bạn</p>
             <button
               onClick={onOpenRequestModal}
-              className="inline-block rounded-lg bg-white px-4 py-2 text-xs font-semibold transition-all hover:shadow-lg"
+              className="inline-block cursor-pointer rounded-lg bg-white px-4 py-2 text-xs font-semibold transition-all hover:shadow-lg"
               style={{ color: '#1DB87A' }}
             >
               Tạo yêu cầu →
@@ -527,7 +557,7 @@ function EmployeeDashboard({
                       <td className="px-3 py-3">
                         <button
                           onClick={() => onOpenDetail(request)}
-                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
                           style={{ background: '#1DB87A' }}
                         >
                           <Eye size={13} /> Xem
@@ -544,7 +574,7 @@ function EmployeeDashboard({
 
       <button
         onClick={onOpenRequestModal}
-        className="fixed bottom-6 right-6 z-10 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
+        className="fixed bottom-6 right-6 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
         style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
         aria-label="Đăng ký nghỉ phép mới"
       >
@@ -663,117 +693,57 @@ function AdminHRDashboard({
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {/* Calendar card */}
         <div
           className="rounded-xl bg-white p-5 shadow-sm sm:p-6 lg:col-span-2"
           style={{ border: '1px solid #e2ede9' }}
         >
-          <div className="mb-5 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+          {/* Navigation */}
+          <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold" style={{ color: '#203430' }}>
-              Lịch — {MONTH_NAMES[currentMonth - 1]}/{currentYear}
+              Lịch nghỉ phép
             </h2>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div className="flex items-center gap-1">
               <button
                 onClick={onPrevMonth}
-                className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: '#1DB87A' }}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
               >
-                <ChevronLeft size={14} /> Trước
+                <ChevronLeft size={15} />
               </button>
+              <span
+                className="min-w-[130px] text-center text-sm font-semibold"
+                style={{ color: '#203430' }}
+              >
+                {MONTH_NAMES[currentMonth - 1]} {currentYear}
+              </span>
               <button
                 onClick={onNextMonth}
-                className="flex flex-1 items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white transition-all hover:opacity-90 sm:flex-none"
-                style={{ background: '#1DB87A' }}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
               >
-                Sau <ChevronRight size={14} />
+                <ChevronRight size={15} />
               </button>
             </div>
           </div>
 
-          <div className="mb-4 flex flex-wrap gap-4">
+          {/* Legend */}
+          <div className="mb-3 flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#d1fae5' }} />
-              <span className="text-xs text-muted-foreground">Đã duyệt</span>
+              <span
+                className="inline-block h-3 w-2.5 rounded-sm"
+                style={{ background: '#dcfce7', borderLeft: '2px solid #16a34a' }}
+              />
+              <span className="text-xs text-gray-500">Đã duyệt</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="inline-block h-3 w-3 rounded-sm" style={{ background: '#fef3c7' }} />
-              <span className="text-xs text-muted-foreground">Chờ duyệt</span>
+              <span
+                className="inline-block h-3 w-2.5 rounded-sm"
+                style={{ background: '#fef9c3', borderLeft: '2px solid #d97706' }}
+              />
+              <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[320px]">
-              <div className="mb-1 grid grid-cols-7 gap-1">
-                {WEEK_DAYS.map((day) => (
-                  <div
-                    key={day}
-                    className="rounded-lg py-2 text-center text-xs font-bold"
-                    style={{ background: '#1DB87A', color: '#fff' }}
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {calendarDays.map((cell, index) => {
-                  const data = calendarData[cell.dateStr];
-                  const users = data?.users ?? [];
-                  // Determine cell background: pending overrides approved (pending = needs action)
-                  const hasPending = users.some((u) => u.status === 'pending');
-                  const hasApproved = users.some((u) => u.status === 'approved');
-                  let background = 'transparent';
-                  let dayColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
-                  if (hasApproved) {
-                    background = '#d1fae5';
-                    dayColor = '#059669';
-                  }
-                  if (hasPending) {
-                    background = '#fef3c7';
-                    dayColor = '#d97706';
-                  }
-
-                  return (
-                    <div
-                      key={`${cell.dateStr}-${index}`}
-                      className="flex min-h-[52px] flex-col gap-0.5 rounded-lg p-1 text-xs font-medium transition-colors hover:brightness-95"
-                      style={{ background: background || '#f8fafc' }}
-                    >
-                      {/* Day number */}
-                      <span
-                        className="text-center text-[11px] font-bold leading-none"
-                        style={{ color: dayColor }}
-                      >
-                        {cell.day}
-                      </span>
-                      {/* User name chips per day */}
-                      {cell.month === 'current' &&
-                        users.slice(0, 3).map((u, i) => (
-                          <span
-                            key={i}
-                            className="block truncate rounded px-0.5 text-[9px] font-semibold leading-tight"
-                            style={{
-                              background: u.status === 'approved' ? '#059669' : '#d97706',
-                              color: '#fff',
-                            }}
-                            title={u.name}
-                          >
-                            {u.name}
-                          </span>
-                        ))}
-                      {/* "+N more" indicator when > 3 users */}
-                      {cell.month === 'current' && users.length > 3 && (
-                        <span
-                          className="block text-center text-[9px] leading-tight"
-                          style={{ color: '#6b7280' }}
-                        >
-                          +{users.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <CalendarGrid calendarDays={calendarDays} calendarData={calendarData} />
         </div>
 
         <div className="space-y-4">
@@ -905,7 +875,7 @@ function AdminHRDashboard({
                       <td className="px-3 py-3">
                         <button
                           onClick={() => onOpenDetail(request)}
-                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
                           style={{ background: '#1DB87A' }}
                         >
                           <Eye size={13} /> Xem
@@ -922,7 +892,7 @@ function AdminHRDashboard({
 
       <button
         onClick={onOpenRequestModal}
-        className="fixed bottom-6 right-6 z-10 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
+        className="fixed bottom-6 right-6 z-10 flex h-14 w-14 cursor-pointer items-center justify-center rounded-full text-white shadow-lg transition-all hover:scale-110"
         style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
         aria-label="Đăng ký nghỉ phép mới"
       >

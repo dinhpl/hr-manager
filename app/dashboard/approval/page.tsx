@@ -597,7 +597,7 @@ export default function ApprovalPage() {
               />
             </div>
             <button
-              className="flex items-center gap-1.5 rounded-lg px-4 py-2 font-semibold text-white"
+              className="flex items-center h-[36px] gap-1.5 rounded-lg px-4 py-2 font-semibold text-white"
               style={{ background: '#1DB87A' }}
             >
               <Search size={14} />
