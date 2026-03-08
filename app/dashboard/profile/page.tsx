@@ -32,6 +32,12 @@ const PRESET_AVATARS = [
   '/assets/avatars/bluey_8.png',
   '/assets/avatars/bluey_9.png',
   '/assets/avatars/bluey_10.png',
+  '/assets/avatars/toon_2.png',
+  '/assets/avatars/toon_3.png',
+  '/assets/avatars/toon_4.png',
+  '/assets/avatars/toon_8.png',
+  '/assets/avatars/toon_9.png',
+  '/assets/avatars/toon_10.png',
 ];
 
 export default function ProfilePage() {

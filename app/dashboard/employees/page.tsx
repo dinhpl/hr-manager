@@ -38,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, getApiBaseUrl } from '@/lib/api-client';
 import { buildQuery, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from '@/lib/hr-utils';
 
 type UserRole = 'EMPLOYEE' | 'MANAGER' | 'HR' | 'ADMIN';
@@ -106,6 +106,17 @@ const PALETTE: Array<{ color: string; bg: string }> = [
 
 function getDeptColor(name: string, index: number): { color: string; bg: string } {
   return PALETTE[index % PALETTE.length];
+}
+
+function getAvatarUrl(avatar?: string | null): string | null {
+  if (!avatar) return null;
+  // External URL: use as-is
+  if (avatar.startsWith('http')) return avatar;
+  // Preset avatars (same origin): /assets/...
+  if (avatar.startsWith('/assets')) return avatar;
+  // Uploaded avatars: backend phục vụ file → dùng full URL backend
+  if (avatar.startsWith('/uploads')) return getApiBaseUrl() + avatar;
+  return null;
 }
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
@@ -741,11 +752,11 @@ export default function EmployeesPage() {
                         />
                       </td>
                       <td className="px-3 py-3">
-                        {employee.profileImageUrl ? (
+                        {getAvatarUrl(employee.profileImageUrl) ? (
                           <img
-                            src={employee.profileImageUrl}
+                            src={getAvatarUrl(employee.profileImageUrl) || ''}
                             alt={employee.fullName}
-                            className="w-8 h-8 rounded-full"
+                            className="w-8 h-8 rounded-full object-cover"
                           />
                         ) : (
                           <div
