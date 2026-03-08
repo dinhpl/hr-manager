@@ -622,28 +622,8 @@ export default function LeaveHistoryPage() {
           >
             <FileDown size={14} /> Export Excel
           </button>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
-            style={{ borderColor: '#e2ede9', color: '#203430' }}
-          >
-            <Printer size={14} /> In báo cáo
-          </button>
         </div>
       </div>
-
-      <div
-        className="rounded-xl border px-4 py-3 text-sm"
-        style={{
-          borderColor: '#bfdbfe',
-          background: '#eff6ff',
-          color: '#1d4ed8',
-        }}
-      >
-        Backend hiện chưa hỗ trợ draft, edit và resubmit cho lịch sử nghỉ phép. Trang này chỉ dùng
-        API thật cho tạo mới, xem chi tiết và hủy yêu cầu đang ở trạng thái chờ duyệt.
-      </div>
-
       {error ? (
         <div
           className="rounded-xl border px-4 py-3 text-sm"
