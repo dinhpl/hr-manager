@@ -56,7 +56,7 @@ interface DashboardManagerSummary {
 }
 
 type DashboardSummary = DashboardEmployeeSummary | DashboardManagerSummary;
-type CalendarData = Record<string, { approved?: boolean; pending?: boolean }>;
+type CalendarData = Record<string, { users: { name: string; status: 'approved' | 'pending' }[] }>;
 
 interface DashboardLeaveRequest {
   id: string;
@@ -343,26 +343,58 @@ function EmployeeDashboard({
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((cell, index) => {
                   const data = calendarData[cell.dateStr];
+                  const users = data?.users ?? [];
+                  // Determine cell background: pending overrides approved (pending = needs action)
+                  const hasPending = users.some((u) => u.status === 'pending');
+                  const hasApproved = users.some((u) => u.status === 'approved');
                   let background = 'transparent';
-                  let textColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
-
-                  if (data?.approved) {
+                  let dayColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
+                  if (hasApproved) {
                     background = '#d1fae5';
-                    textColor = '#059669';
+                    dayColor = '#059669';
                   }
-
-                  if (data?.pending) {
+                  if (hasPending) {
                     background = '#fef3c7';
-                    textColor = '#d97706';
+                    dayColor = '#d97706';
                   }
 
                   return (
                     <div
                       key={`${cell.dateStr}-${index}`}
-                      className="flex aspect-square cursor-default items-center justify-center rounded-lg text-sm font-medium transition-colors hover:bg-accent"
-                      style={{ background, color: textColor }}
+                      className="flex min-h-[52px] flex-col gap-0.5 rounded-lg p-1 text-xs font-medium transition-colors hover:brightness-95"
+                      style={{ background: background || '#f8fafc' }}
                     >
-                      {cell.day}
+                      {/* Day number */}
+                      <span
+                        className="text-center text-[11px] font-bold leading-none"
+                        style={{ color: dayColor }}
+                      >
+                        {cell.day}
+                      </span>
+                      {/* User name chips per day */}
+                      {cell.month === 'current' &&
+                        users.slice(0, 3).map((u, i) => (
+                          <span
+                            key={i}
+                            className="block truncate rounded px-0.5 text-[9px] font-semibold leading-tight"
+                            style={{
+                              background: u.status === 'approved' ? '#059669' : '#d97706',
+                              color: '#fff',
+                            }}
+                            title={u.name}
+                          >
+                            {u.name}
+                          </span>
+                        ))}
+                      {/* "+N more" indicator when > 3 users */}
+                      {cell.month === 'current' && users.length > 3 && (
+                        <span
+                          className="block text-center text-[9px] leading-tight"
+                          style={{ color: '#6b7280' }}
+                        >
+                          +{users.length - 3}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
@@ -684,26 +716,58 @@ function AdminHRDashboard({
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((cell, index) => {
                   const data = calendarData[cell.dateStr];
+                  const users = data?.users ?? [];
+                  // Determine cell background: pending overrides approved (pending = needs action)
+                  const hasPending = users.some((u) => u.status === 'pending');
+                  const hasApproved = users.some((u) => u.status === 'approved');
                   let background = 'transparent';
-                  let textColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
-
-                  if (data?.approved) {
+                  let dayColor = cell.month === 'current' ? '#203430' : '#c4d4cf';
+                  if (hasApproved) {
                     background = '#d1fae5';
-                    textColor = '#059669';
+                    dayColor = '#059669';
                   }
-
-                  if (data?.pending) {
+                  if (hasPending) {
                     background = '#fef3c7';
-                    textColor = '#d97706';
+                    dayColor = '#d97706';
                   }
 
                   return (
                     <div
                       key={`${cell.dateStr}-${index}`}
-                      className="flex aspect-square cursor-default items-center justify-center rounded-lg text-sm font-medium transition-colors hover:bg-accent"
-                      style={{ background, color: textColor }}
+                      className="flex min-h-[52px] flex-col gap-0.5 rounded-lg p-1 text-xs font-medium transition-colors hover:brightness-95"
+                      style={{ background: background || '#f8fafc' }}
                     >
-                      {cell.day}
+                      {/* Day number */}
+                      <span
+                        className="text-center text-[11px] font-bold leading-none"
+                        style={{ color: dayColor }}
+                      >
+                        {cell.day}
+                      </span>
+                      {/* User name chips per day */}
+                      {cell.month === 'current' &&
+                        users.slice(0, 3).map((u, i) => (
+                          <span
+                            key={i}
+                            className="block truncate rounded px-0.5 text-[9px] font-semibold leading-tight"
+                            style={{
+                              background: u.status === 'approved' ? '#059669' : '#d97706',
+                              color: '#fff',
+                            }}
+                            title={u.name}
+                          >
+                            {u.name}
+                          </span>
+                        ))}
+                      {/* "+N more" indicator when > 3 users */}
+                      {cell.month === 'current' && users.length > 3 && (
+                        <span
+                          className="block text-center text-[9px] leading-tight"
+                          style={{ color: '#6b7280' }}
+                        >
+                          +{users.length - 3}
+                        </span>
+                      )}
                     </div>
                   );
                 })}

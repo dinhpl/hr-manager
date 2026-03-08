@@ -5,7 +5,6 @@ import {
   Building2,
   Cake,
   CalendarOff,
-  Check,
   Clock,
   Eye,
   FileDown,
@@ -63,13 +62,6 @@ interface EmployeeApiItem {
   createdAt: string;
 }
 
-interface EmployeeDropdownItem {
-  id: string | number;
-  fullName?: string | null;
-  username?: string | null;
-  department?: string | null;
-}
-
 interface EmployeeRow {
   id: string;
   email: string;
@@ -94,7 +86,27 @@ interface EmployeeFormData {
   status: EmployeeStatus;
 }
 
-const DEFAULT_DEPARTMENTS = ['Engineering', 'Marketing', 'Operations', 'HR', 'Sales'];
+// Department item from /api/departments
+interface DepartmentItem {
+  id: string;
+  code: string;
+  name: string;
+}
+
+// Fallback palette for departments without a defined color (cycles through these)
+const PALETTE: Array<{ color: string; bg: string }> = [
+  { color: '#3b82f6', bg: '#eff6ff' },
+  { color: '#f59e0b', bg: '#fffbeb' },
+  { color: '#1DB87A', bg: '#f0fdf9' },
+  { color: '#06b6d4', bg: '#ecfeff' },
+  { color: '#8b5cf6', bg: '#f5f3ff' },
+  { color: '#f43f5e', bg: '#fff1f2' },
+  { color: '#0ea5e9', bg: '#f0f9ff' },
+];
+
+function getDeptColor(name: string, index: number): { color: string; bg: string } {
+  return PALETTE[index % PALETTE.length];
+}
 
 const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
   { value: 'EMPLOYEE', label: 'Nhân viên' },
@@ -112,14 +124,6 @@ const STATUS_CONFIG: Record<EmployeeStatus, { label: string; badge: string }> = 
     label: 'Tạm nghỉ',
     badge: 'bg-gray-100 text-gray-600 border border-gray-200',
   },
-};
-
-const DEPARTMENT_COLORS: Record<string, { color: string; bg: string }> = {
-  Engineering: { color: '#3b82f6', bg: '#eff6ff' },
-  Marketing: { color: '#f59e0b', bg: '#fffbeb' },
-  Operations: { color: '#1DB87A', bg: '#f0fdf9' },
-  HR: { color: '#06b6d4', bg: '#ecfeff' },
-  Sales: { color: '#8b5cf6', bg: '#f5f3ff' },
 };
 
 function buildUsernameFromEmail(email: string) {
@@ -176,7 +180,7 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
-  const [departments, setDepartments] = useState<string[]>(DEFAULT_DEPARTMENTS);
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -189,6 +193,7 @@ export default function EmployeesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const [isRecalculating, setIsRecalculating] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
@@ -196,14 +201,10 @@ export default function EmployeesPage() {
 
   const fetchDepartments = useCallback(async () => {
     try {
-      const { data } = await apiClient.get<EmployeeDropdownItem[]>('/api/users/dropdown');
-      const dropdownDepartments = data
-        .map((item) => item.department?.trim())
-        .filter((department): department is string => Boolean(department));
-      const nextDepartments = Array.from(new Set([...DEFAULT_DEPARTMENTS, ...dropdownDepartments]));
-      setDepartments(nextDepartments);
+      const { data } = await apiClient.get<DepartmentItem[]>('/api/departments');
+      setDepartments(data ?? []);
     } catch {
-      setDepartments(DEFAULT_DEPARTMENTS);
+      setDepartments([]);
     }
   }, []);
 
@@ -264,9 +265,7 @@ export default function EmployeesPage() {
     return Object.entries(grouped)
       .sort(([, countA], [, countB]) => countB - countA)
       .map(([department, count], index) => {
-        const palette =
-          DEPARTMENT_COLORS[department] ??
-          Object.values(DEPARTMENT_COLORS)[index % Object.values(DEPARTMENT_COLORS).length];
+        const palette = getDeptColor(department, index);
         const pct = Math.round((count / total) * 100);
 
         return {
@@ -392,6 +391,38 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleRecalculateLeave = async () => {
+    if (
+      !window.confirm(
+        `Tính toán lại phép năm ${new Date().getFullYear()} cho tất cả nhân viên?\n` +
+          'Số ngày đã dùng (used_days) sẽ được giữ nguyên.',
+      )
+    ) {
+      return;
+    }
+
+    setIsRecalculating(true);
+    try {
+      const result = await apiClient.post<{
+        year: number;
+        usersProcessed: number;
+        leaveTypesProcessed: number;
+      }>('/api/leave-balances/recalculate', { year: new Date().getFullYear() });
+      setFeedback({
+        type: 'success',
+        message: `Đã tính toán lại phép năm ${result.data.year} cho ${result.data.usersProcessed} nhân viên.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message:
+          error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.',
+      });
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -414,6 +445,17 @@ export default function EmployeesPage() {
             disabled={isMutating}
           >
             <UserPlus size={14} /> Thêm nhân viên
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleRecalculateLeave()}
+            disabled={isRecalculating || isMutating}
+            title="Tính toán lại tổng ngày phép năm cho tất cả nhân viên dựa theo ngày vào công ty"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+            style={{ borderColor: '#1DB87A', color: '#1DB87A', background: '#f0fdf9' }}
+          >
+            <RefreshCw size={14} className={isRecalculating ? 'animate-spin' : ''} />
+            {isRecalculating ? 'Đang tính...' : 'Tính toán lại phép năm'}
           </button>
           <button
             type="button"
@@ -545,9 +587,9 @@ export default function EmployeesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
-                {departments.map((department) => (
-                  <SelectItem key={department} value={department}>
-                    {department}
+                {departments.map((dept) => (
+                  <SelectItem key={dept.code} value={dept.name}>
+                    {dept.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -675,10 +717,11 @@ export default function EmployeesPage() {
                     `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
                       .trim()
                       .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
-                  const departmentColor = DEPARTMENT_COLORS[employee.department] ?? {
-                    color: '#6b7f78',
-                    bg: '#f3f4f6',
-                  };
+                  const deptIndex = departments.findIndex((d) => d.name === employee.department);
+                  const departmentColor = getDeptColor(
+                    employee.department,
+                    deptIndex >= 0 ? deptIndex : 0,
+                  );
 
                   return (
                     <tr
@@ -720,36 +763,24 @@ export default function EmployeesPage() {
                       </td>
                       <td className="px-3 py-3 min-w-[160px]">
                         {editingCellId === employee.id && editingField === 'department' ? (
-                          <div className="flex gap-1" onClick={(event) => event.stopPropagation()}>
+                          <div onClick={(event) => event.stopPropagation()}>
                             <select
+                              autoFocus
                               value={editingValue}
-                              onChange={(event) => setEditingValue(event.target.value)}
-                              className="px-2 py-1 rounded border text-xs flex-1"
-                              style={{
-                                borderColor: '#e2ede9',
-                                color: '#203430',
+                              onChange={(event) => {
+                                void handleCellEdit(employee.id, 'department', event.target.value);
                               }}
+                              onBlur={closeInlineEdit}
+                              className="px-2 py-1 rounded border text-xs w-full"
+                              style={{ borderColor: '#e2ede9', color: '#203430' }}
                             >
-                              {departments.map((department) => (
-                                <option key={department} value={department}>
-                                  {department}
+                              <option value="Chưa phân bổ">Chưa phân bổ</option>
+                              {departments.map((dept) => (
+                                <option key={dept.code} value={dept.name}>
+                                  {dept.name}
                                 </option>
                               ))}
                             </select>
-                            <button
-                              onClick={() =>
-                                void handleCellEdit(employee.id, 'department', editingValue)
-                              }
-                              className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                            >
-                              <Check size={12} style={{ color: '#059669' }} />
-                            </button>
-                            <button
-                              onClick={closeInlineEdit}
-                              className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                            >
-                              <X size={12} style={{ color: '#6b7f78' }} />
-                            </button>
                           </div>
                         ) : (
                           <div
@@ -774,34 +805,24 @@ export default function EmployeesPage() {
                       </td>
                       <td className="px-3 py-3 min-w-[140px]">
                         {editingCellId === employee.id && editingField === 'role' ? (
-                          <div className="flex gap-1" onClick={(event) => event.stopPropagation()}>
+                          <div onClick={(event) => event.stopPropagation()}>
                             <select
+                              autoFocus
                               value={editingValue}
-                              onChange={(event) => setEditingValue(event.target.value)}
-                              className="px-2 py-1 rounded border text-xs flex-1"
-                              style={{
-                                borderColor: '#e2ede9',
-                                color: '#203430',
+                              onChange={(event) => {
+                                void handleCellEdit(employee.id, 'role', event.target.value);
                               }}
+                              onBlur={closeInlineEdit}
+                              className="px-2 py-1 rounded border text-xs w-full"
+                              style={{ borderColor: '#e2ede9', color: '#203430' }}
                             >
+                              <option value="">Chưa phân bổ</option>
                               {ROLE_OPTIONS.map((role) => (
                                 <option key={role.value} value={role.value}>
                                   {role.label}
                                 </option>
                               ))}
                             </select>
-                            <button
-                              onClick={() => void handleCellEdit(employee.id, 'role', editingValue)}
-                              className="px-1.5 py-1 rounded bg-green-100 hover:bg-green-200 transition-colors"
-                            >
-                              <Check size={12} style={{ color: '#059669' }} />
-                            </button>
-                            <button
-                              onClick={closeInlineEdit}
-                              className="px-1.5 py-1 rounded bg-gray-100 hover:bg-gray-200 transition-colors"
-                            >
-                              <X size={12} style={{ color: '#6b7f78' }} />
-                            </button>
                           </div>
                         ) : (
                           <div
@@ -992,7 +1013,7 @@ function AddEmployeeForm({
   onClose,
   isSubmitting,
 }: {
-  departments: string[];
+  departments: DepartmentItem[];
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
@@ -1003,7 +1024,7 @@ function AddEmployeeForm({
     email: '',
     password: '',
     role: 'EMPLOYEE',
-    department: departments[0] ?? DEFAULT_DEPARTMENTS[0],
+    department: departments[0]?.name ?? '',
     companyJoinDate: '',
     status: 'active',
   });
@@ -1013,7 +1034,7 @@ function AddEmployeeForm({
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
-      department: prev.department || departments[0] || DEFAULT_DEPARTMENTS[0],
+      department: prev.department || departments[0]?.name || '',
     }));
   }, [departments]);
 
@@ -1225,9 +1246,9 @@ function AddEmployeeForm({
                   <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map((department) => (
-                    <SelectItem key={department} value={department}>
-                      {department}
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.code} value={dept.name}>
+                      {dept.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

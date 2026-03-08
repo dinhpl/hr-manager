@@ -48,3 +48,17 @@ export async function adjustBalance(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+export async function recalculateAnnualLeave(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { year } = z
+      .object({ year: z.coerce.number().int().min(2020).max(2100).optional() })
+      .parse(req.body);
+
+    const targetYear = year ?? new Date().getFullYear();
+    const result = await service.recalculateAllBalances(targetYear);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}

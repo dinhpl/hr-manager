@@ -80,20 +80,37 @@ export async function getCalendarData(
 
   const requests = await prisma.leaveRequest.findMany({
     where,
-    select: { fromDate: true, toDate: true, status: true },
+    select: {
+      fromDate: true,
+      toDate: true,
+      status: true,
+      // Include user info to show names on calendar cells
+      user: { select: { fullName: true, username: true } },
+    },
   });
 
-  const calendarMap: Record<string, { approved?: boolean; pending?: boolean }> = {};
+  // Build map: dateStr → list of { name, status } entries per user per day
+  const calendarMap: Record<string, { users: { name: string; status: 'approved' | 'pending' }[] }> = {};
+
   for (const r of requests) {
+    const userName = r.user?.fullName?.trim() || r.user?.username || 'NV';
+    const status: 'approved' | 'pending' = r.status === 'APPROVED' ? 'approved' : 'pending';
+
     const cur = new Date(r.fromDate);
     while (cur <= r.toDate) {
       const key = cur.toISOString().slice(0, 10);
-      if (!calendarMap[key]) calendarMap[key] = {};
-      if (r.status === 'APPROVED') calendarMap[key].approved = true;
-      if (r.status === 'PENDING') calendarMap[key].pending = true;
+      if (!calendarMap[key]) calendarMap[key] = { users: [] };
+      // Avoid duplicate same user on same day (edge case: overlapping requests)
+      const alreadyAdded = calendarMap[key].users.some(
+        (u) => u.name === userName && u.status === status,
+      );
+      if (!alreadyAdded) {
+        calendarMap[key].users.push({ name: userName, status });
+      }
       cur.setDate(cur.getDate() + 1);
     }
   }
+
   return calendarMap;
 }
 

@@ -449,20 +449,6 @@ export default function ApprovalPage() {
           </button>
         </div>
       </div>
-
-      <div
-        className="rounded-xl border px-4 py-3 text-sm"
-        style={{
-          borderColor: '#bfdbfe',
-          background: '#eff6ff',
-          color: '#1d4ed8',
-        }}
-      >
-        Backend hiện chỉ trả trạng thái chuẩn `PENDING`, `APPROVED`, `REJECTED`. Trang này suy ra
-        `quá hạn` nếu yêu cầu chờ hơn 2 ngày, còn luồng `HR confirm` riêng chưa có endpoint nên đang
-        được giản lược an toàn.
-      </div>
-
       {error ? (
         <div
           className="rounded-xl border px-4 py-3 text-sm"

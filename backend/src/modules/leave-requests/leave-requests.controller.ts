@@ -32,7 +32,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
     const data = createLeaveRequestSchema.parse(req.body);
     // attachment_url from multer file upload (optional)
     const attachmentUrl = (req.file as Express.Multer.File | undefined)?.filename;
-    const request = await service.createLeaveRequest(req.user!.id, data, attachmentUrl);
+    const request = await service.createLeaveRequest(req.user!, data, attachmentUrl);
     sendSuccess(res, request, undefined, 201);
   } catch (err) {
     next(err);

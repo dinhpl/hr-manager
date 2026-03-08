@@ -1,10 +1,22 @@
 import { z } from 'zod';
 import { LeaveRequestStatus } from '@prisma/client';
 
+const durationModeSchema = z.enum(['FULL_DAY', 'HALF_DAY', 'HOURLY']);
+
 export const createLeaveRequestSchema = z.object({
   leaveTypeId: z.coerce.bigint(),
+  userId: z.coerce.bigint().optional(),
   fromDate: z.string().datetime(),
   toDate: z.string().datetime(),
+  durationMode: durationModeSchema.optional(),
+  fromTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(),
+  toTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(),
   totalDays: z.coerce.number().min(0.5),
   reason: z.string().min(1).max(1000),
 });

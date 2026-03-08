@@ -17,6 +17,7 @@ import { compOffRouter } from './modules/comp-off/comp-off.router';
 import { dashboardRouter } from './modules/dashboard/dashboard.router';
 import { reportsRouter } from './modules/reports/reports.router';
 import { settingsRouter } from './modules/settings/settings.router';
+import { departmentsRouter } from './modules/departments/departments.router';
 
 export function createApp(): Application {
   const app = express();
@@ -29,11 +30,22 @@ export function createApp(): Application {
   // Security headers
   app.use(helmet());
 
-  // CORS — allow frontend origin with credentials for httpOnly cookies
-  app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+  // CORS — allow frontend origins (production port 5500 + dev port 3000)
+  const allowedOrigins = [env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:5500'];
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. curl, mobile apps) or matching allowed origins
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,
+  }));
 
-  // Rate limiting: 200 requests per 15 minutes per IP
-  app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
+  // Rate limiting: 200 requests per 1 minute per IP
+  app.use(rateLimit({ windowMs: 1 * 60 * 1000, max: 200 }));
 
   // Body parsing
   app.use(express.json());
@@ -64,6 +76,7 @@ export function createApp(): Application {
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/settings', settingsRouter);
+  app.use('/api/departments', departmentsRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === 'development') {

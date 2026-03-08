@@ -35,8 +35,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { apiRequest, apiClient } from '@/lib/api-client';
-import { numberValue, toIsoDateTime } from '@/lib/hr-utils';
+import { apiRequest, apiClient, getStoredUser } from '@/lib/api-client';
+import { numberValue, toFrontendRole, toIsoDateTime } from '@/lib/hr-utils';
 
 type DurationMode = 'FULL_DAY' | 'HALF_DAY' | 'HOURLY';
 
@@ -64,19 +64,20 @@ interface UserDropdownItem {
   department?: string | null;
 }
 
-function countWorkingDays(fromDate: string, toDate: string): number {
+interface UserInfo {
+  id: string;
+  role: string;
+}
+
+function countCalendarDays(fromDate: string, toDate: string): number {
   if (!fromDate || !toDate) return 0;
   const start = new Date(fromDate);
   const end = new Date(toDate);
   if (end < start) return 0;
-  let count = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
 }
 
 export interface LeaveRequestData {
@@ -123,6 +124,8 @@ export default function LeaveRequestModal({
   const [balances, setBalances] = useState<LeaveBalanceRecord[]>([]);
   const [handoverPersons, setHandoverPersons] = useState<UserDropdownItem[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [requestForUserId, setRequestForUserId] = useState('');
 
   const isEditMode = !!editData?.id;
   const initialFormState = getInitialFormState(editData);
@@ -143,21 +146,40 @@ export default function LeaveRequestModal({
     type: 'warning' | 'info' | 'success';
     message: string;
   } | null>(null);
+  const isAdmin = toFrontendRole(userInfo?.role) === 'admin';
+  const effectiveUserId = requestForUserId || userInfo?.id || '';
+  const requestForUser = handoverPersons.find((item) => item.id === effectiveUserId);
 
   useEffect(() => {
     if (!isOpen) return;
 
     setLoadingOptions(true);
 
+    const storedUser = getStoredUser<UserInfo>();
+    if (storedUser) {
+      setUserInfo(storedUser);
+      setRequestForUserId(storedUser.id);
+    }
+
     Promise.all([
       apiClient.get<LeaveTypeOption[]>('/api/leave-types'),
-      apiClient.get<LeaveBalanceRecord[]>('/api/leave-balances'),
       apiClient.get<UserDropdownItem[]>('/api/users/dropdown'),
+      apiClient.get<UserInfo>('/api/auth/me'),
     ])
-      .then(([leaveTypeRes, balanceRes, handoverRes]) => {
+      .then(async ([leaveTypeRes, handoverRes, meRes]) => {
+        const currentUser = meRes.data;
         setLeaveTypes(leaveTypeRes.data);
-        setBalances(balanceRes.data);
         setHandoverPersons(handoverRes.data);
+        setUserInfo(currentUser);
+        setRequestForUserId((currentValue) => currentValue || currentUser.id);
+
+        const targetUserId = storedUser?.id || currentUser.id;
+        const balanceEndpoint =
+          toFrontendRole(currentUser.role) === 'admin' && targetUserId
+            ? `/api/leave-balances/${targetUserId}`
+            : '/api/leave-balances';
+        const balanceRes = await apiClient.get<LeaveBalanceRecord[]>(balanceEndpoint);
+        setBalances(balanceRes.data);
       })
       .catch((err) => {
         setAlert({
@@ -167,6 +189,25 @@ export default function LeaveRequestModal({
       })
       .finally(() => setLoadingOptions(false));
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !effectiveUserId) return;
+
+    const balanceEndpoint =
+      isAdmin && effectiveUserId ? `/api/leave-balances/${effectiveUserId}` : '/api/leave-balances';
+
+    apiClient
+      .get<LeaveBalanceRecord[]>(balanceEndpoint)
+      .then((res) => {
+        setBalances(res.data);
+      })
+      .catch((err) => {
+        setAlert({
+          type: 'warning',
+          message: err instanceof Error ? err.message : 'Không tải được số dư phép.',
+        });
+      });
+  }, [effectiveUserId, isAdmin, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -180,15 +221,16 @@ export default function LeaveRequestModal({
     setToTime(nextState.toTime);
     setReason(nextState.reason);
     setHandoverPerson(nextState.handoverPerson);
+    setRequestForUserId((currentValue) => currentValue || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
     setAlert(null);
-  }, [isOpen, editData]);
+  }, [isOpen, editData, userInfo?.id]);
 
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
-    const base = countWorkingDays(fromDate, toDate);
+    const base = countCalendarDays(fromDate, toDate);
     if (durationMode === 'HALF_DAY') return base * 0.5;
     if (durationMode === 'HOURLY') {
       if (!fromTime || !toTime) return 0;
@@ -266,6 +308,22 @@ export default function LeaveRequestModal({
       return;
     }
 
+    if (new Date(toDate) < new Date(fromDate)) {
+      setAlert({
+        type: 'warning',
+        message: 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
+      });
+      return;
+    }
+
+    if (days <= 0) {
+      setAlert({
+        type: 'warning',
+        message: 'Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.',
+      });
+      return;
+    }
+
     const handoverName = handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? '';
 
     const composedReason = [
@@ -281,8 +339,16 @@ export default function LeaveRequestModal({
 
     const formData = new FormData();
     formData.append('leaveTypeId', selectedLeaveType.id);
+    if (isAdmin && effectiveUserId) {
+      formData.append('userId', effectiveUserId);
+    }
     formData.append('fromDate', toIsoDateTime(fromDate));
     formData.append('toDate', toIsoDateTime(toDate, true));
+    formData.append('durationMode', durationMode);
+    if (durationMode === 'HOURLY') {
+      formData.append('fromTime', fromTime);
+      formData.append('toTime', toTime);
+    }
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
     if (attachedFile) {
@@ -331,6 +397,7 @@ export default function LeaveRequestModal({
     setToTime('17:00');
     setReason('');
     setHandoverPerson('');
+    setRequestForUserId(userInfo?.id ?? '');
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
@@ -407,6 +474,9 @@ export default function LeaveRequestModal({
               <span className="text-sm font-semibold" style={{ color: '#0E474E' }}>
                 Thông tin phép hiện tại
               </span>
+              {isAdmin && requestForUser ? (
+                <span className="text-xs text-muted-foreground">{requestForUser.fullName}</span>
+              ) : null}
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
@@ -448,6 +518,37 @@ export default function LeaveRequestModal({
 
           {/* Form fields */}
           <div className="space-y-5">
+            {isAdmin && (
+              <div>
+                <label
+                  className="flex items-center gap-2 text-sm font-semibold mb-2"
+                  style={{ color: '#203430' }}
+                >
+                  <Users2 size={14} style={{ color: '#1DB87A' }} /> Nhân viên đăng ký{' '}
+                  <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <Select
+                  value={requestForUserId || 'placeholder'}
+                  onValueChange={(value) =>
+                    setRequestForUserId(value === 'placeholder' ? '' : value)
+                  }
+                  disabled={loadingOptions}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="-- Chọn nhân viên --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="placeholder">-- Chọn nhân viên --</SelectItem>
+                    {handoverPersons.map((person) => (
+                      <SelectItem key={person.id} value={person.id}>
+                        {person.fullName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Leave type */}
             <div>
               <label

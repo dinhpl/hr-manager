@@ -45,18 +45,22 @@ export function getStatusLabel(status?: string | null) {
   }
 }
 
+// Format date as "HH:mm D/M/YYYY" — e.g. "09:30 8/3/2026"
+function pad2(n: number) {
+  return n.toString().padStart(2, '0');
+}
+
 export function formatDateVN(value?: string | Date | null) {
   if (!value) return '-';
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('vi-VN');
+  const hh = pad2(date.getHours());
+  const mm = pad2(date.getMinutes());
+  return `${hh}:${mm} ${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
 }
 
 export function formatDateTimeVN(value?: string | Date | null) {
-  if (!value) return '-';
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('vi-VN');
+  return formatDateVN(value);
 }
 
 export function toDateInputValue(value?: string | Date | null) {

@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+coverage
+tsconfig.tsbuildinfo
+.git
+.gitignore
+.DS_Store
+backend/node_modules
+backend/dist
+backend/coverage
+backend/uploads

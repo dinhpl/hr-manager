@@ -92,6 +92,7 @@ interface LeaveRequestItem {
 
 interface LeaveRecord {
   id: string;
+  userName: string;
   type: { code: string; label: string; color: string };
   fromDate: string;
   toDate: string;
@@ -211,6 +212,7 @@ function mapToRecord(item: LeaveRequestItem): LeaveRecord {
 
   return {
     id: String(item.id),
+    userName: item.user?.fullName || item.user?.username || '-',
     type: {
       code,
       label,
@@ -989,6 +991,7 @@ export default function LeaveHistoryPage() {
                 </th>
                 {[
                   'ID',
+                  'Tên NV',
                   'Loại',
                   'Từ ngày',
                   'Đến ngày',
@@ -1013,13 +1016,13 @@ export default function LeaveHistoryPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={13} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Đang tải dữ liệu từ API...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={13} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Không có yêu cầu nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>
@@ -1041,6 +1044,9 @@ export default function LeaveHistoryPage() {
                     </td>
                     <td className="px-3 py-3 font-bold" style={{ color: '#203430' }}>
                       #{row.id}
+                    </td>
+                    <td className="max-w-[160px] truncate px-3 py-3 font-medium" style={{ color: '#203430' }}>
+                      {row.userName}
                     </td>
                     <td className="px-3 py-3">
                       <span

@@ -1,32 +1,57 @@
-version: "3.8"
-
 services:
   db:
+    container_name: hr-postgres
     image: postgres:16-alpine
+    command: ["postgres", "-p", "5532"]
     environment:
       POSTGRES_DB: hr_leave_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
     ports:
-      - "5432:5432"
+      - "5532:5532"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hr_leave_db -p 5532"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./hr_leave_db.sql:/docker-entrypoint-initdb.d/init.sql
 
   backend:
-    build: ./backend
+    container_name: hr-backend
+    build:
+      context: ./backend
     ports:
-      - "4000:4000"
+      - "5501:5501"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://postgres:secret@db:5432/hr_leave_db
+      DATABASE_URL: postgresql://postgres:secret@db:5532/hr_leave_db
       JWT_ACCESS_SECRET: change-me-in-production-at-least-32-chars
       JWT_REFRESH_SECRET: change-me-in-production-too-at-least-32
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:5500
       NODE_ENV: production
+      PORT: 5501
     volumes:
       - ./backend/uploads:/app/uploads
+
+  frontend:
+    container_name: hr-frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5501
+    ports:
+      - "5500:5500"
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      PORT: 5500
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: http://localhost:5501
 
 volumes:
   pgdata:

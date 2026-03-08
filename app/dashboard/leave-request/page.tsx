@@ -60,19 +60,15 @@ interface UserDropdownItem {
   department?: string | null;
 }
 
-function countWorkingDays(fromDate: string, toDate: string): number {
+function countCalendarDays(fromDate: string, toDate: string): number {
   if (!fromDate || !toDate) return 0;
   const start = new Date(fromDate);
   const end = new Date(toDate);
   if (end < start) return 0;
-  let count = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    const day = cur.getDay();
-    if (day !== 0 && day !== 6) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1;
 }
 
 export default function LeaveRequestPage() {
@@ -124,7 +120,7 @@ export default function LeaveRequestPage() {
   // Calculate days
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
-    const base = countWorkingDays(fromDate, toDate);
+    const base = countCalendarDays(fromDate, toDate);
     if (durationMode === 'HALF_DAY') return base * 0.5;
     if (durationMode === 'HOURLY') {
       if (!fromTime || !toTime) return 0;
@@ -215,6 +211,22 @@ export default function LeaveRequestPage() {
       return;
     }
 
+    if (new Date(toDate) < new Date(fromDate)) {
+      setAlert({
+        type: 'warning',
+        message: 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
+      });
+      return;
+    }
+
+    if (days <= 0) {
+      setAlert({
+        type: 'warning',
+        message: 'Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.',
+      });
+      return;
+    }
+
     const handoverName = handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? '';
 
     const composedReason = [
@@ -232,6 +244,11 @@ export default function LeaveRequestPage() {
     formData.append('leaveTypeId', selectedLeaveType.id);
     formData.append('fromDate', toIsoDateTime(fromDate));
     formData.append('toDate', toIsoDateTime(toDate, true));
+    formData.append('durationMode', durationMode);
+    if (durationMode === 'HOURLY') {
+      formData.append('fromTime', fromTime);
+      formData.append('toTime', toTime);
+    }
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
     if (attachedFile) {

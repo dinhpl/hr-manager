@@ -10,6 +10,53 @@ const LEAVE_REQUEST_INCLUDE = {
   approver: { select: { id: true, fullName: true } },
 } as const;
 
+function calculateTotalDays(data: CreateLeaveRequestDto) {
+  const startDate = new Date(data.fromDate);
+  const endDate = new Date(data.toDate);
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    throw Object.assign(new Error('Invalid leave request dates'), { status: 400 });
+  }
+
+  startDate.setUTCHours(0, 0, 0, 0);
+  endDate.setUTCHours(0, 0, 0, 0);
+
+  if (endDate < startDate) {
+    throw Object.assign(new Error('toDate must be greater than or equal to fromDate'), {
+      status: 400,
+    });
+  }
+
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  const inclusiveDays =
+    Math.floor((endDate.getTime() - startDate.getTime()) / millisecondsPerDay) + 1;
+  const durationMode = data.durationMode ?? 'FULL_DAY';
+
+  if (durationMode === 'HALF_DAY') {
+    return inclusiveDays * 0.5;
+  }
+
+  if (durationMode === 'HOURLY') {
+    if (!data.fromTime || !data.toTime) {
+      throw Object.assign(new Error('fromTime and toTime are required for hourly leave'), {
+        status: 400,
+      });
+    }
+
+    const startTime = new Date(`2000-01-01T${data.fromTime}:00`);
+    const endTime = new Date(`2000-01-01T${data.toTime}:00`);
+    const hours = (endTime.getTime() - startTime.getTime()) / (60 * 60 * 1000);
+
+    if (hours <= 0) {
+      throw Object.assign(new Error('toTime must be greater than fromTime'), { status: 400 });
+    }
+
+    return hours / 8;
+  }
+
+  return inclusiveDays;
+}
+
 // Build Prisma where clause scoped to the requesting user's role
 function buildScopeFilter(
   requestingUser: { id: bigint; role: UserRole },
@@ -81,17 +128,28 @@ export async function getLeaveRequestById(
 }
 
 export async function createLeaveRequest(
-  userId: bigint,
+  requestingUser: { id: bigint; role: UserRole },
   data: CreateLeaveRequestDto,
   attachmentUrl?: string,
 ) {
+  const canCreateForOtherUser = requestingUser.role === 'ADMIN';
+  const requestedUserId = data.userId;
+
+  if (requestedUserId && requestedUserId !== requestingUser.id && !canCreateForOtherUser) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+
+  const targetUserId =
+    canCreateForOtherUser && requestedUserId ? requestedUserId : requestingUser.id;
+  const totalDays = data.durationMode ? calculateTotalDays(data) : data.totalDays;
+
   return prisma.leaveRequest.create({
     data: {
-      userId,
+      userId: targetUserId,
       leaveTypeId: data.leaveTypeId,
       fromDate: new Date(data.fromDate),
       toDate: new Date(data.toDate),
-      totalDays: data.totalDays,
+      totalDays,
       reason: data.reason,
       status: 'PENDING',
       ...(attachmentUrl && { attachmentUrl }),
