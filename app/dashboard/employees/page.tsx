@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
 import { buildQuery, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from '@/lib/hr-utils';
 
@@ -205,10 +206,10 @@ export default function EmployeesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    type: 'success' | 'error' | 'info';
-    message: string;
-  } | null>(null);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const fetchDepartments = useCallback(async () => {
     try {
@@ -244,16 +245,16 @@ export default function EmployeesPage() {
           prev.filter((id) => mappedEmployees.some((item) => item.id === id)),
         );
       } catch (error) {
-        setFeedback({
-          type: 'error',
-          message: error instanceof Error ? error.message : 'Không thể tải danh sách nhân viên.',
-        });
+        const message =
+          error instanceof Error ? error.message : 'Không thể tải danh sách nhân viên.';
+        scrollToTop();
+        toast.error(message);
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [searchQuery, statusFilter, teamFilter],
+    [scrollToTop, searchQuery, statusFilter, teamFilter],
   );
 
   useEffect(() => {
@@ -325,16 +326,11 @@ export default function EmployeesPage() {
         field === 'role' ? { role: value } : { department: value },
       );
       closeInlineEdit();
-      setFeedback({
-        type: 'success',
-        message: field === 'role' ? 'Đã cập nhật vai trò.' : 'Đã cập nhật phòng ban.',
-      });
+      toast.success(field === 'role' ? 'Đã cập nhật vai trò.' : 'Đã cập nhật phòng ban.');
       await Promise.all([fetchEmployees(), fetchDepartments()]);
     } catch (error) {
-      setFeedback({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Không thể cập nhật nhân viên.',
-      });
+      scrollToTop();
+      toast.error(error instanceof Error ? error.message : 'Không thể cập nhật nhân viên.');
     } finally {
       setIsMutating(false);
     }
@@ -366,7 +362,7 @@ export default function EmployeesPage() {
       }
 
       setIsAddModalOpen(false);
-      setFeedback({ type: 'success', message: 'Đã tạo nhân viên mới.' });
+      toast.success('Đã tạo nhân viên mới.');
       await Promise.all([fetchEmployees(), fetchDepartments()]);
     } catch (error) {
       throw error instanceof Error ? error : new Error('Không thể tạo nhân viên mới.');
@@ -387,16 +383,11 @@ export default function EmployeesPage() {
     setIsMutating(true);
     try {
       await apiClient.delete(`/api/users/${employeeId}`);
-      setFeedback({
-        type: 'success',
-        message: 'Đã chuyển nhân viên sang trạng thái không hoạt động.',
-      });
+      toast.success('Đã chuyển nhân viên sang trạng thái không hoạt động.');
       await fetchEmployees();
     } catch (error) {
-      setFeedback({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Không thể xóa nhân viên.',
-      });
+      scrollToTop();
+      toast.error(error instanceof Error ? error.message : 'Không thể xóa nhân viên.');
     } finally {
       setIsMutating(false);
     }
@@ -419,15 +410,12 @@ export default function EmployeesPage() {
         usersProcessed: number;
         leaveTypesProcessed: number;
       }>('/api/leave-balances/recalculate', { year: new Date().getFullYear() });
-      setFeedback({
-        type: 'success',
-        message: `Đã tính toán lại phép năm ${result.data.year} cho ${result.data.usersProcessed} nhân viên.`,
-      });
+      toast.success(
+        `Đã tính toán lại phép năm ${result.data.year} cho ${result.data.usersProcessed} nhân viên.`,
+      );
     } catch (error) {
-      setFeedback({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.',
-      });
+      scrollToTop();
+      toast.error(error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.');
     } finally {
       setIsRecalculating(false);
     }
@@ -487,28 +475,6 @@ export default function EmployeesPage() {
           </button>
         </div>
       </div>
-
-      {feedback && (
-        <div
-          className="rounded-lg p-3 text-sm font-medium"
-          style={{
-            background:
-              feedback.type === 'success'
-                ? '#D3F2E7'
-                : feedback.type === 'error'
-                  ? '#fee2e2'
-                  : '#eff6ff',
-            color:
-              feedback.type === 'success'
-                ? '#0E474E'
-                : feedback.type === 'error'
-                  ? '#991b1b'
-                  : '#1d4ed8',
-          }}
-        >
-          {feedback.message}
-        </div>
-      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -673,7 +639,7 @@ export default function EmployeesPage() {
           <table className="w-full text-xs">
             <thead>
               <tr style={{ background: '#203430' }}>
-                <th className="px-3 py-3">
+                <th className="px-3 py-3 w-10">
                   <Checkbox
                     checked={selectedIds.length === employees.length && employees.length > 0}
                     onCheckedChange={toggleAll}
@@ -743,7 +709,7 @@ export default function EmployeesPage() {
                       }}
                       onClick={() => toggleSelect(employee.id)}
                     >
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 w-10">
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleSelect(employee.id)}

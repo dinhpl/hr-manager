@@ -5,6 +5,7 @@ import {
   getLeaveRequestsQuerySchema,
   approveRejectSchema,
   bulkApproveSchema,
+  updateLeaveRequestSchema,
 } from './leave-requests.validation';
 import { sendSuccess } from '../../utils/response';
 
@@ -39,12 +40,28 @@ export async function create(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = updateLeaveRequestSchema.parse(req.body);
+    const attachmentUrl = (req.file as Express.Multer.File | undefined)?.filename;
+    const request = await service.updateLeaveRequest(
+      BigInt(String(req.params.id)),
+      req.user!,
+      data,
+      attachmentUrl,
+    );
+    sendSuccess(res, request);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function approve(req: Request, res: Response, next: NextFunction) {
   try {
     const { note } = approveRejectSchema.parse(req.body);
     const request = await service.approveLeaveRequest(
       BigInt(String(req.params.id)),
-      req.user!.id,
+      req.user!,
       note,
     );
     sendSuccess(res, request);
@@ -58,7 +75,7 @@ export async function reject(req: Request, res: Response, next: NextFunction) {
     const { note } = approveRejectSchema.parse(req.body);
     const request = await service.rejectLeaveRequest(
       BigInt(String(req.params.id)),
-      req.user!.id,
+      req.user!,
       note,
     );
     sendSuccess(res, request);
@@ -79,7 +96,7 @@ export async function cancel(req: Request, res: Response, next: NextFunction) {
 export async function bulkApprove(req: Request, res: Response, next: NextFunction) {
   try {
     const { ids, note } = bulkApproveSchema.parse(req.body);
-    const result = await service.bulkApproveLeaveRequests(ids, req.user!.id, note);
+    const result = await service.bulkApproveLeaveRequests(ids, req.user!, note);
     sendSuccess(res, result);
   } catch (err) {
     next(err);

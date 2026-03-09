@@ -1,7 +1,13 @@
 import prisma from '../../config/prisma';
+import { UserRole } from '@prisma/client';
 import { hashPassword } from '../../utils/hash';
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
 import { GetUsersQuery, CreateUserDto, UpdateUserDto } from './users.validation';
+
+type AuthUser = {
+  id: bigint;
+  role: UserRole;
+};
 
 // Fields returned in list/detail — password excluded
 const USER_SELECT = {
@@ -65,7 +71,24 @@ export async function getUsers(query: GetUsersQuery) {
   return { data: users, meta: buildMeta(total, page, limit) };
 }
 
-export async function getUserById(id: bigint) {
+export async function getUserById(id: bigint, requestingUser: AuthUser) {
+  const scopeUser = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, managerId: true },
+  });
+
+  if (!scopeUser) throw Object.assign(new Error('User not found'), { status: 404 });
+
+  const canView =
+    requestingUser.role === 'ADMIN' ||
+    requestingUser.role === 'HR' ||
+    requestingUser.id === id ||
+    (requestingUser.role === 'MANAGER' && scopeUser.managerId === requestingUser.id);
+
+  if (!canView) {
+    throw Object.assign(new Error('Forbidden'), { status: 403 });
+  }
+
   const user = await prisma.user.findUnique({
     where: { id },
     select: {

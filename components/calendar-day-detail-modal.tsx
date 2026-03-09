@@ -101,10 +101,7 @@ export default function CalendarDayDetailModal({
           className="px-6 py-4 border-b grid grid-cols-2 gap-4 shrink-0"
           style={{ borderColor: '#e2ede9', background: '#f8faf9' }}
         >
-          <div
-            className="p-4 rounded-xl flex items-center gap-3"
-            style={{ background: '#dcfce7' }}
-          >
+          <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: '#dcfce7' }}>
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center"
               style={{ background: '#bbf7d0' }}
@@ -120,10 +117,7 @@ export default function CalendarDayDetailModal({
               </p>
             </div>
           </div>
-          <div
-            className="p-4 rounded-xl flex items-center gap-3"
-            style={{ background: '#fef9c3' }}
-          >
+          <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: '#fef9c3' }}>
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center"
               style={{ background: '#fef3c7' }}
@@ -186,13 +180,19 @@ export default function CalendarDayDetailModal({
                     <div className="flex items-center gap-3 text-xs" style={{ color: '#6b7f78' }}>
                       {user.department && (
                         <span className="flex items-center gap-1">
-                          <span className="w-1 h-1 rounded-full" style={{ background: '#6b7f78' }} />
+                          <span
+                            className="w-1 h-1 rounded-full"
+                            style={{ background: '#6b7f78' }}
+                          />
                           {user.department}
                         </span>
                       )}
                       {user.position && (
                         <span className="flex items-center gap-1">
-                          <span className="w-1 h-1 rounded-full" style={{ background: '#6b7f78' }} />
+                          <span
+                            className="w-1 h-1 rounded-full"
+                            style={{ background: '#6b7f78' }}
+                          />
                           {user.position}
                         </span>
                       )}
@@ -219,7 +219,10 @@ export default function CalendarDayDetailModal({
                 </div>
 
                 {/* Divider */}
-                <div className="border-t mx-4" style={{ borderColor: isApproved ? '#bbf7d0' : '#fef9c3' }} />
+                <div
+                  className="border-t mx-4"
+                  style={{ borderColor: isApproved ? '#bbf7d0' : '#fef9c3' }}
+                />
 
                 {/* Details Row - Reason */}
                 {user.reason && (

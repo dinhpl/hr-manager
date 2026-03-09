@@ -14,6 +14,7 @@ import {
   Search,
   Users,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
 import ConfirmDialog from '@/components/confirm-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -51,6 +52,7 @@ interface LeaveRequestItem {
   toDate: string;
   totalDays: number | string;
   reason?: string | null;
+  handoverPerson?: string | null;
   attachmentUrl?: string | null;
   createdAt: string;
   approvedAt?: string | null;
@@ -120,11 +122,6 @@ function getEmployeeInitials(name?: string | null) {
     .join('');
 }
 
-function extractHandover(reason?: string | null) {
-  const matched = reason?.match(/Người bàn giao:\s*(.+)$/m);
-  return matched?.[1]?.trim() || '-';
-}
-
 function getPrimaryReason(reason?: string | null) {
   if (!reason) return '—';
   const [firstLine] = reason
@@ -157,7 +154,7 @@ function toDetailData(request: LeaveRequestItem): LeaveDetailData {
     toDate: formatDateVN(request.toDate),
     days: numberValue(request.totalDays),
     reason: request.reason || '—',
-    handover: extractHandover(request.reason),
+    handover: request.handoverPerson || '-',
     status: 'pending',
     submittedAt: formatDateTimeVN(request.createdAt),
     employeeName: request.user?.fullName || 'Nhân viên',
@@ -341,9 +338,12 @@ export default function ApprovalPage() {
         delete next[id];
         return next;
       });
+      toast.success(`Đã duyệt yêu cầu #${id}`);
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể duyệt yêu cầu.');
+      const message = err instanceof Error ? err.message : 'Không thể duyệt yêu cầu.';
+      setError(message);
+      toast.error(message);
     } finally {
       setActionLoadingId(null);
     }
@@ -360,9 +360,12 @@ export default function ApprovalPage() {
         delete next[id];
         return next;
       });
+      toast.success(`Đã từ chối yêu cầu #${id}`);
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể từ chối yêu cầu.');
+      const message = err instanceof Error ? err.message : 'Không thể từ chối yêu cầu.';
+      setError(message);
+      toast.error(message);
     } finally {
       setActionLoadingId(null);
     }
@@ -377,9 +380,12 @@ export default function ApprovalPage() {
       await apiClient.post('/api/leave-requests/bulk-approve', { ids: selectedIds });
       setSelectedIds([]);
       setBulkConfirmOpen(false);
+      toast.success(`Đã duyệt ${selectedIds.length} yêu cầu`);
       await loadPendingRequests();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Không thể duyệt hàng loạt.');
+      const message = err instanceof Error ? err.message : 'Không thể duyệt hàng loạt.';
+      setError(message);
+      toast.error(message);
     } finally {
       setActionLoadingId(null);
     }
@@ -709,7 +715,7 @@ export default function ApprovalPage() {
                       </p>
                       <p className="text-xs" style={{ color: '#6b7f78' }}>
                         <strong style={{ color: '#203430' }}>Người bàn giao:</strong>{' '}
-                        {extractHandover(request.reason)}
+                        {request.handoverPerson || '-'}
                       </p>
                       <p className="text-xs" style={{ color: '#6b7f78' }}>
                         Gửi: {formatDateTimeVN(request.createdAt)}

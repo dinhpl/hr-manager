@@ -238,6 +238,56 @@ export function getLeaveRequestApiPayload(params: {
   };
 }
 
+export function getTimeInputValue(value?: string | Date | null) {
+  const formatted = formatApiDateTime(value);
+  return formatted ? formatted.slice(11, 16) : '';
+}
+
+export function inferLeaveRequestModeFromRange(
+  fromDate?: string | Date | null,
+  toDate?: string | Date | null,
+  reason?: string | null,
+) {
+  if (reason?.includes('Hình thức nghỉ: Nghỉ buổi sáng')) {
+    return 'MORNING_HALF_DAY' satisfies LeaveRequestMode;
+  }
+  if (reason?.includes('Hình thức nghỉ: Nghỉ buổi chiều')) {
+    return 'AFTERNOON_HALF_DAY' satisfies LeaveRequestMode;
+  }
+  if (reason?.includes('Hình thức nghỉ: Theo giờ') || reason?.includes('Khung giờ:')) {
+    return 'HOURLY' satisfies LeaveRequestMode;
+  }
+
+  const fromTime = getTimeInputValue(fromDate);
+  const toTime = getTimeInputValue(toDate);
+
+  if (!fromTime || !toTime) return 'FULL_DAY' satisfies LeaveRequestMode;
+  if (fromTime === '08:00' && toTime === '11:45')
+    return 'MORNING_HALF_DAY' satisfies LeaveRequestMode;
+  if (fromTime === '13:00' && toTime === '17:15') {
+    return 'AFTERNOON_HALF_DAY' satisfies LeaveRequestMode;
+  }
+  if (fromTime !== '08:00' || toTime !== '17:15') return 'HOURLY' satisfies LeaveRequestMode;
+  return 'FULL_DAY' satisfies LeaveRequestMode;
+}
+
+export function getLeaveRequestReasonInput(reason?: string | null) {
+  if (!reason) return '';
+
+  return reason
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+      return (
+        trimmed !== '' &&
+        !trimmed.startsWith('Hình thức nghỉ:') &&
+        !trimmed.startsWith('Khung giờ:')
+      );
+    })
+    .join('\n')
+    .trim();
+}
+
 export function countCalendarDays(fromDate: string, toDate: string): number {
   const startParts = parseDateOnlyParts(fromDate);
   const endParts = parseDateOnlyParts(toDate);

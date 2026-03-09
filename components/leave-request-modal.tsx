@@ -35,6 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from 'sonner';
 import { apiRequest, apiClient, getStoredUser } from '@/lib/api-client';
 import {
   countCalendarDays,
@@ -81,6 +82,7 @@ interface UserInfo {
 
 export interface LeaveRequestData {
   id?: string;
+  requestForUserId?: string;
   typeCode?: string;
   fromDate?: string;
   toDate?: string;
@@ -110,6 +112,7 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
     reason: editData?.reason || '',
     handoverPerson: editData?.handoverPerson || '',
     approverId: editData?.approverId || '',
+    requestForUserId: editData?.requestForUserId || '',
   } as const;
 }
 
@@ -163,7 +166,7 @@ export default function LeaveRequestModal({
     const storedUser = getStoredUser<UserInfo>();
     if (storedUser) {
       setUserInfo(storedUser);
-      setRequestForUserId(storedUser.id);
+      setRequestForUserId(editData?.requestForUserId || storedUser.id);
     }
 
     Promise.all([
@@ -176,9 +179,11 @@ export default function LeaveRequestModal({
         setLeaveTypes(leaveTypeRes.data);
         setHandoverPersons(handoverRes.data);
         setUserInfo(currentUser);
-        setRequestForUserId((currentValue) => currentValue || currentUser.id);
+        setRequestForUserId(
+          (currentValue) => currentValue || editData?.requestForUserId || currentUser.id,
+        );
 
-        const targetUserId = storedUser?.id || currentUser.id;
+        const targetUserId = editData?.requestForUserId || storedUser?.id || currentUser.id;
         const balanceEndpoint =
           toFrontendRole(currentUser.role) === 'admin' && targetUserId
             ? `/api/leave-balances/${targetUserId}`
@@ -193,7 +198,7 @@ export default function LeaveRequestModal({
         });
       })
       .finally(() => setLoadingOptions(false));
-  }, [isOpen]);
+  }, [editData?.requestForUserId, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !effectiveUserId) return;
@@ -227,12 +232,27 @@ export default function LeaveRequestModal({
     setReason(nextState.reason);
     setHandoverPerson(nextState.handoverPerson);
     setApproverId(nextState.approverId);
-    setRequestForUserId((currentValue) => currentValue || userInfo?.id || '');
+    setRequestForUserId(nextState.requestForUserId || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
     setAlert(null);
   }, [isOpen, editData, userInfo?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !editData?.handoverPerson || handoverPerson) return;
+
+    const matchedById = handoverPersons.find((item) => item.id === editData.handoverPerson);
+    if (matchedById) {
+      setHandoverPerson(matchedById.id);
+      return;
+    }
+
+    const matchedByName = handoverPersons.find((item) => item.fullName === editData.handoverPerson);
+    if (matchedByName) {
+      setHandoverPerson(matchedByName.id);
+    }
+  }, [editData?.handoverPerson, handoverPerson, handoverPersons, isOpen]);
 
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
@@ -319,10 +339,10 @@ export default function LeaveRequestModal({
   }, []);
 
   const handleSubmit = async () => {
-    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim() || !approverId) {
+    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim()) {
       setAlert({
         type: 'warning',
-        message: 'Vui lòng điền đầy đủ các trường bắt buộc (*), bao gồm người duyệt.',
+        message: 'Vui lòng điền đầy đủ các trường bắt buộc (*).',
       });
       return;
     }
@@ -362,7 +382,6 @@ export default function LeaveRequestModal({
         ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
         : null,
       durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
-      handoverName ? `Người bàn giao: ${handoverName}` : null,
     ]
       .filter(Boolean)
       .join('\n');
@@ -380,7 +399,9 @@ export default function LeaveRequestModal({
     if (isAdmin && effectiveUserId) {
       formData.append('userId', effectiveUserId);
     }
-    formData.append('approverId', approverId);
+    if (approverId) {
+      formData.append('approverId', approverId);
+    }
     formData.append('fromDate', leaveRequestPayload.fromDate);
     formData.append('toDate', leaveRequestPayload.toDate);
     formData.append('durationMode', leaveRequestPayload.durationMode);
@@ -388,6 +409,9 @@ export default function LeaveRequestModal({
     formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
+    if (handoverPerson) {
+      formData.append('handoverPerson', handoverName);
+    }
     if (attachedFile) {
       formData.append('attachment', attachedFile);
     }
@@ -397,8 +421,8 @@ export default function LeaveRequestModal({
 
     try {
       await apiRequest({
-        url: '/api/leave-requests',
-        method: 'POST',
+        url: isEditMode ? `/api/leave-requests/${editData.id}` : '/api/leave-requests',
+        method: isEditMode ? 'PATCH' : 'POST',
         data: formData,
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -406,16 +430,15 @@ export default function LeaveRequestModal({
       });
 
       setSubmitState('success');
-      setAlert({
-        type: 'success',
-        message: 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
-      });
+      toast.success(
+        isEditMode
+          ? 'Yêu cầu nghỉ phép đã được cập nhật thành công.'
+          : 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
+      );
 
-      setTimeout(() => {
-        resetForm();
-        onClose();
-        onSubmitSuccess?.();
-      }, 1200);
+      resetForm();
+      onClose();
+      onSubmitSuccess?.();
     } catch (err) {
       setSubmitState('idle');
       setAlert({
@@ -435,7 +458,7 @@ export default function LeaveRequestModal({
     setReason('');
     setHandoverPerson('');
     setApproverId('');
-    setRequestForUserId(userInfo?.id ?? '');
+    setRequestForUserId(editData?.requestForUserId || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
@@ -540,9 +563,7 @@ export default function LeaveRequestModal({
               style={
                 alert.type === 'warning'
                   ? { background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e' }
-                  : alert.type === 'success'
-                    ? { background: '#d1fae5', border: '1px solid #6ee7b7', color: '#065f46' }
-                    : { background: '#dbeafe', border: '1px solid #93c5fd', color: '#1e3a8a' }
+                  : { background: '#dbeafe', border: '1px solid #93c5fd', color: '#1e3a8a' }
               }
             >
               {alert.type === 'warning' ? (
@@ -790,8 +811,7 @@ export default function LeaveRequestModal({
                 className="flex items-center gap-2 text-sm font-semibold mb-2"
                 style={{ color: '#203430' }}
               >
-                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt{' '}
-                <span style={{ color: '#ef4444' }}>*</span>
+                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt
               </label>
               <Select
                 value={approverId || 'placeholder'}

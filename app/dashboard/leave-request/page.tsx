@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { apiRequest, apiClient } from '@/lib/api-client';
 import {
   countCalendarDays,
@@ -94,6 +95,10 @@ export default function LeaveRequestPage() {
     message: string;
   } | null>(null);
 
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   useEffect(() => {
     Promise.all([
       apiClient.get<LeaveTypeOption[]>('/api/leave-types'),
@@ -106,13 +111,14 @@ export default function LeaveRequestPage() {
         setHandoverPersons(handoverRes.data);
       })
       .catch((err) => {
+        scrollToTop();
         setAlert({
           type: 'warning',
           message: err instanceof Error ? err.message : 'Không tải được dữ liệu biểu mẫu.',
         });
       })
       .finally(() => setLoadingOptions(false));
-  }, []);
+  }, [scrollToTop]);
 
   // Calculate days
   const calcDays = (): number => {
@@ -256,7 +262,6 @@ export default function LeaveRequestPage() {
         ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
         : null,
       durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
-      handoverName ? `Người bàn giao: ${handoverName}` : null,
     ]
       .filter(Boolean)
       .join('\n');
@@ -278,6 +283,9 @@ export default function LeaveRequestPage() {
     formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
+    if (handoverPerson) {
+      formData.append('handoverPerson', handoverName);
+    }
     if (attachedFile) {
       formData.append('attachment', attachedFile);
     }
@@ -296,16 +304,11 @@ export default function LeaveRequestPage() {
       });
 
       setSubmitState('success');
-      setAlert({
-        type: 'success',
-        message: 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
-      });
-
-      setTimeout(() => {
-        router.push('/dashboard/leave-history');
-      }, 1200);
+      toast.success('Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.');
+      router.push('/dashboard/leave-history');
     } catch (err) {
       setSubmitState('idle');
+      scrollToTop();
       setAlert({
         type: 'warning',
         message: err instanceof Error ? err.message : 'Không thể gửi yêu cầu nghỉ phép.',
@@ -366,9 +369,7 @@ export default function LeaveRequestPage() {
           style={
             alert.type === 'warning'
               ? { background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e' }
-              : alert.type === 'success'
-                ? { background: '#d1fae5', border: '1px solid #6ee7b7', color: '#065f46' }
-                : { background: '#dbeafe', border: '1px solid #93c5fd', color: '#1e3a8a' }
+              : { background: '#dbeafe', border: '1px solid #93c5fd', color: '#1e3a8a' }
           }
         >
           {alert.type === 'warning' ? (

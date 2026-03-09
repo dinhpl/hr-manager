@@ -52,7 +52,7 @@ const NAV_ITEMS = [
     key: 'leave-history',
   },
   // [MVP-HIDDEN] Quản lý Overtime - not in MVP scope
-  { href: '/dashboard/overtime', label: 'Quản lý Overtime', icon: Clock, key: 'overtime' },
+  // { href: '/dashboard/overtime', label: 'Quản lý Overtime', icon: Clock, key: 'overtime' },
   // [MVP-HIDDEN] Nghỉ bù (Comp-off) - not in MVP scope
   // { href: '/dashboard/compoff', label: 'Nghỉ bù (Comp-off)', icon: BedDouble, key: 'compoff' },
   {
@@ -168,10 +168,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div>
             <span className="font-bold text-sm leading-none" style={{ color: '#203430' }}>
-              NextHR
+              HR
             </span>
             <span className="block text-xs font-normal" style={{ color: '#6b7f78' }}>
-              Leave System
+              Leave Management
             </span>
           </div>
           <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>

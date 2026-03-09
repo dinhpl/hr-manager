@@ -14,13 +14,14 @@ import {
   Filter,
   History,
   List,
+  Pencil,
   PlusCircle,
   Printer,
   X,
   XCircle,
 } from 'lucide-react';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
-import LeaveRequestModal from '@/components/leave-request-modal';
+import LeaveRequestModal, { type LeaveRequestData } from '@/components/leave-request-modal';
 import ConfirmDialog from '@/components/confirm-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -39,6 +40,9 @@ import {
   formatDateTimeVN,
   formatDateVN,
   getDateTimeValue,
+  getLeaveRequestReasonInput,
+  getTimeInputValue,
+  inferLeaveRequestModeFromRange,
   numberValue,
   toDateInputValue,
 } from '@/lib/hr-utils';
@@ -70,6 +74,7 @@ interface LeaveRequestItem {
   toDate: string;
   totalDays: number | string;
   reason?: string | null;
+  handoverPerson?: string | null;
   attachmentUrl?: string | null;
   createdAt: string;
   approvedAt?: string | null;
@@ -193,11 +198,6 @@ function getPeriodRange(period: string) {
   };
 }
 
-function extractHandover(reason?: string | null) {
-  const matched = reason?.match(/Người bàn giao:\s*(.+)$/m);
-  return matched?.[1]?.trim() || '-';
-}
-
 function getPrimaryReason(reason?: string | null) {
   if (!reason) return '—';
   const [firstLine] = reason
@@ -223,7 +223,7 @@ function mapToRecord(item: LeaveRequestItem): LeaveRecord {
     toDate: formatDateVN(item.toDate),
     days: numberValue(item.totalDays),
     reason: getPrimaryReason(item.reason),
-    handover: extractHandover(item.reason),
+    handover: item.handoverPerson || '-',
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
     submittedAtValue: getDateTimeValue(item.createdAt),
@@ -243,13 +243,29 @@ function toDetailData(item: LeaveRequestItem): LeaveDetailData {
     toDate: formatDateVN(item.toDate),
     days: numberValue(item.totalDays),
     reason: item.reason || '—',
-    handover: extractHandover(item.reason),
+    handover: item.handoverPerson || '-',
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
     approver: item.approver?.fullName || undefined,
     approverRole: item.approver?.fullName ? 'Người duyệt' : undefined,
     approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : undefined,
     fileAttachment: item.attachmentUrl || undefined,
+  };
+}
+
+function toEditData(item: LeaveRequestItem): LeaveRequestData {
+  return {
+    id: String(item.id),
+    typeCode: item.leaveType?.code || undefined,
+    requestForUserId: item.user?.id || undefined,
+    fromDate: toDateInputValue(item.fromDate),
+    toDate: toDateInputValue(item.toDate),
+    durationMode: inferLeaveRequestModeFromRange(item.fromDate, item.toDate, item.reason),
+    fromTime: getTimeInputValue(item.fromDate),
+    toTime: getTimeInputValue(item.toDate),
+    reason: getLeaveRequestReasonInput(item.reason),
+    handoverPerson: item.handoverPerson || '',
+    approverId: item.approver?.id || '',
   };
 }
 
@@ -264,6 +280,7 @@ export default function LeaveHistoryPage() {
   const initialRange = useMemo(() => getPeriodRange('thisMonth'), []);
   const [records, setRecords] = useState<LeaveRecord[]>([]);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
+  const [editingRequest, setEditingRequest] = useState<ReturnType<typeof toEditData> | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
@@ -503,6 +520,20 @@ export default function LeaveHistoryPage() {
       setSelectedDetail(toDetailData(response.data));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không tải được chi tiết yêu cầu nghỉ phép.');
+    } finally {
+      setDetailLoadingId(null);
+    }
+  };
+
+  const handleEdit = async (id: string) => {
+    setDetailLoadingId(id);
+
+    try {
+      const response = await apiClient.get<LeaveRequestItem>(`/api/leave-requests/${id}`);
+      setEditingRequest(toEditData(response.data));
+      setIsLeaveRequestModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không tải được dữ liệu để chỉnh sửa.');
     } finally {
       setDetailLoadingId(null);
     }
@@ -1099,6 +1130,16 @@ export default function LeaveHistoryPage() {
                         </button>
                         {row.status === 'pending' ? (
                           <button
+                            onClick={() => void handleEdit(row.id)}
+                            disabled={detailLoadingId === row.id || actionLoadingId === row.id}
+                            className="flex h-6 w-6 items-center justify-center rounded hover:bg-amber-50 disabled:opacity-50"
+                            title="Chỉnh sửa"
+                          >
+                            <Pencil size={13} style={{ color: '#f59e0b' }} />
+                          </button>
+                        ) : null}
+                        {row.status === 'pending' ? (
+                          <button
                             onClick={() => setConfirmCancelId(row.id)}
                             disabled={actionLoadingId === row.id}
                             className="flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 disabled:opacity-50"
@@ -1285,11 +1326,16 @@ export default function LeaveHistoryPage() {
 
       <LeaveRequestModal
         isOpen={isLeaveRequestModalOpen}
-        onClose={() => setIsLeaveRequestModalOpen(false)}
+        onClose={() => {
+          setIsLeaveRequestModalOpen(false);
+          setEditingRequest(null);
+        }}
         onSubmitSuccess={() => {
           setCurrentPage(1);
+          setEditingRequest(null);
           void loadRecords();
         }}
+        editData={editingRequest}
       />
 
       <ConfirmDialog

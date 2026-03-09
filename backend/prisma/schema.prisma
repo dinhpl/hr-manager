@@ -87,6 +87,7 @@ model LeaveRequest {
   toDate         DateTime           @map("to_date")
   totalDays      Decimal            @map("total_days") @db.Decimal(10, 2)
   reason         String
+  handoverPerson String?            @map("handover_person")
   status         LeaveRequestStatus @default(PENDING)
   attachmentUrl  String?            @map("attachment_url")
   approverId     BigInt?            @map("approver_id")

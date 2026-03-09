@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BedDouble, Calculator, Clock, History, MinusCircle, PlusCircle, Save } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { apiClient } from '@/lib/api-client';
 import { formatDateVN, getStatusLabel } from '@/lib/hr-utils';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -133,7 +134,6 @@ export default function OvertimePage() {
   const [lunchEnd, setLunchEnd] = useState('13:00');
   const [otType, setOtType] = useState('weekday');
   const [reason, setReason] = useState('');
-  const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -141,6 +141,10 @@ export default function OvertimePage() {
   const [monthlyItems, setMonthlyItems] = useState<OvertimeApiItem[]>([]);
   const [compOffRows, setCompOffRows] = useState<CompOffApiItem[]>([]);
   const [compOffSummary, setCompOffSummary] = useState<CompOffSummary | null>(null);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const calc = useMemo(() => {
     if (!startTime || !endTime) return null;
@@ -186,11 +190,12 @@ export default function OvertimePage() {
       setCompOffRows(compOffListResponse.data ?? []);
       setCompOffSummary(compOffSummaryResponse.data ?? null);
     } catch (error) {
+      scrollToTop();
       setErrorMessage(error instanceof Error ? error.message : 'Khong the tai du lieu overtime.');
     } finally {
       setIsLoading(false);
     }
-  }, [workDate]);
+  }, [scrollToTop, workDate]);
 
   useEffect(() => {
     void loadData();
@@ -215,13 +220,12 @@ export default function OvertimePage() {
     event.preventDefault();
 
     if (!calc) {
-      setSubmittedMessage(null);
+      scrollToTop();
       setErrorMessage('Thoi gian OT khong hop le. Vui long kiem tra lai.');
       return;
     }
 
     setIsSubmitting(true);
-    setSubmittedMessage(null);
     setErrorMessage(null);
 
     try {
@@ -231,11 +235,12 @@ export default function OvertimePage() {
         reason: reason.trim(),
       });
 
-      setSubmittedMessage('Da gui dang ky OT thanh cong.');
+      toast.success('Đã gửi đăng ký OT thành công.');
       setEndTime('');
       setReason('');
       await loadData();
     } catch (error) {
+      scrollToTop();
       setErrorMessage(error instanceof Error ? error.message : 'Khong the gui dang ky OT.');
     } finally {
       setIsSubmitting(false);
@@ -256,16 +261,16 @@ export default function OvertimePage() {
         </h1>
       </div>
 
-      {(errorMessage || submittedMessage) && (
+      {errorMessage && (
         <div
           className="rounded-xl border p-3 text-sm font-medium"
           style={{
-            background: submittedMessage ? '#D3F2E7' : '#fff5f5',
-            color: submittedMessage ? '#0E474E' : '#b91c1c',
-            borderColor: submittedMessage ? '#9fdcc4' : '#fecaca',
+            background: '#fff5f5',
+            color: '#b91c1c',
+            borderColor: '#fecaca',
           }}
         >
-          {submittedMessage ?? errorMessage}
+          {errorMessage}
         </div>
       )}
 

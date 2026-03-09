@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* NextHR Design System */
+  /* Leave Management System */
   /* Primary: Jade #1DB87A / Eagle Green #0E474E / Aero Blue #D3F2E7 / Cultured #f7f7f7 / Medium Jungle #203430 */
   --background: #f7f7f7;
   --foreground: #203430;

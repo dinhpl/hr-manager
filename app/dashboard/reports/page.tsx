@@ -28,6 +28,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { toast } from 'sonner';
 import { apiClient, getApiBaseUrl, getStoredToken } from '@/lib/api-client';
 import { DatePicker } from '@/components/ui/date-picker';
 import {
@@ -150,7 +151,10 @@ export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const selectedYear = useMemo(() => {
     const endDate = new Date(`${toDate}T00:00:00`);
@@ -162,37 +166,44 @@ export default function ReportsPage() {
     return currentYear;
   }, [currentYear, fromDate, toDate]);
 
-  const loadReports = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
+  const loadReports = useCallback(
+    async (showSuccess = false) => {
+      setIsLoading(true);
+      setErrorMessage(null);
 
-    try {
-      const [leaveResponse, overtimeResponse, departmentResponse, topUsersResponse] =
-        await Promise.all([
-          apiClient.get<LeaveTrendRow[]>('/api/reports/leave', {
-            params: { year: selectedYear, department: deptFilter || undefined },
-          }),
-          apiClient.get<OvertimeReportRow[]>('/api/reports/overtime', {
-            params: { year: selectedYear },
-          }),
-          apiClient.get<DepartmentReportRow[]>('/api/reports/department', {
-            params: { year: selectedYear },
-          }),
-          apiClient.get<TopUserRow[]>('/api/reports/top-users', {
-            params: { year: selectedYear, limit: 10 },
-          }),
-        ]);
+      try {
+        const [leaveResponse, overtimeResponse, departmentResponse, topUsersResponse] =
+          await Promise.all([
+            apiClient.get<LeaveTrendRow[]>('/api/reports/leave', {
+              params: { year: selectedYear, department: deptFilter || undefined },
+            }),
+            apiClient.get<OvertimeReportRow[]>('/api/reports/overtime', {
+              params: { year: selectedYear },
+            }),
+            apiClient.get<DepartmentReportRow[]>('/api/reports/department', {
+              params: { year: selectedYear },
+            }),
+            apiClient.get<TopUserRow[]>('/api/reports/top-users', {
+              params: { year: selectedYear, limit: 10 },
+            }),
+          ]);
 
-      setLeaveTrend(leaveResponse.data ?? []);
-      setOvertimeTrend(overtimeResponse.data ?? []);
-      setDepartmentRows(departmentResponse.data ?? []);
-      setTopUsers(topUsersResponse.data ?? []);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Khong the tai du lieu bao cao.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [deptFilter, selectedYear]);
+        setLeaveTrend(leaveResponse.data ?? []);
+        setOvertimeTrend(overtimeResponse.data ?? []);
+        setDepartmentRows(departmentResponse.data ?? []);
+        setTopUsers(topUsersResponse.data ?? []);
+        if (showSuccess) {
+          toast.success(`Đã tạo báo cáo cho năm ${selectedYear}.`);
+        }
+      } catch (error) {
+        scrollToTop();
+        setErrorMessage(error instanceof Error ? error.message : 'Khong the tai du lieu bao cao.');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [deptFilter, scrollToTop, selectedYear],
+  );
 
   useEffect(() => {
     void loadReports();
@@ -379,8 +390,9 @@ export default function ReportsPage() {
       link.download = `leave-report-${selectedYear}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
-      setNoticeMessage(`Đã tải báo cáo CSV cho năm ${selectedYear}.`);
+      toast.success(`Đã tải báo cáo CSV cho năm ${selectedYear}.`);
     } catch (error) {
+      scrollToTop();
       setErrorMessage(error instanceof Error ? error.message : 'Khong the export CSV.');
     } finally {
       setIsExporting(false);
@@ -404,7 +416,7 @@ export default function ReportsPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => void loadReports()}
+            onClick={() => void loadReports(true)}
             className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold text-white"
             style={{ background: '#1DB87A' }}
           >
@@ -431,16 +443,16 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {(errorMessage || noticeMessage) && (
+      {errorMessage && (
         <div
           className="rounded-xl border p-3 text-sm"
           style={{
-            background: errorMessage ? '#fff5f5' : '#f7fffb',
-            color: errorMessage ? '#b91c1c' : '#0E474E',
-            borderColor: errorMessage ? '#fecaca' : '#D3F2E7',
+            background: '#fff5f5',
+            color: '#b91c1c',
+            borderColor: '#fecaca',
           }}
         >
-          {errorMessage ?? noticeMessage}
+          {errorMessage}
         </div>
       )}
 

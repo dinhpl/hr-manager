@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Camera, Upload, Eye, EyeOff, Save, Loader2, X, Check } from 'lucide-react';
+import { User, Lock, Camera, Upload, Eye, EyeOff, Save, Loader2, Check } from 'lucide-react';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import { getRoleLabel } from '@/lib/hr-utils';
+import { toast } from 'sonner';
 
 interface UserProfile {
   id: string;
@@ -48,8 +49,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
-  const [success, setSuccess] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const [showAvatarList, setShowAvatarList] = useState(false);
 
@@ -85,10 +84,12 @@ export default function ProfilePage() {
     void loadUser();
   }, [loadUser]);
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleProfileSave = async () => {
     setSaving(true);
-    setError(null);
-    setSuccess(null);
 
     try {
       const { data } = await apiClient.patch<UserProfile>('/api/auth/profile', {
@@ -97,9 +98,10 @@ export default function ProfilePage() {
         avatar: selectedAvatar,
       });
       setUser(data);
-      setSuccess('Cập nhật thông tin thành công!');
+      toast.success('Cập nhật thông tin thành công!');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cập nhật thất bại');
+      scrollToTop();
+      toast.error(err instanceof Error ? err.message : 'Cập nhật thất bại');
     } finally {
       setSaving(false);
     }
@@ -118,7 +120,6 @@ export default function ProfilePage() {
     if (!file) return;
 
     setSaving(true);
-    setError(null);
 
     const formData = new FormData();
     formData.append('avatar', file);
@@ -129,9 +130,10 @@ export default function ProfilePage() {
       });
       setUser(data);
       setSelectedAvatar(data.avatar || '');
-      setSuccess('Upload avatar thành công!');
+      toast.success('Upload avatar thành công!');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload thất bại');
+      scrollToTop();
+      toast.error(err instanceof Error ? err.message : 'Upload thất bại');
     } finally {
       setSaving(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -140,30 +142,31 @@ export default function ProfilePage() {
 
   const handlePasswordChange = async () => {
     if (newPassword !== confirmPassword) {
-      setError('Mật khẩu mới không khớp');
+      scrollToTop();
+      toast.error('Mật khẩu mới không khớp');
       return;
     }
 
     if (newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự');
+      scrollToTop();
+      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự');
       return;
     }
 
     setSaving(true);
-    setError(null);
-    setSuccess(null);
 
     try {
       await apiClient.patch('/api/auth/change-password', {
         currentPassword,
         newPassword,
       });
-      setSuccess('Đổi mật khẩu thành công!');
+      toast.success('Đổi mật khẩu thành công!');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Đổi mật khẩu thất bại');
+      scrollToTop();
+      toast.error(err instanceof Error ? err.message : 'Đổi mật khẩu thất bại');
     } finally {
       setSaving(false);
     }
@@ -219,20 +222,6 @@ export default function ProfilePage() {
           Đổi mật khẩu
         </button>
       </div>
-
-      {/* Success/Error Messages */}
-      {success && (
-        <div className="mb-4 p-3 rounded-lg bg-green-50 text-green-700 text-sm flex items-center gap-2">
-          <Check size={16} />
-          {success}
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm flex items-center gap-2">
-          <X size={16} />
-          {error}
-        </div>
-      )}
 
       {activeTab === 'profile' && (
         <div className="bg-white rounded-xl p-6 shadow-sm" style={{ border: '1px solid #e2ede9' }}>

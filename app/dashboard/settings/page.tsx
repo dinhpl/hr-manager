@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
   Calendar,
   Check,
   Download,
@@ -26,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { apiClient } from '@/lib/api-client';
 import { getRoleLabel } from '@/lib/hr-utils';
+import { toast } from 'sonner';
 
 interface AnnualLeaveRule {
   fromYear: number;
@@ -51,11 +51,6 @@ interface ApprovalFlow {
   autoApproveWFH: boolean;
   requireDocumentTypes: string[];
 }
-
-type AlertState = {
-  type: 'success' | 'error';
-  message: string;
-};
 
 const TAB_ITEMS = [
   { id: 'leave', label: 'Chính sách nghỉ phép', icon: Calendar },
@@ -170,7 +165,6 @@ function parseDocumentTypes(input: string) {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<(typeof TAB_ITEMS)[number]['id']>('leave');
-  const [alert, setAlert] = useState<AlertState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [leavePolicy, setLeavePolicy] = useState<LeavePolicy>(DEFAULT_LEAVE_POLICY);
@@ -192,6 +186,10 @@ export default function SettingsPage() {
     DEFAULT_APPROVAL_FLOW.requireDocumentTypes.join(', '),
   );
 
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -207,16 +205,14 @@ export default function SettingsPage() {
       setDocumentTypesInput(nextApprovalFlow.requireDocumentTypes.join(', '));
       setEditingLeaveIndex(null);
       setEditingLevelIndex(null);
-      setAlert(null);
     } catch (error) {
-      setAlert({
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Không thể tải cấu hình hệ thống.',
-      });
+      const message = error instanceof Error ? error.message : 'Không thể tải cấu hình hệ thống.';
+      scrollToTop();
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [scrollToTop]);
 
   useEffect(() => {
     void loadSettings();
@@ -243,18 +239,15 @@ export default function SettingsPage() {
       ]);
 
       setApprovalFlow(nextApprovalFlow);
-      setAlert({
-        type: 'success',
-        message: 'Cấu hình đã được lưu thành công.',
-      });
+      toast.success('Cấu hình đã được lưu thành công.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Không thể lưu cấu hình.';
-      setAlert({
-        type: 'error',
-        message: /insufficient permissions/i.test(message)
+      scrollToTop();
+      toast.error(
+        /insufficient permissions/i.test(message)
           ? 'Bạn không có quyền cập nhật cấu hình. Chỉ ADMIN mới có thể lưu thay đổi.'
           : message,
-      });
+      );
     } finally {
       setIsSaving(false);
     }
@@ -262,6 +255,7 @@ export default function SettingsPage() {
 
   const handleReset = () => {
     void loadSettings();
+    toast.success('Đã tải lại cấu hình từ hệ thống.');
   };
 
   const handleExportConfig = () => {
@@ -284,6 +278,7 @@ export default function SettingsPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    toast.success('Đã export cấu hình.');
   };
 
   const handleAddLeaveRule = () => {
@@ -423,19 +418,6 @@ export default function SettingsPage() {
           </button>
         </div>
       </div>
-
-      {alert && (
-        <div
-          className="p-3 rounded-lg text-sm font-medium flex items-center gap-2"
-          style={{
-            background: alert.type === 'success' ? '#D3F2E7' : '#fee2e2',
-            color: alert.type === 'success' ? '#0E474E' : '#991b1b',
-          }}
-        >
-          {alert.type === 'success' ? <Check size={16} /> : <AlertTriangle size={16} />}
-          {alert.message}
-        </div>
-      )}
 
       <div
         className="bg-white rounded-xl border overflow-hidden"

@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 
 type CompOffSummary = {
   totalHours: number;
@@ -137,7 +138,10 @@ export default function CompoffPage() {
   const [summary, setSummary] = useState<CompOffSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -154,11 +158,12 @@ export default function CompoffPage() {
       setItems(listResponse.data ?? []);
       setSummary(summaryResponse.data ?? null);
     } catch (error) {
+      scrollToTop();
       setErrorMessage(error instanceof Error ? error.message : 'Khong the tai du lieu comp-off.');
     } finally {
       setIsLoading(false);
     }
-  }, [sortBy]);
+  }, [scrollToTop, sortBy]);
 
   useEffect(() => {
     void loadData();
@@ -258,7 +263,7 @@ export default function CompoffPage() {
   }, [items, summary?.expiredHours]);
 
   const showActionUnavailable = () => {
-    setActionMessage(
+    toast.info(
       'Chức năng này chưa có endpoint backend tương ứng nên đang được giữ ở trạng thái an toàn.',
     );
   };
@@ -298,9 +303,7 @@ export default function CompoffPage() {
           </button>
           <button
             type="button"
-            onClick={() =>
-              setActionMessage('Khối tính toán ở cột phải chỉ dùng để ước tính nhanh.')
-            }
+            onClick={() => toast.info('Khối tính toán ở cột phải chỉ dùng để ước tính nhanh.')}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
             style={{ borderColor: '#e2ede9', color: '#203430' }}
           >
@@ -309,16 +312,16 @@ export default function CompoffPage() {
         </div>
       </div>
 
-      {(errorMessage || actionMessage) && (
+      {errorMessage && (
         <div
           className="rounded-xl border p-3 text-sm"
           style={{
-            background: errorMessage ? '#fff5f5' : '#f7fffb',
-            color: errorMessage ? '#b91c1c' : '#0E474E',
-            borderColor: errorMessage ? '#fecaca' : '#D3F2E7',
+            background: '#fff5f5',
+            color: '#b91c1c',
+            borderColor: '#fecaca',
           }}
         >
-          {errorMessage ?? actionMessage}
+          {errorMessage}
         </div>
       )}
 

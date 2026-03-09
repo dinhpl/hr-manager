@@ -51,3 +51,4 @@ Thumbs.db
 backend/node_modules
 backend/dist
 backend/uploads/
+.pnpm-store/

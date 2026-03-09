@@ -21,7 +21,10 @@ export const createLeaveRequestSchema = z.object({
     .optional(),
   totalDays: z.coerce.number().min(0.5),
   reason: z.string().min(1).max(1000),
+  handoverPerson: z.string().optional(),
 });
+
+export const updateLeaveRequestSchema = createLeaveRequestSchema;
 
 export const getLeaveRequestsQuerySchema = z.object({
   status: z.nativeEnum(LeaveRequestStatus).optional(),
@@ -44,4 +47,5 @@ export const bulkApproveSchema = z.object({
 });
 
 export type CreateLeaveRequestDto = z.infer<typeof createLeaveRequestSchema>;
+export type UpdateLeaveRequestDto = z.infer<typeof updateLeaveRequestSchema>;
 export type GetLeaveRequestsQuery = z.infer<typeof getLeaveRequestsQuerySchema>;

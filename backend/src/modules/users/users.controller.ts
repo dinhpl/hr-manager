@@ -24,7 +24,7 @@ export async function getUsersDropdown(req: Request, res: Response, next: NextFu
 
 export async function getUserById(req: Request, res: Response, next: NextFunction) {
   try {
-    const user = await usersService.getUserById(BigInt(String(req.params.id)));
+    const user = await usersService.getUserById(BigInt(String(req.params.id)), req.user!);
     sendSuccess(res, user);
   } catch (err) {
     next(err);
