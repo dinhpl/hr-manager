@@ -68,11 +68,13 @@ type CalendarData = Record<
   string,
   {
     users: {
+      requestId?: string;
       name: string;
       status: 'approved' | 'pending';
       reason?: string;
       leaveType?: { code: string; name: string; color: string };
       approver?: string;
+      department?: string | null;
     }[];
   }
 >;
@@ -1029,6 +1031,27 @@ export default function DashboardPage() {
     setCurrentMonth((month) => month + 1);
   };
 
+  const handleOpenCalendarRequestDetail = useCallback(
+    async (user: CalendarData[string]['users'][number]) => {
+      if (!user.requestId) {
+        setSelectedDayDetail(null);
+        return;
+      }
+
+      try {
+        const response = await apiClient.get<DashboardLeaveRequest>(
+          `/api/leave-requests/${user.requestId}`,
+        );
+        setSelectedDetail(toDetailData(response.data));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Không tải được chi tiết yêu cầu nghỉ phép.');
+      } finally {
+        setSelectedDayDetail(null);
+      }
+    },
+    [],
+  );
+
   const currentRole = toFrontendRole(userInfo?.role);
   const isLoading = loadingUser || (loadingData && !summary);
 
@@ -1114,11 +1137,7 @@ export default function DashboardPage() {
         date={selectedDayDetail?.date}
         users={selectedDayDetail?.users}
         onClose={() => setSelectedDayDetail(null)}
-        onViewDetail={() => {
-          // TODO: Implement view individual leave request detail
-          // For now, just close the modal
-          setSelectedDayDetail(null);
-        }}
+        onViewDetail={(user) => void handleOpenCalendarRequestDetail(user)}
       />
 
       <LeaveRequestModal

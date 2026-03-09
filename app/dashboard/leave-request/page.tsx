@@ -33,12 +33,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { apiRequest, apiClient } from '@/lib/api-client';
 import {
+  addDaysToDateInput,
+  buildLeavePolicyHints,
   countCalendarDays,
+  getVietnamTodayDateInput,
+  getLeaveRequestPolicyValidation,
   getDateTimeValue,
   getLeaveRequestApiPayload,
   HOURLY_LEAVE_TIME_MAX,
   HOURLY_LEAVE_TIME_MIN,
   HOURLY_LEAVE_TIME_STEP_SECONDS,
+  type ApprovalFlowConfig,
+  type LeavePolicyConfig,
   LEAVE_REQUEST_MODE_CONFIG,
   numberValue,
   type LeaveRequestMode,
@@ -69,6 +75,9 @@ interface UserDropdownItem {
   department?: string | null;
 }
 
+interface ApprovalFlowResponse extends ApprovalFlowConfig {}
+interface LeavePolicyResponse extends LeavePolicyConfig {}
+
 export default function LeaveRequestPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,6 +85,8 @@ export default function LeaveRequestPage() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
   const [balances, setBalances] = useState<LeaveBalanceRecord[]>([]);
   const [handoverPersons, setHandoverPersons] = useState<UserDropdownItem[]>([]);
+  const [leavePolicy, setLeavePolicy] = useState<LeavePolicyResponse | null>(null);
+  const [approvalFlow, setApprovalFlow] = useState<ApprovalFlowResponse | null>(null);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   const [leaveType, setLeaveType] = useState('');
@@ -104,11 +115,15 @@ export default function LeaveRequestPage() {
       apiClient.get<LeaveTypeOption[]>('/api/leave-types'),
       apiClient.get<LeaveBalanceRecord[]>('/api/leave-balances'),
       apiClient.get<UserDropdownItem[]>('/api/users/dropdown'),
+      apiClient.get<LeavePolicyResponse>('/api/settings/leave-policy'),
+      apiClient.get<ApprovalFlowResponse>('/api/settings/approval-flow'),
     ])
-      .then(([leaveTypeRes, balanceRes, handoverRes]) => {
+      .then(([leaveTypeRes, balanceRes, handoverRes, leavePolicyRes, approvalFlowRes]) => {
         setLeaveTypes(leaveTypeRes.data);
         setBalances(balanceRes.data);
         setHandoverPersons(handoverRes.data);
+        setLeavePolicy(leavePolicyRes.data);
+        setApprovalFlow(approvalFlowRes.data);
       })
       .catch((err) => {
         scrollToTop();
@@ -161,6 +176,16 @@ export default function LeaveRequestPage() {
   };
 
   const balanceWarning = checkBalance();
+  const policyHints = buildLeavePolicyHints(leavePolicy, approvalFlow);
+  const policyValidationMessage = getLeaveRequestPolicyValidation({
+    fromDate,
+    toDate,
+    days,
+    leaveTypeCode: selectedLeaveType?.code,
+    hasAttachment: Boolean(attachedFile),
+    leavePolicy,
+    approvalFlow,
+  });
 
   useEffect(() => {
     if (durationMode === 'HOURLY') {
@@ -254,6 +279,11 @@ export default function LeaveRequestPage() {
       return;
     }
 
+    if (policyValidationMessage) {
+      setAlert({ type: 'warning', message: policyValidationMessage });
+      return;
+    }
+
     const handoverName = handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? '';
 
     const composedReason = [
@@ -333,6 +363,33 @@ export default function LeaveRequestPage() {
           <p className="text-xs text-muted-foreground">Điền đầy đủ thông tin để gửi yêu cầu</p>
         </div>
       </div>
+
+      {policyHints.length > 0 && (
+        <div
+          className="rounded-xl p-4 mb-5"
+          style={{ background: '#fffbeb', border: '1px solid #fde68a' }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <Info size={15} style={{ color: '#d97706' }} />
+            <span className="text-sm font-semibold" style={{ color: '#92400e' }}>
+              Quy định áp dụng cho yêu cầu nghỉ
+            </span>
+          </div>
+          <div className="space-y-1 text-xs" style={{ color: '#92400e' }}>
+            {policyHints.map((hint) => (
+              <p key={hint}>- {hint}</p>
+            ))}
+            {typeof leavePolicy?.advanceRequestDays === 'number' ? (
+              <p>
+                - Nếu áp dụng ngay hôm nay, ngày bắt đầu sớm nhất nên từ{' '}
+                {addDaysToDateInput(getVietnamTodayDateInput(), leavePolicy.advanceRequestDays) ||
+                  'hom nay'}
+                .
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Leave balance info */}
       <div
@@ -548,6 +605,18 @@ export default function LeaveRequestPage() {
               <AlertTriangle size={15} style={{ color: '#dc2626', flexShrink: 0, marginTop: 2 }} />
               <span className="text-sm" style={{ color: '#dc2626' }}>
                 {balanceWarning}
+              </span>
+            </div>
+          )}
+
+          {policyValidationMessage && (
+            <div
+              className="flex items-start gap-3 px-4 py-3 rounded-lg"
+              style={{ background: '#fff7ed', border: '1px solid #fdba74' }}
+            >
+              <AlertTriangle size={15} style={{ color: '#ea580c', flexShrink: 0, marginTop: 2 }} />
+              <span className="text-sm" style={{ color: '#c2410c' }}>
+                {policyValidationMessage}
               </span>
             </div>
           )}

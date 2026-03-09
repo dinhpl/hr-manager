@@ -5,7 +5,7 @@ import * as ctrl from './settings.controller';
 
 export const settingsRouter: IRouter = Router();
 
-settingsRouter.use(authMiddleware, requireRoles('HR', 'ADMIN'));
+settingsRouter.use(authMiddleware);
 
 settingsRouter.get('/leave-policy', ctrl.getLeavePolicy);
 settingsRouter.patch('/leave-policy', requireRoles('ADMIN'), ctrl.updateLeavePolicy);

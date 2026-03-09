@@ -2,6 +2,18 @@ import prisma from '../../config/prisma';
 import { UserRole } from '@prisma/client';
 import { serializeLeaveRequestDates } from '../../utils/date-time';
 
+function buildManagerLeaveScope(userId: bigint) {
+  return {
+    OR: [{ userId }, { approverId: userId }, { user: { managerId: userId } }],
+  };
+}
+
+function buildManagerUserScope(userId: bigint) {
+  return {
+    OR: [{ id: userId }, { managerId: userId }],
+  };
+}
+
 async function getEmployeeSummary(userId: bigint) {
   const year = new Date().getFullYear();
 
@@ -26,30 +38,34 @@ async function getEmployeeSummary(userId: bigint) {
   };
 }
 
-async function getManagerHRAdminSummary(role: UserRole) {
+async function getManagerHRAdminSummary(user: { id: bigint; role: UserRole }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - today.getDay());
 
+  const leaveScope = user.role === 'MANAGER' ? buildManagerLeaveScope(user.id) : {};
+  const userScope = user.role === 'MANAGER' ? buildManagerUserScope(user.id) : {};
+
   const [totalUsers, pendingRequests, todayRequests, weekApproved, overdueRequests] =
     await Promise.all([
-      prisma.user.count({ where: { isActive: true } }),
-      prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
-      prisma.leaveRequest.count({ where: { createdAt: { gte: today } } }),
+      prisma.user.count({ where: { isActive: true, ...userScope } }),
+      prisma.leaveRequest.count({ where: { status: 'PENDING', ...leaveScope } }),
+      prisma.leaveRequest.count({ where: { createdAt: { gte: today }, ...leaveScope } }),
       prisma.leaveRequest.count({
-        where: { status: 'APPROVED', approvedAt: { gte: weekStart } },
+        where: { status: 'APPROVED', approvedAt: { gte: weekStart }, ...leaveScope },
       }),
       prisma.leaveRequest.count({
         where: {
           status: 'PENDING',
           createdAt: { lt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) },
+          ...leaveScope,
         },
       }),
     ]);
 
   return {
-    type: role === 'ADMIN' ? 'admin' : role === 'HR' ? 'hr' : 'manager',
+    type: user.role === 'ADMIN' ? 'admin' : user.role === 'HR' ? 'hr' : 'manager',
     stats: {
       totalEmployees: totalUsers,
       pendingRequests,
@@ -62,7 +78,7 @@ async function getManagerHRAdminSummary(role: UserRole) {
 
 export async function getDashboardSummary(user: { id: bigint; role: UserRole }) {
   if (user.role === 'EMPLOYEE') return getEmployeeSummary(user.id);
-  return getManagerHRAdminSummary(user.role);
+  return getManagerHRAdminSummary(user);
 }
 
 export async function getCalendarData(
@@ -77,7 +93,14 @@ export async function getCalendarData(
   const where =
     user.role === 'EMPLOYEE'
       ? { userId: user.id, fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter }
-      : { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter };
+      : user.role === 'MANAGER'
+        ? {
+            fromDate: { lte: end },
+            toDate: { gte: start },
+            status: statusFilter,
+            ...buildManagerLeaveScope(user.id),
+          }
+        : { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter };
 
   const requests = await prisma.leaveRequest.findMany({
     where,
@@ -87,8 +110,7 @@ export async function getCalendarData(
       toDate: true,
       status: true,
       reason: true,
-      // Include user info to show names on calendar cells
-      user: { select: { fullName: true, username: true } },
+      user: { select: { fullName: true, username: true, department: true } },
       leaveType: { select: { code: true, name: true, color: true } },
       approver: { select: { fullName: true } },
     },
@@ -96,11 +118,13 @@ export async function getCalendarData(
 
   // Build map: dateStr → list of { name, status, reason, leaveType, approver } entries per user per day
   type CalendarUser = {
+    requestId: string;
     name: string;
     status: 'approved' | 'pending';
     reason?: string;
     leaveType?: { code: string; name: string; color: string };
     approver?: string;
+    department?: string | null;
   };
   const calendarMap: Record<string, { users: CalendarUser[] }> = {};
 
@@ -122,11 +146,13 @@ export async function getCalendarData(
       );
       if (!alreadyAdded) {
         calendarMap[key].users.push({
+          requestId: r.id.toString(),
           name: userName,
           status,
           reason: r.reason || undefined,
           leaveType,
           approver,
+          department: r.user?.department,
         });
       }
       cur.setDate(cur.getDate() + 1);
@@ -137,7 +163,12 @@ export async function getCalendarData(
 }
 
 export async function getRecentRequests(user: { id: bigint; role: UserRole }, limit = 10) {
-  const where = user.role === 'EMPLOYEE' ? { userId: user.id } : {};
+  const where =
+    user.role === 'EMPLOYEE'
+      ? { userId: user.id }
+      : user.role === 'MANAGER'
+        ? buildManagerLeaveScope(user.id)
+        : {};
   const requests = await prisma.leaveRequest.findMany({
     where,
     include: {

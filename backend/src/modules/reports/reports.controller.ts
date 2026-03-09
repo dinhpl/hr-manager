@@ -1,13 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import * as service from './reports.service';
 import { sendSuccess } from '../../utils/response';
+import { reportsQuerySchema } from './reports.validation';
 
 export async function getLeaveReport(req: Request, res: Response, next: NextFunction) {
   try {
-    const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-    const department = req.query.department as string | undefined;
-    const leaveTypeId = req.query.leaveTypeId ? BigInt(String(req.query.leaveTypeId)) : undefined;
-    const data = await service.getLeaveReport({ year, department, leaveTypeId });
+    const query = reportsQuerySchema.parse(req.query);
+    const data = await service.getLeaveReport(req.user!, query);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
@@ -16,8 +15,8 @@ export async function getLeaveReport(req: Request, res: Response, next: NextFunc
 
 export async function getDepartmentReport(req: Request, res: Response, next: NextFunction) {
   try {
-    const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-    const data = await service.getDepartmentReport(year);
+    const query = reportsQuerySchema.parse(req.query);
+    const data = await service.getDepartmentReport(req.user!, query);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
@@ -26,9 +25,8 @@ export async function getDepartmentReport(req: Request, res: Response, next: Nex
 
 export async function getTopUsers(req: Request, res: Response, next: NextFunction) {
   try {
-    const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-    const limit = req.query.limit ? Number(req.query.limit) : 10;
-    const data = await service.getTopLeaveUsers(year, limit);
+    const query = reportsQuerySchema.parse(req.query);
+    const data = await service.getTopLeaveUsers(req.user!, query);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
@@ -37,8 +35,8 @@ export async function getTopUsers(req: Request, res: Response, next: NextFunctio
 
 export async function getOvertimeReport(req: Request, res: Response, next: NextFunction) {
   try {
-    const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-    const data = await service.getOvertimeReport(year);
+    const query = reportsQuerySchema.parse(req.query);
+    const data = await service.getOvertimeReport(req.user!, query);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
@@ -47,10 +45,13 @@ export async function getOvertimeReport(req: Request, res: Response, next: NextF
 
 export async function exportReport(req: Request, res: Response, next: NextFunction) {
   try {
-    const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
-    const csv = await service.exportLeaveReport(year);
+    const query = reportsQuerySchema.parse(req.query);
+    const csv = await service.exportLeaveReport(req.user!, query);
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="leave-report-${year}.csv"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="leave-report-${query.fromDate ?? query.year ?? 'range'}.csv"`,
+    );
     res.send(csv);
   } catch (err) {
     next(err);

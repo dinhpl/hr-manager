@@ -68,6 +68,17 @@ type TopUserRow = {
   pct: number;
 };
 
+type DepartmentOption = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+type UserInfo = {
+  id: string;
+  role: string;
+};
+
 const DEPARTMENT_COLORS = [
   '#3b82f6',
   '#f59e0b',
@@ -95,6 +106,8 @@ function formatHours(value?: number | string | null) {
 }
 
 function monthLabel(monthValue: string) {
+  const [year, month] = monthValue.split('-');
+  if (year && month) return `T${month}/${year}`;
   return `T${monthValue}`;
 }
 
@@ -143,11 +156,12 @@ export default function ReportsPage() {
   const [fromDate, setFromDate] = useState(`${currentYear}-01-01`);
   const [toDate, setToDate] = useState(`${currentYear}-12-31`);
   const [deptFilter, setDeptFilter] = useState('');
-  const [teamFilter, setTeamFilter] = useState('');
   const [leaveTrend, setLeaveTrend] = useState<LeaveTrendRow[]>([]);
   const [overtimeTrend, setOvertimeTrend] = useState<OvertimeReportRow[]>([]);
   const [departmentRows, setDepartmentRows] = useState<DepartmentReportRow[]>([]);
   const [topUsers, setTopUsers] = useState<TopUserRow[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
+  const [userRole, setUserRole] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -166,6 +180,30 @@ export default function ReportsPage() {
     return currentYear;
   }, [currentYear, fromDate, toDate]);
 
+  const reportParams = useMemo(
+    () => ({
+      fromDate,
+      toDate,
+      department: deptFilter || undefined,
+      limit: 10,
+    }),
+    [deptFilter, fromDate, toDate],
+  );
+
+  useEffect(() => {
+    void Promise.all([
+      apiClient.get<DepartmentOption[]>('/api/departments'),
+      apiClient.get<UserInfo>('/api/auth/me'),
+    ])
+      .then(([departmentsResponse, meResponse]) => {
+        setDepartmentOptions(departmentsResponse.data ?? []);
+        setUserRole((meResponse.data?.role ?? '').toLowerCase());
+      })
+      .catch(() => {
+        // Ignore optional filter bootstrapping failures; report calls will still show real errors.
+      });
+  }, []);
+
   const loadReports = useCallback(
     async (showSuccess = false) => {
       setIsLoading(true);
@@ -175,16 +213,16 @@ export default function ReportsPage() {
         const [leaveResponse, overtimeResponse, departmentResponse, topUsersResponse] =
           await Promise.all([
             apiClient.get<LeaveTrendRow[]>('/api/reports/leave', {
-              params: { year: selectedYear, department: deptFilter || undefined },
+              params: reportParams,
             }),
             apiClient.get<OvertimeReportRow[]>('/api/reports/overtime', {
-              params: { year: selectedYear },
+              params: reportParams,
             }),
             apiClient.get<DepartmentReportRow[]>('/api/reports/department', {
-              params: { year: selectedYear },
+              params: reportParams,
             }),
             apiClient.get<TopUserRow[]>('/api/reports/top-users', {
-              params: { year: selectedYear, limit: 10 },
+              params: reportParams,
             }),
           ]);
 
@@ -202,7 +240,7 @@ export default function ReportsPage() {
         setIsLoading(false);
       }
     },
-    [deptFilter, scrollToTop, selectedYear],
+    [reportParams, scrollToTop, selectedYear],
   );
 
   useEffect(() => {
@@ -355,7 +393,7 @@ export default function ReportsPage() {
         : 0;
 
       return {
-        month: `${row.month.padStart(2, '0')}/${selectedYear}`,
+        month: monthLabel(row.month),
         annual: Number(row.annual ?? 0),
         sick: Number(row.sick ?? 0),
         wfh: Number(row.wfh ?? 0),
@@ -366,7 +404,7 @@ export default function ReportsPage() {
         annualRate,
       };
     });
-  }, [leaveTrend, overtimeTrend, selectedYear]);
+  }, [leaveTrend, overtimeTrend]);
 
   const exportCsv = async () => {
     setIsExporting(true);
@@ -374,7 +412,12 @@ export default function ReportsPage() {
 
     try {
       const token = getStoredToken();
-      const response = await fetch(`${getApiBaseUrl()}/api/reports/export?year=${selectedYear}`, {
+      const query = new URLSearchParams();
+      query.set('fromDate', fromDate);
+      query.set('toDate', toDate);
+      if (deptFilter) query.set('department', deptFilter);
+
+      const response = await fetch(`${getApiBaseUrl()}/api/reports/export?${query.toString()}`, {
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
@@ -387,7 +430,7 @@ export default function ReportsPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `leave-report-${selectedYear}.csv`;
+      link.download = `leave-report-${fromDate}-to-${toDate}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success(`Đã tải báo cáo CSV cho năm ${selectedYear}.`);
@@ -398,6 +441,19 @@ export default function ReportsPage() {
       setIsExporting(false);
     }
   };
+
+  const scopeLabel =
+    userRole === 'manager'
+      ? 'Manager chi xem du lieu cua minh va nhan vien bao cao truc tiep.'
+      : userRole === 'hr' || userRole === 'admin'
+        ? 'HR/Admin xem du lieu theo pham vi loc hien tai.'
+        : 'Du lieu duoc gioi han theo quyen hien tai.';
+
+  const showLeaveInsights = ['leave-summary', 'leave-detail', 'leave-trend'].includes(reportType);
+  const showOvertimeInsights = ['overtime-summary', 'leave-summary'].includes(reportType);
+  const showDepartmentInsights = ['department-analysis', 'leave-summary'].includes(reportType);
+  const showTopUsers = ['employee-performance', 'leave-summary'].includes(reportType);
+  const showMonthlyTable = reportType !== 'employee-performance';
 
   return (
     <div className="space-y-5">
@@ -507,31 +563,11 @@ export default function ReportsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
-                {departmentRows
-                  .map((row) => row.department)
-                  .filter((department): department is string => Boolean(department))
-                  .map((department) => (
-                    <SelectItem key={department} value={department}>
-                      {department}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
-              Nhóm
-            </label>
-            <Select
-              value={teamFilter || 'all'}
-              onValueChange={(value) => setTeamFilter(value === 'all' ? '' : value)}
-              disabled
-            >
-              <SelectTrigger className="min-w-[130px]">
-                <SelectValue placeholder="Chọn nhóm" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả</SelectItem>
+                {departmentOptions.map((department) => (
+                  <SelectItem key={department.id} value={department.name}>
+                    {department.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -545,8 +581,7 @@ export default function ReportsPage() {
           </button>
         </div>
         <p className="mt-3 text-xs" style={{ color: '#6b7f78' }}>
-          Dữ liệu chart và bảng đang lấy theo năm {selectedYear}. Bộ lọc nhóm hiện chưa có endpoint
-          backend nên chỉ giữ ở trạng thái an toàn.
+          Dữ liệu đang lấy theo khoảng {fromDate} đến {toDate}. {scopeLabel}
         </p>
       </div>
 
@@ -589,441 +624,455 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div
-          className="rounded-xl border bg-white p-5 lg:col-span-2"
-          style={{ borderColor: '#e2ede9' }}
-        >
-          <div className="mb-4 flex items-center gap-2">
-            <TrendingUp size={15} style={{ color: '#1DB87A' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-              Xu hướng nghỉ phép 12 tháng
-            </h3>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f2" />
-              <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: '#6b7f78' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#6b7f78' }} />
-              <Tooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="annual"
-                name="Nghỉ phép năm"
-                stroke="#1DB87A"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="sick"
-                name="Nghỉ ốm"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="wfh"
-                name="WFH"
-                stroke="#9ca3af"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-          <div className="mb-4 flex items-center gap-2">
-            <FilePieChart size={15} style={{ color: '#1DB87A' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-              Phân bố theo phòng ban
-            </h3>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={55}
-                outerRadius={85}
-                dataKey="value"
-                paddingAngle={3}
-              >
-                {pieData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-              <PieTooltip
-                contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
-            {pieData.map((item) => (
-              <div
-                key={item.name}
-                className="flex items-center gap-1.5 text-xs"
-                style={{ color: '#6b7f78' }}
-              >
-                <div
-                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                  style={{ background: item.color }}
+        {showLeaveInsights ? (
+          <div
+            className="rounded-xl border bg-white p-5 lg:col-span-2"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <div className="mb-4 flex items-center gap-2">
+              <TrendingUp size={15} style={{ color: '#1DB87A' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                Xu hướng nghỉ phép 12 tháng
+              </h3>
+            </div>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f2" />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: '#6b7f78' }} />
+                <YAxis tick={{ fontSize: 11, fill: '#6b7f78' }} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
                 />
-                {item.name}
-              </div>
-            ))}
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line
+                  type="monotone"
+                  dataKey="annual"
+                  name="Nghỉ phép năm"
+                  stroke="#1DB87A"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="sick"
+                  name="Nghỉ ốm"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="wfh"
+                  name="WFH"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-        </div>
+        ) : null}
+
+        {showDepartmentInsights ? (
+          <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <FilePieChart size={15} style={{ color: '#1DB87A' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                Phân bố theo phòng ban
+              </h3>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={55}
+                  outerRadius={85}
+                  dataKey="value"
+                  paddingAngle={3}
+                >
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} />
+                  ))}
+                </Pie>
+                <PieTooltip
+                  contentStyle={{ borderRadius: 8, border: '1px solid #e2ede9', fontSize: 12 }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+              {pieData.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center gap-1.5 text-xs"
+                  style={{ color: '#6b7f78' }}
+                >
+                  <div
+                    className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={{ background: item.color }}
+                  />
+                  {item.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-        <div className="mb-4 flex items-center gap-2">
-          <Building2 size={15} style={{ color: '#1DB87A' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-            Phân tích chi tiết theo phòng ban
-          </h3>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredDepartments.length > 0 ? (
-            filteredDepartments.map((department) => {
-              const usage = Math.min(
-                100,
-                department.employeeCount
-                  ? Math.round((department.avgDays / Math.max(department.avgDays, 1)) * 100)
-                  : 0,
-              );
+      {showDepartmentInsights ? (
+        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
+          <div className="mb-4 flex items-center gap-2">
+            <Building2 size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+              Phân tích chi tiết theo phòng ban
+            </h3>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {filteredDepartments.length > 0 ? (
+              filteredDepartments.map((department) => {
+                const usage = Math.min(
+                  100,
+                  department.employeeCount
+                    ? Math.round((department.avgDays / Math.max(department.avgDays, 1)) * 100)
+                    : 0,
+                );
 
-              return (
-                <div
-                  key={department.label}
-                  className="rounded-xl border p-4 transition-all hover:shadow-sm"
-                  style={{
-                    borderColor: '#e2ede9',
-                    borderLeft: `4px solid ${department.color}`,
-                  }}
-                >
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="rounded px-2 py-0.5 text-xs font-bold text-white"
-                        style={{ background: department.color }}
-                      >
-                        {department.label.slice(0, 2).toUpperCase()}
-                      </span>
-                      <span className="text-sm font-semibold" style={{ color: '#203430' }}>
-                        {department.label}
+                return (
+                  <div
+                    key={department.label}
+                    className="rounded-xl border p-4 transition-all hover:shadow-sm"
+                    style={{
+                      borderColor: '#e2ede9',
+                      borderLeft: `4px solid ${department.color}`,
+                    }}
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="rounded px-2 py-0.5 text-xs font-bold text-white"
+                          style={{ background: department.color }}
+                        >
+                          {department.label.slice(0, 2).toUpperCase()}
+                        </span>
+                        <span className="text-sm font-semibold" style={{ color: '#203430' }}>
+                          {department.label}
+                        </span>
+                      </div>
+                      <span className="text-xs" style={{ color: '#6b7f78' }}>
+                        {department.employeeCount} nhân viên
                       </span>
                     </div>
-                    <span className="text-xs" style={{ color: '#6b7f78' }}>
-                      {department.employeeCount} nhân viên
-                    </span>
-                  </div>
-                  <div className="mb-3 grid grid-cols-4 gap-2 text-center">
-                    {[
-                      {
-                        val: department.totalDays.toFixed(1),
-                        label: 'Ngày nghỉ',
-                        color: department.color,
-                      },
-                      {
-                        val: formatHours(department.otHours),
-                        label: 'Overtime',
-                        color: '#1DB87A',
-                      },
-                      {
-                        val: String(department.employeeCount),
-                        label: 'Nhân sự',
-                        color: '#f59e0b',
-                      },
-                      {
-                        val: department.avgDays.toFixed(1),
-                        label: 'Ngày/NV',
-                        color: '#06b6d4',
-                      },
-                    ].map((metric) => (
-                      <div key={metric.label}>
-                        <p className="text-lg font-bold" style={{ color: metric.color }}>
-                          {metric.val}
-                        </p>
-                        <p className="text-xs" style={{ color: '#6b7f78' }}>
-                          {metric.label}
-                        </p>
+                    <div className="mb-3 grid grid-cols-4 gap-2 text-center">
+                      {[
+                        {
+                          val: department.totalDays.toFixed(1),
+                          label: 'Ngày nghỉ',
+                          color: department.color,
+                        },
+                        {
+                          val: formatHours(department.otHours),
+                          label: 'Overtime',
+                          color: '#1DB87A',
+                        },
+                        {
+                          val: String(department.employeeCount),
+                          label: 'Nhân sự',
+                          color: '#f59e0b',
+                        },
+                        {
+                          val: department.avgDays.toFixed(1),
+                          label: 'Ngày/NV',
+                          color: '#06b6d4',
+                        },
+                      ].map((metric) => (
+                        <div key={metric.label}>
+                          <p className="text-lg font-bold" style={{ color: metric.color }}>
+                            {metric.val}
+                          </p>
+                          <p className="text-xs" style={{ color: '#6b7f78' }}>
+                            {metric.label}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div
+                        className="mb-1 flex justify-between text-xs"
+                        style={{ color: '#6b7f78' }}
+                      >
+                        <span>Mức tải nghỉ phép / nhân sự</span>
+                        <span className="font-semibold">{department.avgDays.toFixed(1)} ngày</span>
                       </div>
-                    ))}
+                      <div
+                        className="h-1.5 overflow-hidden rounded-full"
+                        style={{ background: '#f0f4f2' }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.max(10, usage)}%`,
+                            background: department.color,
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="mb-1 flex justify-between text-xs" style={{ color: '#6b7f78' }}>
-                      <span>Mức tải nghỉ phép / nhân sự</span>
-                      <span className="font-semibold">{department.avgDays.toFixed(1)} ngày</span>
+                );
+              })
+            ) : (
+              <div
+                className="rounded-xl border p-6 text-center text-sm md:col-span-2"
+                style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+              >
+                {isLoading ? 'Đang tải dữ liệu phòng ban...' : 'Không có dữ liệu phòng ban.'}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {showTopUsers ? (
+          <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <Trophy size={15} style={{ color: '#f59e0b' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                Top 10 nhân viên nghỉ phép nhiều nhất
+              </h3>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: '#f7f7f7' }}>
+                  {['#', 'Nhân viên', 'Phòng ban', 'Số ngày', '%'].map((header) => (
+                    <th
+                      key={header}
+                      className="px-3 py-2.5 text-left text-xs font-semibold"
+                      style={{ color: '#6b7f78' }}
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTopUsers.length > 0 ? (
+                  filteredTopUsers.map((user, index) => {
+                    const color = getDepartmentColor(index);
+                    const bg = getDepartmentBg(index);
+
+                    return (
+                      <tr
+                        key={`${user.rank}-${user.name}`}
+                        className="border-b last:border-0"
+                        style={{ borderColor: '#f0f4f2' }}
+                      >
+                        <td
+                          className="px-3 py-3 text-xs font-bold"
+                          style={{ color: user.rank <= 3 ? '#f59e0b' : '#6b7f78' }}
+                        >
+                          {user.rank}
+                        </td>
+                        <td className="px-3 py-3 text-xs font-medium" style={{ color: '#203430' }}>
+                          {user.name}
+                        </td>
+                        <td className="px-3 py-3">
+                          <span
+                            className="rounded px-2 py-0.5 text-xs font-bold"
+                            style={{ background: bg, color }}
+                          >
+                            {user.department ?? 'Chưa rõ'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-xs font-bold" style={{ color: '#203430' }}>
+                          {user.days}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-1.5 flex-1 overflow-hidden rounded-full"
+                              style={{ background: '#f0f4f2' }}
+                            >
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${user.pct}%`, background: '#1DB87A' }}
+                              />
+                            </div>
+                            <span
+                              className="min-w-[32px] text-xs font-semibold"
+                              style={{ color: '#203430' }}
+                            >
+                              {user.pct}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-3 py-6 text-center text-sm"
+                      style={{ color: '#6b7f78' }}
+                    >
+                      {isLoading ? 'Đang tải top users...' : 'Không có dữ liệu top users.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
+        {showLeaveInsights || showOvertimeInsights ? (
+          <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <BarChart2 size={15} style={{ color: '#1DB87A' }} />
+              <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                Phân tích theo loại nghỉ phép
+              </h3>
+            </div>
+            <div className="space-y-3">
+              {leaveTotals.types.map((type) => (
+                <div key={type.code} className="flex items-center gap-3">
+                  <span
+                    className="w-12 shrink-0 rounded px-1 py-0.5 text-center text-xs font-bold text-white"
+                    style={{ background: type.color }}
+                  >
+                    {type.code}
+                  </span>
+                  <div className="flex-1">
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span style={{ color: '#203430' }}>{type.label}</span>
+                      <span className="font-semibold" style={{ color: '#203430' }}>
+                        {type.days} lượt ({type.pct}%)
+                      </span>
                     </div>
                     <div
-                      className="h-1.5 overflow-hidden rounded-full"
+                      className="h-2 overflow-hidden rounded-full"
                       style={{ background: '#f0f4f2' }}
                     >
                       <div
                         className="h-full rounded-full"
-                        style={{
-                          width: `${Math.max(10, usage)}%`,
-                          background: department.color,
-                        }}
+                        style={{ width: `${Math.max(type.pct, 4)}%`, background: type.color }}
                       />
                     </div>
                   </div>
                 </div>
-              );
-            })
-          ) : (
-            <div
-              className="rounded-xl border p-6 text-center text-sm md:col-span-2"
-              style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
-            >
-              {isLoading ? 'Đang tải dữ liệu phòng ban...' : 'Không có dữ liệu phòng ban.'}
+              ))}
             </div>
-          )}
-        </div>
+            <p className="mt-4 text-xs" style={{ color: '#6b7f78' }}>
+              Báo cáo hiện lấy trực tiếp từ endpoint `leave` trong phạm vi lọc dang chon.
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-          <div className="mb-4 flex items-center gap-2">
-            <Trophy size={15} style={{ color: '#f59e0b' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-              Top 10 nhân viên nghỉ phép nhiều nhất
-            </h3>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: '#f7f7f7' }}>
-                {['#', 'Nhân viên', 'Phòng ban', 'Số ngày', '%'].map((header) => (
-                  <th
-                    key={header}
-                    className="px-3 py-2.5 text-left text-xs font-semibold"
-                    style={{ color: '#6b7f78' }}
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTopUsers.length > 0 ? (
-                filteredTopUsers.map((user, index) => {
-                  const color = getDepartmentColor(index);
-                  const bg = getDepartmentBg(index);
-
-                  return (
-                    <tr
-                      key={`${user.rank}-${user.name}`}
-                      className="border-b last:border-0"
-                      style={{ borderColor: '#f0f4f2' }}
-                    >
-                      <td
-                        className="px-3 py-3 text-xs font-bold"
-                        style={{ color: user.rank <= 3 ? '#f59e0b' : '#6b7f78' }}
-                      >
-                        {user.rank}
-                      </td>
-                      <td className="px-3 py-3 text-xs font-medium" style={{ color: '#203430' }}>
-                        {user.name}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className="rounded px-2 py-0.5 text-xs font-bold"
-                          style={{ background: bg, color }}
-                        >
-                          {user.department ?? 'Chưa rõ'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-xs font-bold" style={{ color: '#203430' }}>
-                        {user.days}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-1.5 flex-1 overflow-hidden rounded-full"
-                            style={{ background: '#f0f4f2' }}
-                          >
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${user.pct}%`, background: '#1DB87A' }}
-                            />
-                          </div>
-                          <span
-                            className="min-w-[32px] text-xs font-semibold"
-                            style={{ color: '#203430' }}
-                          >
-                            {user.pct}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-3 py-6 text-center text-sm"
-                    style={{ color: '#6b7f78' }}
-                  >
-                    {isLoading ? 'Đang tải top users...' : 'Không có dữ liệu top users.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-          <div className="mb-4 flex items-center gap-2">
-            <BarChart2 size={15} style={{ color: '#1DB87A' }} />
-            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-              Phân tích theo loại nghỉ phép
-            </h3>
-          </div>
-          <div className="space-y-3">
-            {leaveTotals.types.map((type) => (
-              <div key={type.code} className="flex items-center gap-3">
-                <span
-                  className="w-12 shrink-0 rounded px-1 py-0.5 text-center text-xs font-bold text-white"
-                  style={{ background: type.color }}
-                >
-                  {type.code}
-                </span>
-                <div className="flex-1">
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span style={{ color: '#203430' }}>{type.label}</span>
-                    <span className="font-semibold" style={{ color: '#203430' }}>
-                      {type.days} lượt ({type.pct}%)
-                    </span>
-                  </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-full"
-                    style={{ background: '#f0f4f2' }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${Math.max(type.pct, 4)}%`, background: type.color }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs" style={{ color: '#6b7f78' }}>
-            Báo cáo hiện lấy trực tiếp từ endpoint `leave`, nên các loại nghỉ chưa có trong API tổng
-            hợp sẽ chưa hiển thị ở khối này.
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="overflow-hidden rounded-xl border bg-white"
-        style={{ borderColor: '#e2ede9' }}
-      >
+      {showMonthlyTable ? (
         <div
-          className="flex items-center gap-2 border-b px-5 py-3"
+          className="overflow-hidden rounded-xl border bg-white"
           style={{ borderColor: '#e2ede9' }}
         >
-          <BarChart2 size={15} style={{ color: '#1DB87A' }} />
-          <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-            Báo cáo chi tiết theo tháng
-          </h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ background: '#203430' }}>
-                {[
-                  'Tháng',
-                  'Phép năm',
-                  'Nghỉ ốm',
-                  'WFH',
-                  'Tổng lượt',
-                  'Overtime (h)',
-                  'Phiếu OT',
-                  'Loại chính',
-                  'Thao tác',
-                ].map((header) => (
-                  <th
-                    key={header}
-                    className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-white"
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyTable.length > 0 ? (
-                monthlyTable.map((row) => (
-                  <tr
-                    key={row.month}
-                    className="border-b transition-colors last:border-0 hover:bg-gray-50"
-                    style={{ borderColor: '#f0f4f2' }}
-                  >
-                    <td className="px-4 py-3 text-xs font-bold" style={{ color: '#203430' }}>
-                      {row.month}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
-                      {row.annual}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
-                      {row.sick}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
-                      {row.wfh}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-medium" style={{ color: '#1DB87A' }}>
-                      {row.totalRequests}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
-                      {row.otHours.toFixed(1)}
-                    </td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
-                      {row.otCount}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className="rounded px-2 py-1 text-xs font-bold text-white"
-                        style={{ background: rateColor(row.annualRate) }}
-                      >
-                        {row.dominantType}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        disabled
-                        title="Backend hiện chưa có endpoint chi tiết theo tháng."
-                        className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-lg border opacity-60"
-                        style={{ borderColor: '#e2ede9' }}
-                      >
-                        <Eye size={13} style={{ color: '#3b82f6' }} />
-                      </button>
+          <div
+            className="flex items-center gap-2 border-b px-5 py-3"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <BarChart2 size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+              Báo cáo chi tiết theo tháng
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: '#203430' }}>
+                  {[
+                    'Tháng',
+                    'Phép năm',
+                    'Nghỉ ốm',
+                    'WFH',
+                    'Tổng lượt',
+                    'Overtime (h)',
+                    'Phiếu OT',
+                    'Loại chính',
+                    'Thao tác',
+                  ].map((header) => (
+                    <th
+                      key={header}
+                      className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-white"
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyTable.length > 0 ? (
+                  monthlyTable.map((row) => (
+                    <tr
+                      key={row.month}
+                      className="border-b transition-colors last:border-0 hover:bg-gray-50"
+                      style={{ borderColor: '#f0f4f2' }}
+                    >
+                      <td className="px-4 py-3 text-xs font-bold" style={{ color: '#203430' }}>
+                        {row.month}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
+                        {row.annual}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
+                        {row.sick}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
+                        {row.wfh}
+                      </td>
+                      <td className="px-4 py-3 text-xs font-medium" style={{ color: '#1DB87A' }}>
+                        {row.totalRequests}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
+                        {row.otHours.toFixed(1)}
+                      </td>
+                      <td className="px-4 py-3 text-xs" style={{ color: '#203430' }}>
+                        {row.otCount}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="rounded px-2 py-1 text-xs font-bold text-white"
+                          style={{ background: rateColor(row.annualRate) }}
+                        >
+                          {row.dominantType}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          disabled
+                          title="Backend hiện chưa có endpoint chi tiết theo tháng."
+                          className="flex h-7 w-7 cursor-not-allowed items-center justify-center rounded-lg border opacity-60"
+                          style={{ borderColor: '#e2ede9' }}
+                        >
+                          <Eye size={13} style={{ color: '#3b82f6' }} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-4 py-6 text-center text-sm"
+                      style={{ color: '#6b7f78' }}
+                    >
+                      {isLoading ? 'Đang tải bảng tổng hợp...' : 'Chưa có dữ liệu theo tháng.'}
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-6 text-center text-sm"
-                    style={{ color: '#6b7f78' }}
-                  >
-                    {isLoading ? 'Đang tải bảng tổng hợp...' : 'Chưa có dữ liệu theo tháng.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

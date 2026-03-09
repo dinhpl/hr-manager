@@ -1,6 +1,16 @@
 export type FrontendRole = 'employee' | 'manager' | 'hr' | 'admin';
 export type LeaveRequestMode = 'FULL_DAY' | 'MORNING_HALF_DAY' | 'AFTERNOON_HALF_DAY' | 'HOURLY';
 
+export type LeavePolicyConfig = {
+  advanceRequestDays?: number;
+  maxConsecutiveDays?: number;
+};
+
+export type ApprovalFlowConfig = {
+  autoApproveWFH?: boolean;
+  requireDocumentTypes?: string[];
+};
+
 const API_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const VN_OFFSET_MINUTES = 7 * 60;
@@ -286,6 +296,88 @@ export function getLeaveRequestReasonInput(reason?: string | null) {
     })
     .join('\n')
     .trim();
+}
+
+export function getVietnamTodayDateInput() {
+  return formatApiDateTime(new Date()).slice(0, 10);
+}
+
+export function addDaysToDateInput(value: string, days: number) {
+  const date = parseApiDateTime(value);
+  if (!date) return '';
+
+  const nextDate = new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+  return toDateInputValue(nextDate);
+}
+
+export function buildLeavePolicyHints(
+  leavePolicy?: LeavePolicyConfig | null,
+  approvalFlow?: ApprovalFlowConfig | null,
+) {
+  const hints: string[] = [];
+
+  if (typeof leavePolicy?.advanceRequestDays === 'number') {
+    hints.push(`Gui truoc it nhat ${leavePolicy.advanceRequestDays} ngay.`);
+  }
+
+  if (typeof leavePolicy?.maxConsecutiveDays === 'number') {
+    hints.push(`Toi da ${leavePolicy.maxConsecutiveDays} ngay nghi lien tiep moi don.`);
+  }
+
+  if ((approvalFlow?.requireDocumentTypes ?? []).length > 0) {
+    hints.push(
+      `Bat buoc dinh kem file voi: ${(approvalFlow?.requireDocumentTypes ?? []).join(', ')}.`,
+    );
+  }
+
+  if (approvalFlow?.autoApproveWFH) {
+    hints.push('WFH co the duoc duyet tu dong theo cau hinh hien tai.');
+  }
+
+  return hints;
+}
+
+export function getLeaveRequestPolicyValidation(params: {
+  fromDate: string;
+  toDate: string;
+  days: number;
+  leaveTypeCode?: string;
+  hasAttachment: boolean;
+  leavePolicy?: LeavePolicyConfig | null;
+  approvalFlow?: ApprovalFlowConfig | null;
+}) {
+  const { fromDate, toDate, days, leaveTypeCode, hasAttachment, leavePolicy, approvalFlow } =
+    params;
+
+  if (!fromDate || !toDate || days <= 0) return null;
+
+  if (typeof leavePolicy?.advanceRequestDays === 'number') {
+    const earliestAllowedDate = addDaysToDateInput(
+      getVietnamTodayDateInput(),
+      leavePolicy.advanceRequestDays,
+    );
+
+    if (earliestAllowedDate && fromDate < earliestAllowedDate) {
+      return `Don nghi phai duoc gui truoc it nhat ${leavePolicy.advanceRequestDays} ngay.`;
+    }
+  }
+
+  if (
+    typeof leavePolicy?.maxConsecutiveDays === 'number' &&
+    countCalendarDays(fromDate, toDate) > leavePolicy.maxConsecutiveDays
+  ) {
+    return `So ngay nghi lien tiep vuot gioi han ${leavePolicy.maxConsecutiveDays} ngay.`;
+  }
+
+  if (
+    leaveTypeCode &&
+    (approvalFlow?.requireDocumentTypes ?? []).includes(leaveTypeCode) &&
+    !hasAttachment
+  ) {
+    return `Loai nghi ${leaveTypeCode} bat buoc dinh kem ho so/giay to.`;
+  }
+
+  return null;
 }
 
 export function countCalendarDays(fromDate: string, toDate: string): number {

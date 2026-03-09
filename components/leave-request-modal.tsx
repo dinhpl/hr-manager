@@ -38,15 +38,21 @@ import {
 import { toast } from 'sonner';
 import { apiRequest, apiClient, getStoredUser } from '@/lib/api-client';
 import {
+  addDaysToDateInput,
+  buildLeavePolicyHints,
   countCalendarDays,
+  getLeaveRequestPolicyValidation,
   getDateTimeValue,
   getLeaveRequestApiPayload,
+  getVietnamTodayDateInput,
   HOURLY_LEAVE_TIME_MAX,
   HOURLY_LEAVE_TIME_MIN,
   HOURLY_LEAVE_TIME_STEP_SECONDS,
   LEAVE_REQUEST_MODE_CONFIG,
   numberValue,
   toFrontendRole,
+  type ApprovalFlowConfig,
+  type LeavePolicyConfig,
   type LeaveRequestMode,
 } from '@/lib/hr-utils';
 
@@ -79,6 +85,9 @@ interface UserInfo {
   id: string;
   role: string;
 }
+
+interface ApprovalFlowResponse extends ApprovalFlowConfig {}
+interface LeavePolicyResponse extends LeavePolicyConfig {}
 
 export interface LeaveRequestData {
   id?: string;
@@ -130,6 +139,8 @@ export default function LeaveRequestModal({
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [requestForUserId, setRequestForUserId] = useState('');
+  const [leavePolicy, setLeavePolicy] = useState<LeavePolicyResponse | null>(null);
+  const [approvalFlow, setApprovalFlow] = useState<ApprovalFlowResponse | null>(null);
 
   const isEditMode = !!editData?.id;
   const initialFormState = getInitialFormState(editData);
@@ -173,12 +184,16 @@ export default function LeaveRequestModal({
       apiClient.get<LeaveTypeOption[]>('/api/leave-types'),
       apiClient.get<UserDropdownItem[]>('/api/users/dropdown'),
       apiClient.get<UserInfo>('/api/auth/me'),
+      apiClient.get<LeavePolicyResponse>('/api/settings/leave-policy'),
+      apiClient.get<ApprovalFlowResponse>('/api/settings/approval-flow'),
     ])
-      .then(async ([leaveTypeRes, handoverRes, meRes]) => {
+      .then(async ([leaveTypeRes, handoverRes, meRes, leavePolicyRes, approvalFlowRes]) => {
         const currentUser = meRes.data;
         setLeaveTypes(leaveTypeRes.data);
         setHandoverPersons(handoverRes.data);
         setUserInfo(currentUser);
+        setLeavePolicy(leavePolicyRes.data);
+        setApprovalFlow(approvalFlowRes.data);
         setRequestForUserId(
           (currentValue) => currentValue || editData?.requestForUserId || currentUser.id,
         );
@@ -294,6 +309,16 @@ export default function LeaveRequestModal({
   };
 
   const balanceWarning = checkBalance();
+  const policyHints = buildLeavePolicyHints(leavePolicy, approvalFlow);
+  const policyValidationMessage = getLeaveRequestPolicyValidation({
+    fromDate,
+    toDate,
+    days,
+    leaveTypeCode: selectedLeaveType?.code,
+    hasAttachment: Boolean(attachedFile),
+    leavePolicy,
+    approvalFlow,
+  });
 
   useEffect(() => {
     if (durationMode === 'HOURLY') {
@@ -371,6 +396,11 @@ export default function LeaveRequestModal({
         type: 'warning',
         message: 'Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.',
       });
+      return;
+    }
+
+    if (policyValidationMessage) {
+      setAlert({ type: 'warning', message: policyValidationMessage });
       return;
     }
 
@@ -555,6 +585,35 @@ export default function LeaveRequestModal({
               ))}
             </div>
           </div>
+
+          {policyHints.length > 0 ? (
+            <div
+              className="rounded-xl p-4"
+              style={{ background: '#fffbeb', border: '1px solid #fde68a' }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Info size={15} style={{ color: '#d97706' }} />
+                <span className="text-sm font-semibold" style={{ color: '#92400e' }}>
+                  Quy định áp dụng
+                </span>
+              </div>
+              <div className="space-y-1 text-xs" style={{ color: '#92400e' }}>
+                {policyHints.map((hint) => (
+                  <p key={hint}>- {hint}</p>
+                ))}
+                {typeof leavePolicy?.advanceRequestDays === 'number' ? (
+                  <p>
+                    - Ngày bắt đầu sớm nhất từ{' '}
+                    {addDaysToDateInput(
+                      getVietnamTodayDateInput(),
+                      leavePolicy.advanceRequestDays,
+                    ) || 'hom nay'}
+                    .
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           {/* Alert */}
           {alert && (
@@ -787,6 +846,21 @@ export default function LeaveRequestModal({
                 </span>
               </div>
             )}
+
+            {policyValidationMessage ? (
+              <div
+                className="flex items-start gap-3 px-4 py-3 rounded-lg"
+                style={{ background: '#fff7ed', border: '1px solid #fdba74' }}
+              >
+                <AlertTriangle
+                  size={15}
+                  style={{ color: '#ea580c', flexShrink: 0, marginTop: 2 }}
+                />
+                <span className="text-sm" style={{ color: '#c2410c' }}>
+                  {policyValidationMessage}
+                </span>
+              </div>
+            ) : null}
 
             {/* Reason */}
             <div>

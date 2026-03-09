@@ -3,13 +3,14 @@
 import { X, Calendar, User, FileText, CheckCircle2, Clock, ChevronRight } from 'lucide-react';
 
 export interface CalendarDayUser {
+  requestId?: string;
   id?: string;
   name: string;
   status: 'approved' | 'pending';
   reason?: string;
   leaveType?: { code: string; name: string; color: string };
   approver?: string;
-  department?: string;
+  department?: string | null;
   position?: string;
 }
 
