@@ -18,6 +18,7 @@ import { dashboardRouter } from './modules/dashboard/dashboard.router';
 import { reportsRouter } from './modules/reports/reports.router';
 import { settingsRouter } from './modules/settings/settings.router';
 import { departmentsRouter } from './modules/departments/departments.router';
+import { notificationsRouter } from './modules/notifications/notifications.router';
 
 export function createApp(): Application {
   const app = express();
@@ -83,6 +84,7 @@ export function createApp(): Application {
   app.use('/api/reports', reportsRouter);
   app.use('/api/settings', settingsRouter);
   app.use('/api/departments', departmentsRouter);
+  app.use('/api/notifications', notificationsRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === 'development') {

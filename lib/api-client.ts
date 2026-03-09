@@ -103,7 +103,7 @@ export const api = axios.create({
   },
 });
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   try {
     const response = await axios.post<ApiResponse<{ accessToken: string }>>(
       `${API_URL}/api/auth/refresh-token`,

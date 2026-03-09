@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  Bell,
+  Check,
   LayoutDashboard,
   History,
   CheckCircle2,
@@ -16,7 +18,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
+import { useNotifications } from '@/hooks/use-notifications';
 import { getRoleLabel, toFrontendRole } from '@/lib/hr-utils';
+import { formatNotificationTime, getNotificationHref } from '@/lib/notification-utils';
 
 const NAV_ITEMS = [
   {
@@ -86,7 +90,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const notifications = useNotifications(Boolean(userInfo));
 
   useEffect(() => {
     apiClient
@@ -218,11 +224,126 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setNotifOpen((p) => !p);
+                  setProfileOpen(false);
+                }}
+                className="relative w-9 h-9 rounded-lg flex items-center justify-center hover:bg-accent transition-colors"
+                aria-label="Thông báo"
+              >
+                <Bell size={17} style={{ color: '#6b7f78' }} />
+                {notifications.unreadCount > 0 ? (
+                  <span
+                    className="absolute top-1.5 right-1.5 min-w-4 h-4 rounded-full px-1 text-white text-[10px] flex items-center justify-center font-bold"
+                    style={{ background: '#ef4444' }}
+                  >
+                    {notifications.unreadCount > 9 ? '9+' : notifications.unreadCount}
+                  </span>
+                ) : null}
+              </button>
+              {notifOpen ? (
+                <div
+                  className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border bg-white shadow-lg z-20"
+                  style={{ borderColor: '#e2ede9' }}
+                >
+                  <div
+                    className="flex items-center justify-between gap-3 border-b px-4 py-3"
+                    style={{ borderColor: '#e2ede9' }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                        Thông báo
+                      </p>
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
+                        {notifications.isConnecting
+                          ? 'Đang kết nối realtime...'
+                          : 'Cập nhật tự động qua SSE'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void notifications.markAllAsRead()}
+                      disabled={notifications.unreadCount === 0}
+                      className="text-xs font-semibold disabled:opacity-50"
+                      style={{ color: '#1DB87A' }}
+                    >
+                      Đánh dấu đã đọc
+                    </button>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto">
+                    {notifications.isLoading ? (
+                      <div className="px-4 py-6 text-sm text-center" style={{ color: '#6b7f78' }}>
+                        Đang tải thông báo...
+                      </div>
+                    ) : notifications.items.length === 0 ? (
+                      <div className="px-4 py-6 text-sm text-center" style={{ color: '#6b7f78' }}>
+                        Chưa có thông báo nào.
+                      </div>
+                    ) : (
+                      notifications.items.map((item) => (
+                        <Link
+                          key={item.id}
+                          href={getNotificationHref(item)}
+                          onClick={() => {
+                            setNotifOpen(false);
+                            if (!item.isRead) {
+                              void notifications.markAsRead(item.id);
+                            }
+                          }}
+                          className="block border-b px-4 py-3 transition-colors hover:bg-[#f7fdfb]"
+                          style={{
+                            borderColor: '#f0f4f2',
+                            background: item.isRead ? '#ffffff' : '#f8fffc',
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                              style={{ background: item.isRead ? '#cbd5e1' : '#1DB87A' }}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                                  {item.title}
+                                </p>
+                                <span className="shrink-0 text-[11px]" style={{ color: '#6b7f78' }}>
+                                  {formatNotificationTime(item.createdAt)}
+                                </span>
+                              </div>
+                              <p
+                                className="mt-1 text-xs leading-relaxed"
+                                style={{ color: '#6b7f78' }}
+                              >
+                                {item.message}
+                              </p>
+                            </div>
+                          </div>
+                        </Link>
+                      ))
+                    )}
+                  </div>
+                  {notifications.hasMore ? (
+                    <button
+                      type="button"
+                      onClick={() => void notifications.loadMore()}
+                      className="flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-medium"
+                      style={{ color: '#203430' }}
+                    >
+                      <Check size={14} /> Xem thêm
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
             {/* Avatar + name */}
             <div className="relative">
               <button
                 onClick={() => {
                   setProfileOpen((p) => !p);
+                  setNotifOpen(false);
                 }}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-accent transition-colors"
               >

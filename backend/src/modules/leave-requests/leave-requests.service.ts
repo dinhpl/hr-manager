@@ -9,6 +9,11 @@ import {
 } from '../../utils/date-time';
 import { buildMeta, getPaginationParams } from '../../utils/pagination';
 import { deductBalance, restoreBalance } from '../leave-balances/leave-balances.service';
+import {
+  buildLeaveRequestNotification,
+  createManyNotifications,
+  createNotification,
+} from '../notifications/notifications.service';
 import { getApprovalFlow, getLeavePolicy } from '../settings/settings.service';
 import {
   CreateLeaveRequestDto,
@@ -363,6 +368,11 @@ async function serializeRequestById(tx: Prisma.TransactionClient, id: bigint) {
   return serializeLeaveRequestDates(request);
 }
 
+function getActorName(requestingUser: AuthUser, fallback?: string | null) {
+  if (fallback && fallback.trim()) return fallback;
+  return requestingUser.role === 'EMPLOYEE' ? 'Nhan vien' : requestingUser.role;
+}
+
 export async function getLeaveRequests(requestingUser: AuthUser, query: GetLeaveRequestsQuery) {
   const { page, limit, skip } = getPaginationParams(query);
   const where = buildScopeFilter(requestingUser, query);
@@ -423,7 +433,7 @@ export async function createLeaveRequest(
     attachmentUrl,
   });
 
-  return prisma.$transaction(async (tx) => {
+  const createdRequest = await prisma.$transaction(async (tx) => {
     const shouldAutoApprove = ruleResult.autoApproveWFH && ruleResult.leaveTypeCode === 'WFH';
     const request = await tx.leaveRequest.create({
       data: {
@@ -454,6 +464,38 @@ export async function createLeaveRequest(
 
     return serializeRequestById(tx, request.id);
   });
+
+  if (createdRequest.status === 'APPROVED') {
+    await createNotification(
+      buildLeaveRequestNotification({
+        recipientUserId: BigInt(createdRequest.user.id),
+        type: 'LEAVE_REQUEST_APPROVED',
+        requestId: BigInt(createdRequest.id),
+        actorName: createdRequest.approver?.fullName || 'He thong',
+        requesterName: createdRequest.user?.fullName || 'Nhan vien',
+        leaveTypeName:
+          createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
+        fromDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.fromDate)),
+        toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
+      }),
+    );
+  } else if (createdRequest.approver?.id) {
+    await createNotification(
+      buildLeaveRequestNotification({
+        recipientUserId: BigInt(createdRequest.approver.id),
+        type: 'LEAVE_REQUEST_CREATED',
+        requestId: BigInt(createdRequest.id),
+        actorName: createdRequest.user?.fullName || 'Nhan vien',
+        requesterName: createdRequest.user?.fullName || 'Nhan vien',
+        leaveTypeName:
+          createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
+        fromDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.fromDate)),
+        toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
+      }),
+    );
+  }
+
+  return createdRequest;
 }
 
 export async function updateLeaveRequest(
@@ -519,7 +561,7 @@ export async function updateLeaveRequest(
 }
 
 export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, note?: string) {
-  return prisma.$transaction(async (tx) => {
+  const approvedRequest = await prisma.$transaction(async (tx) => {
     const request = await tx.leaveRequest.findUnique({
       where: { id },
       include: LEAVE_REQUEST_INCLUDE,
@@ -579,6 +621,22 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
 
     return serializeRequestById(tx, id);
   });
+
+  await createNotification(
+    buildLeaveRequestNotification({
+      recipientUserId: BigInt(approvedRequest.user.id),
+      type: 'LEAVE_REQUEST_APPROVED',
+      requestId: BigInt(approvedRequest.id),
+      actorName: getActorName(requestingUser, approvedRequest.approver?.fullName),
+      requesterName: approvedRequest.user.fullName || 'Nhan vien',
+      leaveTypeName:
+        approvedRequest.leaveType?.name || approvedRequest.leaveType?.code || 'nghi phep',
+      fromDateLabel: getVietnamDatePart(parseVietnamDateTime(approvedRequest.fromDate)),
+      toDateLabel: getVietnamDatePart(parseVietnamDateTime(approvedRequest.toDate)),
+    }),
+  );
+
+  return approvedRequest;
 }
 
 export async function rejectLeaveRequest(id: bigint, requestingUser: AuthUser, note?: string) {
@@ -605,11 +663,27 @@ export async function rejectLeaveRequest(id: bigint, requestingUser: AuthUser, n
     include: LEAVE_REQUEST_INCLUDE,
   });
 
-  return serializeLeaveRequestDates(updatedRequest);
+  const serializedRequest = serializeLeaveRequestDates(updatedRequest);
+
+  await createNotification(
+    buildLeaveRequestNotification({
+      recipientUserId: BigInt(serializedRequest.user.id),
+      type: 'LEAVE_REQUEST_REJECTED',
+      requestId: BigInt(serializedRequest.id),
+      actorName: getActorName(requestingUser, serializedRequest.approver?.fullName),
+      requesterName: serializedRequest.user.fullName || 'Nhan vien',
+      leaveTypeName:
+        serializedRequest.leaveType?.name || serializedRequest.leaveType?.code || 'nghi phep',
+      fromDateLabel: getVietnamDatePart(parseVietnamDateTime(serializedRequest.fromDate)),
+      toDateLabel: getVietnamDatePart(parseVietnamDateTime(serializedRequest.toDate)),
+    }),
+  );
+
+  return serializedRequest;
 }
 
 export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
-  return prisma.$transaction(async (tx) => {
+  const cancelledRequest = await prisma.$transaction(async (tx) => {
     const request = await tx.leaveRequest.findUnique({
       where: { id },
       include: LEAVE_REQUEST_INCLUDE,
@@ -653,6 +727,31 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
 
     return serializeRequestById(tx, id);
   });
+
+  const recipientIds = new Set<string>();
+  if (cancelledRequest.user?.id) recipientIds.add(cancelledRequest.user.id.toString());
+  if (cancelledRequest.approver?.id) recipientIds.add(cancelledRequest.approver.id.toString());
+
+  await createManyNotifications(
+    Array.from(recipientIds).map((recipientId) =>
+      buildLeaveRequestNotification({
+        recipientUserId: BigInt(recipientId),
+        type: 'LEAVE_REQUEST_CANCELLED',
+        requestId: BigInt(cancelledRequest.id),
+        actorName:
+          cancelledRequest.user?.id === requestingUser.id
+            ? cancelledRequest.user?.fullName || 'Nhan vien'
+            : getActorName(requestingUser),
+        requesterName: cancelledRequest.user?.fullName || 'Nhan vien',
+        leaveTypeName:
+          cancelledRequest.leaveType?.name || cancelledRequest.leaveType?.code || 'nghi phep',
+        fromDateLabel: getVietnamDatePart(parseVietnamDateTime(cancelledRequest.fromDate)),
+        toDateLabel: getVietnamDatePart(parseVietnamDateTime(cancelledRequest.toDate)),
+      }),
+    ),
+  );
+
+  return cancelledRequest;
 }
 
 export async function bulkApproveLeaveRequests(
@@ -660,7 +759,7 @@ export async function bulkApproveLeaveRequests(
   requestingUser: AuthUser,
   note?: string,
 ) {
-  return prisma.$transaction(async (tx) => {
+  const approvedRequests = await prisma.$transaction(async (tx) => {
     const requests = await tx.leaveRequest.findMany({
       where: { id: { in: ids } },
       include: LEAVE_REQUEST_INCLUDE,
@@ -737,8 +836,29 @@ export async function bulkApproveLeaveRequests(
       );
     }
 
-    return { approved: pendingRequests.length, skipped: 0 };
+    const serializedRequests = await Promise.all(
+      pendingRequests.map((request) => serializeRequestById(tx, request.id)),
+    );
+
+    return serializedRequests;
   });
+
+  await createManyNotifications(
+    approvedRequests.map((request) =>
+      buildLeaveRequestNotification({
+        recipientUserId: BigInt(request.user.id),
+        type: 'LEAVE_REQUEST_APPROVED',
+        requestId: BigInt(request.id),
+        actorName: getActorName(requestingUser),
+        requesterName: request.user.fullName || 'Nhan vien',
+        leaveTypeName: request.leaveType?.name || request.leaveType?.code || 'nghi phep',
+        fromDateLabel: getVietnamDatePart(parseVietnamDateTime(request.fromDate)),
+        toDateLabel: getVietnamDatePart(parseVietnamDateTime(request.toDate)),
+      }),
+    ),
+  );
+
+  return { approved: approvedRequests.length, skipped: 0 };
 }
 
 export function getLeaveRequestTimeSummary(value: Date | string | null | undefined) {

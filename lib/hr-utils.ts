@@ -317,21 +317,21 @@ export function buildLeavePolicyHints(
   const hints: string[] = [];
 
   if (typeof leavePolicy?.advanceRequestDays === 'number') {
-    hints.push(`Gui truoc it nhat ${leavePolicy.advanceRequestDays} ngay.`);
+    hints.push(`Gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày.`);
   }
 
   if (typeof leavePolicy?.maxConsecutiveDays === 'number') {
-    hints.push(`Toi da ${leavePolicy.maxConsecutiveDays} ngay nghi lien tiep moi don.`);
+    hints.push(`Tối đa ${leavePolicy.maxConsecutiveDays} ngày nghỉ liên tiếp mỗi đơn.`);
   }
 
-  if ((approvalFlow?.requireDocumentTypes ?? []).length > 0) {
-    hints.push(
-      `Bat buoc dinh kem file voi: ${(approvalFlow?.requireDocumentTypes ?? []).join(', ')}.`,
-    );
-  }
+  // if ((approvalFlow?.requireDocumentTypes ?? []).length > 0) {
+  //   hints.push(
+  //     `Bắt buộc đính kèm file với: ${(approvalFlow?.requireDocumentTypes ?? []).join(', ')}.`,
+  //   );
+  // }
 
   if (approvalFlow?.autoApproveWFH) {
-    hints.push('WFH co the duoc duyet tu dong theo cau hinh hien tai.');
+    hints.push('WFH có thể được duyệt tự động theo cấu hình hiện tại.');
   }
 
   return hints;
@@ -358,7 +358,7 @@ export function getLeaveRequestPolicyValidation(params: {
     );
 
     if (earliestAllowedDate && fromDate < earliestAllowedDate) {
-      return `Don nghi phai duoc gui truoc it nhat ${leavePolicy.advanceRequestDays} ngay.`;
+      return `Đơn nghỉ phải được gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày.`;
     }
   }
 
@@ -366,16 +366,16 @@ export function getLeaveRequestPolicyValidation(params: {
     typeof leavePolicy?.maxConsecutiveDays === 'number' &&
     countCalendarDays(fromDate, toDate) > leavePolicy.maxConsecutiveDays
   ) {
-    return `So ngay nghi lien tiep vuot gioi han ${leavePolicy.maxConsecutiveDays} ngay.`;
+    return `Số ngày nghỉ liên tiếp vượt giới hạn ${leavePolicy.maxConsecutiveDays} ngày.`;
   }
 
-  if (
-    leaveTypeCode &&
-    (approvalFlow?.requireDocumentTypes ?? []).includes(leaveTypeCode) &&
-    !hasAttachment
-  ) {
-    return `Loai nghi ${leaveTypeCode} bat buoc dinh kem ho so/giay to.`;
-  }
+  // if (
+  //   leaveTypeCode &&
+  //   (approvalFlow?.requireDocumentTypes ?? []).includes(leaveTypeCode) &&
+  //   !hasAttachment
+  // ) {
+  //   return `Loại nghỉ ${leaveTypeCode} bắt buộc đính kèm hồ sơ/giấy tờ.`;
+  // }
 
   return null;
 }

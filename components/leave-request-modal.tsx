@@ -607,7 +607,7 @@ export default function LeaveRequestModal({
                     {addDaysToDateInput(
                       getVietnamTodayDateInput(),
                       leavePolicy.advanceRequestDays,
-                    ) || 'hom nay'}
+                    ) || 'hôm nay'}
                     .
                   </p>
                 ) : null}

@@ -34,7 +34,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 
 export async function approve(req: Request, res: Response, next: NextFunction) {
   try {
-    const record = await service.approveOvertime(BigInt(String(req.params.id)), req.user!.id);
+    const record = await service.approveOvertime(BigInt(String(req.params.id)), req.user!);
     sendSuccess(res, record);
   } catch (err) {
     next(err);
@@ -43,7 +43,7 @@ export async function approve(req: Request, res: Response, next: NextFunction) {
 
 export async function reject(req: Request, res: Response, next: NextFunction) {
   try {
-    const record = await service.rejectOvertime(BigInt(String(req.params.id)), req.user!.id);
+    const record = await service.rejectOvertime(BigInt(String(req.params.id)), req.user!);
     sendSuccess(res, record);
   } catch (err) {
     next(err);

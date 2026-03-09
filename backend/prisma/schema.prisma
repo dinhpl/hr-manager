@@ -27,6 +27,21 @@ enum OvertimeStatus {
   REJECTED
 }
 
+enum NotificationType {
+  LEAVE_REQUEST_CREATED
+  LEAVE_REQUEST_APPROVED
+  LEAVE_REQUEST_REJECTED
+  LEAVE_REQUEST_CANCELLED
+  OVERTIME_CREATED
+  OVERTIME_APPROVED
+  OVERTIME_REJECTED
+}
+
+enum NotificationEntityType {
+  LEAVE_REQUEST
+  OVERTIME
+}
+
 model User {
   id              BigInt    @id @default(autoincrement())
   email           String    @unique @db.VarChar(255)
@@ -57,6 +72,7 @@ model User {
   compOffRecords   CompOffRecord[]  @relation("UserCompOffRecords")
   approvedCompOff  CompOffRecord[]  @relation("ApproverCompOffRecords")
   leaveBalances    LeaveBalance[]
+  notifications    Notification[]
 
   @@map("users")
 }
@@ -180,4 +196,23 @@ model Department {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("departments")
+}
+
+model Notification {
+  id         BigInt                 @id @default(autoincrement())
+  userId     BigInt                 @map("user_id")
+  type       NotificationType
+  title      String                 @db.VarChar(255)
+  message    String
+  entityType NotificationEntityType @map("entity_type")
+  entityId   BigInt?                @map("entity_id")
+  isRead     Boolean                @default(false) @map("is_read")
+  readAt     DateTime?              @map("read_at")
+  createdAt  DateTime               @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

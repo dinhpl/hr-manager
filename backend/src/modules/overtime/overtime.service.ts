@@ -1,6 +1,10 @@
 import prisma from '../../config/prisma';
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
 import { UserRole } from '@prisma/client';
+import {
+  buildOvertimeNotification,
+  createNotification,
+} from '../notifications/notifications.service';
 import { CreateOvertimeDto, GetOvertimeQuery } from './overtime.validation';
 
 const COMP_OFF_RATE: Record<string, number> = {
@@ -15,9 +19,15 @@ function detectOtType(date: Date): 'weekday' | 'weekend' {
 }
 
 const OVERTIME_INCLUDE = {
-  user: { select: { id: true, fullName: true, department: true } },
+  user: { select: { id: true, fullName: true, department: true, managerId: true } },
   approver: { select: { id: true, fullName: true } },
 } as const;
+
+type AuthUser = {
+  id: bigint;
+  role: UserRole;
+  username?: string;
+};
 
 function buildScopeFilter(user: { id: bigint; role: UserRole }, query: GetOvertimeQuery) {
   const where: Record<string, unknown> = {};
@@ -46,6 +56,36 @@ function enrichRecord(r: { date: Date; hours: { toNumber?: () => number } | numb
       ? (r.hours as { toNumber: () => number }).toNumber()
       : Number(r.hours);
   return { otType, compOffHours: hours * COMP_OFF_RATE[otType] };
+}
+
+async function resolveApproverIdForUser(userId: bigint) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      fullName: true,
+      manager: { select: { id: true, role: true, isActive: true } },
+    },
+  });
+
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { status: 404 });
+  }
+
+  if (user.manager?.isActive && ['MANAGER', 'HR', 'ADMIN'].includes(user.manager.role)) {
+    return user.manager.id;
+  }
+
+  const fallbackApprover = await prisma.user.findFirst({
+    where: { isActive: true, role: { in: ['HR', 'ADMIN'] } },
+    select: { id: true },
+    orderBy: [{ role: 'asc' }, { fullName: 'asc' }],
+  });
+
+  if (!fallbackApprover) {
+    throw Object.assign(new Error('No overtime approver available'), { status: 400 });
+  }
+
+  return fallbackApprover.id;
 }
 
 export async function getOvertimes(user: { id: bigint; role: UserRole }, query: GetOvertimeQuery) {
@@ -82,39 +122,73 @@ export async function getOvertimeById(id: bigint, user: { id: bigint; role: User
   if (user.role === 'EMPLOYEE' && record.userId !== user.id) {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
   }
+  if (
+    user.role === 'MANAGER' &&
+    record.userId !== user.id &&
+    record.approverId !== user.id &&
+    record.user.managerId !== user.id
+  ) {
+    throw Object.assign(new Error('Forbidden'), { status: 403 });
+  }
 
   return { ...record, ...enrichRecord(record) };
 }
 
 export async function createOvertime(userId: bigint, data: CreateOvertimeDto) {
-  return prisma.overtimeRecord.create({
+  const approverId = await resolveApproverIdForUser(userId);
+  const record = await prisma.overtimeRecord.create({
     data: {
       userId,
       date: new Date(data.date),
       hours: data.hours,
       reason: data.reason,
       status: 'PENDING',
+      approverId,
     },
-    include: { user: { select: { id: true, fullName: true } } },
+    include: {
+      user: { select: { id: true, fullName: true } },
+      approver: { select: { id: true, fullName: true } },
+    },
   });
+
+  await createNotification(
+    buildOvertimeNotification({
+      recipientUserId: approverId,
+      type: 'OVERTIME_CREATED',
+      overtimeId: record.id,
+      actorName: record.user.fullName || 'Nhan vien',
+      requesterName: record.user.fullName || 'Nhan vien',
+      dateLabel: record.date.toLocaleDateString('vi-VN'),
+      hours: Number(record.hours),
+    }),
+  );
+
+  return record;
 }
 
-export async function approveOvertime(id: bigint, approverId: bigint) {
-  const record = await prisma.overtimeRecord.findUnique({ where: { id } });
+export async function approveOvertime(id: bigint, approver: AuthUser) {
+  const record = await prisma.overtimeRecord.findUnique({
+    where: { id },
+    include: { user: { select: { fullName: true } } },
+  });
   if (!record || record.status !== 'PENDING') {
     throw Object.assign(new Error('Cannot approve: record not found or not pending'), {
       status: 400,
     });
   }
 
+  if (approver.role === 'MANAGER' && record.approverId && record.approverId !== approver.id) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+
   const otType = detectOtType(record.date);
   const compOffHours = Number(record.hours) * COMP_OFF_RATE[otType];
   const compOffDays = compOffHours / 8;
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.overtimeRecord.update({
       where: { id },
-      data: { status: 'APPROVED', approverId, approvedAt: new Date() },
+      data: { status: 'APPROVED', approverId: approver.id, approvedAt: new Date() },
     });
 
     await tx.compOffRecord.create({
@@ -131,18 +205,53 @@ export async function approveOvertime(id: bigint, approverId: bigint) {
 
     return { ...updated, otType, compOffHours };
   });
+
+  await createNotification(
+    buildOvertimeNotification({
+      recipientUserId: record.userId,
+      type: 'OVERTIME_APPROVED',
+      overtimeId: record.id,
+      actorName: approver.username || 'Nguoi duyet',
+      requesterName: record.user.fullName || 'Nhan vien',
+      dateLabel: record.date.toLocaleDateString('vi-VN'),
+      hours: Number(record.hours),
+    }),
+  );
+
+  return updated;
 }
 
-export async function rejectOvertime(id: bigint, approverId: bigint) {
-  const record = await prisma.overtimeRecord.findUnique({ where: { id } });
+export async function rejectOvertime(id: bigint, approver: AuthUser) {
+  const record = await prisma.overtimeRecord.findUnique({
+    where: { id },
+    include: { user: { select: { fullName: true } } },
+  });
   if (!record || record.status !== 'PENDING') {
     throw Object.assign(new Error('Cannot reject: record not found or not pending'), {
       status: 400,
     });
   }
 
-  return prisma.overtimeRecord.update({
+  if (approver.role === 'MANAGER' && record.approverId && record.approverId !== approver.id) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+
+  const updated = await prisma.overtimeRecord.update({
     where: { id },
-    data: { status: 'REJECTED', approverId, approvedAt: new Date() },
+    data: { status: 'REJECTED', approverId: approver.id, approvedAt: new Date() },
   });
+
+  await createNotification(
+    buildOvertimeNotification({
+      recipientUserId: record.userId,
+      type: 'OVERTIME_REJECTED',
+      overtimeId: record.id,
+      actorName: approver.username || 'Nguoi duyet',
+      requesterName: record.user.fullName || 'Nhan vien',
+      dateLabel: record.date.toLocaleDateString('vi-VN'),
+      hours: Number(record.hours),
+    }),
+  );
+
+  return updated;
 }
