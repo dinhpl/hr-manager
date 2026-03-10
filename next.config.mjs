@@ -8,7 +8,7 @@ const nextConfig = {
   },
   async rewrites() {
     // BACKEND_URL: trong Docker set http://backend:5501 để Next server (trong container) proxy tới backend
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:5501';
+    const backendUrl = process.env.BACKEND_URL || 'https://hr.onetech.vn';
     return [
       {
         source: '/uploads/:path*',

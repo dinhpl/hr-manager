@@ -1,0 +1,76 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ota_hr_db
+    restart: unless-stopped
+    command: ['postgres', '-p', '5532']
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hr_leave_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    ports:
+      - '5532:5532'
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-hr_leave_db} -p 5532',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  backend:
+    image: ${BACKEND_IMAGE:-ota-hr-backend}:${BACKEND_VERSION:-latest}
+    container_name: ota_hr_backend
+    restart: unless-stopped
+    ports:
+      - '5501:5501'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-secret}@db:5532/${POSTGRES_DB:-hr_leave_db}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-in-production-at-least-32-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-in-production-too-at-least-32}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5500}
+      NODE_ENV: production
+      PORT: 5501
+      UPLOAD_DIR: ${UPLOAD_DIR:-uploads/leave-attachments}
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - backend
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ota-hr-frontend}:${FRONTEND_VERSION:-latest}
+    container_name: ota_hr_frontend
+    restart: unless-stopped
+    ports:
+      - '5500:5500'
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      PORT: 5500
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5501}
+      BACKEND_URL: ${BACKEND_URL:-http://backend:5501}
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
+
+volumes:
+  pgdata:
+    name: ota_hr_postgres_data
+  uploads_data:
+    name: ota_hr_uploads_data

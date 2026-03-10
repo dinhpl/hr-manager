@@ -46,7 +46,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:5501
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5501}
     ports:
       - '5500:5500'
     depends_on:
@@ -55,7 +55,7 @@ services:
       NODE_ENV: production
       PORT: 5500
       HOSTNAME: 0.0.0.0
-      NEXT_PUBLIC_API_URL: http://localhost:5501
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5501}
       # Next server-side rewrites (e.g. /uploads) proxy tới backend trong Docker
       BACKEND_URL: http://backend:5501
     networks:

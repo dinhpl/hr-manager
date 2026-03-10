@@ -4,8 +4,10 @@ RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:5501
+ARG NEXT_PUBLIC_API_URL=https://hr.onetech.vn
+ARG BACKEND_URL=https://hr.onetech.vn
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV BACKEND_URL=$BACKEND_URL
 RUN pnpm exec next build
 
 FROM node:20-alpine AS runner
