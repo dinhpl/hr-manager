@@ -19,7 +19,6 @@ import {
   Info,
 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/date-picker';
-import { TimePicker } from '@/components/ui/time-picker';
 import {
   Select,
   SelectContent,
@@ -125,12 +124,41 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
   } as const;
 }
 
+function toTimeMinutes(value: string) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function buildTimeOptions(min: string, max: string, stepSeconds: number) {
+  const stepMinutes = Math.max(1, Math.floor(stepSeconds / 60));
+  const options: string[] = [];
+  const start = toTimeMinutes(min);
+  const end = toTimeMinutes(max);
+
+  for (let minutes = start; minutes <= end; minutes += stepMinutes) {
+    const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
+    const mins = String(minutes % 60).padStart(2, '0');
+    options.push(`${hours}:${mins}`);
+  }
+
+  return options;
+}
+
 export default function LeaveRequestModal({
   isOpen,
   onClose,
   onSubmitSuccess,
   editData,
 }: LeaveRequestModalProps) {
+  type LeaveRequestField =
+    | 'requestForUserId'
+    | 'leaveType'
+    | 'fromDate'
+    | 'toDate'
+    | 'fromTime'
+    | 'toTime'
+    | 'reason';
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
@@ -158,10 +186,7 @@ export default function LeaveRequestModal({
   const [submitState, setSubmitState] = useState<'idle' | 'saving' | 'submitting' | 'success'>(
     'idle',
   );
-  const [alert, setAlert] = useState<{
-    type: 'warning' | 'info' | 'success';
-    message: string;
-  } | null>(null);
+  const [errorFields, setErrorFields] = useState<Partial<Record<LeaveRequestField, true>>>({});
   const isAdmin = toFrontendRole(userInfo?.role) === 'admin';
   const effectiveUserId = requestForUserId || userInfo?.id || '';
   const requestForUser = handoverPersons.find((item) => item.id === effectiveUserId);
@@ -207,10 +232,7 @@ export default function LeaveRequestModal({
         setBalances(balanceRes.data);
       })
       .catch((err) => {
-        setAlert({
-          type: 'warning',
-          message: err instanceof Error ? err.message : 'Không tải được dữ liệu biểu mẫu.',
-        });
+        toast.error(err instanceof Error ? err.message : 'Không tải được dữ liệu biểu mẫu.');
       })
       .finally(() => setLoadingOptions(false));
   }, [editData?.requestForUserId, isOpen]);
@@ -227,10 +249,7 @@ export default function LeaveRequestModal({
         setBalances(res.data);
       })
       .catch((err) => {
-        setAlert({
-          type: 'warning',
-          message: err instanceof Error ? err.message : 'Không tải được số dư phép.',
-        });
+        toast.error(err instanceof Error ? err.message : 'Không tải được số dư phép.');
       });
   }, [effectiveUserId, isAdmin, isOpen]);
 
@@ -251,7 +270,7 @@ export default function LeaveRequestModal({
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
-    setAlert(null);
+    setErrorFields({});
   }, [isOpen, editData, userInfo?.id]);
 
   useEffect(() => {
@@ -310,6 +329,11 @@ export default function LeaveRequestModal({
 
   const balanceWarning = checkBalance();
   const policyHints = buildLeavePolicyHints(leavePolicy, approvalFlow);
+  const hourlyTimeOptions = buildTimeOptions(
+    HOURLY_LEAVE_TIME_MIN,
+    HOURLY_LEAVE_TIME_MAX,
+    HOURLY_LEAVE_TIME_STEP_SECONDS,
+  );
   const policyValidationMessage = getLeaveRequestPolicyValidation({
     fromDate,
     toDate,
@@ -331,6 +355,23 @@ export default function LeaveRequestModal({
     setToTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultToTime);
   }, [durationMode]);
 
+  const markFieldValid = useCallback((field: LeaveRequestField) => {
+    setErrorFields((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }, []);
+
+  const getFieldErrorClass = useCallback(
+    (field: LeaveRequestField) =>
+      errorFields[field]
+        ? 'border-red-300 bg-red-50/40 focus-visible:border-red-400 focus-visible:ring-red-100'
+        : '',
+    [errorFields],
+  );
+
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
     const maxSize = 5 * 1024 * 1024;
@@ -342,18 +383,14 @@ export default function LeaveRequestModal({
       'image/png',
     ];
     if (!allowed.includes(file.type)) {
-      setAlert({
-        type: 'warning',
-        message: 'Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, JPG hoặc PNG.',
-      });
+      toast.error('Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, JPG hoặc PNG.');
       return;
     }
     if (file.size > maxSize) {
-      setAlert({ type: 'warning', message: 'File vượt quá 5MB. Vui lòng chọn file nhỏ hơn.' });
+      toast.error('File vượt quá 5MB. Vui lòng chọn file nhỏ hơn.');
       return;
     }
     setAttachedFile(file);
-    setAlert(null);
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -364,19 +401,23 @@ export default function LeaveRequestModal({
   }, []);
 
   const handleSubmit = async () => {
-    if (!selectedLeaveType || !fromDate || !toDate || !reason.trim()) {
-      setAlert({
-        type: 'warning',
-        message: 'Vui lòng điền đầy đủ các trường bắt buộc (*).',
-      });
+    const nextErrorFields: Partial<Record<LeaveRequestField, true>> = {};
+
+    if (isAdmin && !requestForUserId) nextErrorFields.requestForUserId = true;
+    if (!selectedLeaveType) nextErrorFields.leaveType = true;
+    if (!fromDate) nextErrorFields.fromDate = true;
+    if (!toDate) nextErrorFields.toDate = true;
+    if (!reason.trim()) nextErrorFields.reason = true;
+
+    if (Object.keys(nextErrorFields).length > 0) {
+      setErrorFields(nextErrorFields);
+      toast.error('Vui lòng điền đầy đủ các trường bắt buộc.');
       return;
     }
 
     if (toDate < fromDate) {
-      setAlert({
-        type: 'warning',
-        message: 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.',
-      });
+      setErrorFields({ fromDate: true, toDate: true });
+      toast.error('Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
       return;
     }
 
@@ -384,23 +425,26 @@ export default function LeaveRequestModal({
       durationMode === 'HOURLY' &&
       getDateTimeValue(`2000-01-01 ${toTime}`) <= getDateTimeValue(`2000-01-01 ${fromTime}`)
     ) {
-      setAlert({
-        type: 'warning',
-        message: 'Giờ kết thúc phải lớn hơn giờ bắt đầu.',
-      });
+      setErrorFields({ fromTime: true, toTime: true });
+      toast.error('Giờ kết thúc phải lớn hơn giờ bắt đầu.');
       return;
     }
 
     if (days <= 0) {
-      setAlert({
-        type: 'warning',
-        message: 'Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.',
-      });
+      setErrorFields({ fromDate: true, toDate: true });
+      toast.error('Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.');
       return;
     }
 
     if (policyValidationMessage) {
-      setAlert({ type: 'warning', message: policyValidationMessage });
+      toast.error(policyValidationMessage);
+      return;
+    }
+
+    const validatedLeaveType = selectedLeaveType;
+    if (!validatedLeaveType) {
+      toast.error('Vui lòng chọn loại nghỉ phép.');
+      setErrorFields({ leaveType: true });
       return;
     }
 
@@ -425,7 +469,7 @@ export default function LeaveRequestModal({
     });
 
     const formData = new FormData();
-    formData.append('leaveTypeId', selectedLeaveType.id);
+    formData.append('leaveTypeId', validatedLeaveType.id);
     if (isAdmin && effectiveUserId) {
       formData.append('userId', effectiveUserId);
     }
@@ -446,7 +490,7 @@ export default function LeaveRequestModal({
       formData.append('attachment', attachedFile);
     }
 
-    setAlert(null);
+    setErrorFields({});
     setSubmitState('submitting');
 
     try {
@@ -471,10 +515,7 @@ export default function LeaveRequestModal({
       onSubmitSuccess?.();
     } catch (err) {
       setSubmitState('idle');
-      setAlert({
-        type: 'warning',
-        message: err instanceof Error ? err.message : 'Không thể gửi yêu cầu nghỉ phép.',
-      });
+      toast.error(err instanceof Error ? err.message : 'Không thể gửi yêu cầu nghỉ phép.');
     }
   };
 
@@ -492,7 +533,7 @@ export default function LeaveRequestModal({
     setAttachedFile(null);
     setDragging(false);
     setSubmitState('idle');
-    setAlert(null);
+    setErrorFields({});
   };
 
   const handleClose = () => {
@@ -615,25 +656,6 @@ export default function LeaveRequestModal({
             </div>
           ) : null}
 
-          {/* Alert */}
-          {alert && (
-            <div
-              className="flex items-start gap-3 px-4 py-3 rounded-lg text-sm"
-              style={
-                alert.type === 'warning'
-                  ? { background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e' }
-                  : { background: '#dbeafe', border: '1px solid #93c5fd', color: '#1e3a8a' }
-              }
-            >
-              {alert.type === 'warning' ? (
-                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-              ) : (
-                <CheckCircle2 size={15} className="shrink-0 mt-0.5" />
-              )}
-              {alert.message}
-            </div>
-          )}
-
           {/* Form fields */}
           <div className="space-y-5">
             {isAdmin && (
@@ -647,12 +669,14 @@ export default function LeaveRequestModal({
                 </label>
                 <Select
                   value={requestForUserId || 'placeholder'}
-                  onValueChange={(value) =>
-                    setRequestForUserId(value === 'placeholder' ? '' : value)
-                  }
+                  onValueChange={(value) => {
+                    const nextValue = value === 'placeholder' ? '' : value;
+                    setRequestForUserId(nextValue);
+                    if (nextValue) markFieldValid('requestForUserId');
+                  }}
                   disabled={loadingOptions}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className={getFieldErrorClass('requestForUserId')}>
                     <SelectValue placeholder="-- Chọn nhân viên --" />
                   </SelectTrigger>
                   <SelectContent>
@@ -678,10 +702,14 @@ export default function LeaveRequestModal({
               </label>
               <Select
                 value={leaveType || 'placeholder'}
-                onValueChange={(value) => setLeaveType(value === 'placeholder' ? '' : value)}
+                onValueChange={(value) => {
+                  const nextValue = value === 'placeholder' ? '' : value;
+                  setLeaveType(nextValue);
+                  if (nextValue) markFieldValid('leaveType');
+                }}
                 disabled={loadingOptions}
               >
-                <SelectTrigger>
+                <SelectTrigger className={getFieldErrorClass('leaveType')}>
                   <SelectValue placeholder="-- Chọn loại nghỉ --" />
                 </SelectTrigger>
                 <SelectContent>
@@ -705,7 +733,14 @@ export default function LeaveRequestModal({
                   <CalendarDays size={14} style={{ color: '#1DB87A' }} /> Từ ngày{' '}
                   <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <DatePicker value={fromDate} onChange={setFromDate} />
+                <DatePicker
+                  value={fromDate}
+                  onChange={(value) => {
+                    setFromDate(value);
+                    if (value) markFieldValid('fromDate');
+                  }}
+                  className={getFieldErrorClass('fromDate')}
+                />
               </div>
               <div>
                 <label
@@ -715,7 +750,14 @@ export default function LeaveRequestModal({
                   <CalendarDays size={14} style={{ color: '#1DB87A' }} /> Đến ngày{' '}
                   <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <DatePicker value={toDate} onChange={setToDate} />
+                <DatePicker
+                  value={toDate}
+                  onChange={(value) => {
+                    setToDate(value);
+                    if (value) markFieldValid('toDate');
+                  }}
+                  className={getFieldErrorClass('toDate')}
+                />
               </div>
             </div>
 
@@ -734,7 +776,6 @@ export default function LeaveRequestModal({
                     'FULL_DAY',
                     'MORNING_HALF_DAY',
                     'AFTERNOON_HALF_DAY',
-                    'HOURLY',
                   ] as LeaveRequestMode[]
                 ).map((mode) => {
                   const isSelected = durationMode === mode;
@@ -791,13 +832,26 @@ export default function LeaveRequestModal({
                   >
                     Từ giờ
                   </label>
-                  <TimePicker
-                    value={fromTime}
-                    onChange={setFromTime}
-                    min={HOURLY_LEAVE_TIME_MIN}
-                    max={HOURLY_LEAVE_TIME_MAX}
-                    step={HOURLY_LEAVE_TIME_STEP_SECONDS}
-                  />
+                  <Select
+                    value={fromTime || 'placeholder'}
+                    onValueChange={(value) => {
+                      const nextValue = value === 'placeholder' ? '' : value;
+                      setFromTime(nextValue);
+                      if (nextValue) markFieldValid('fromTime');
+                    }}
+                  >
+                    <SelectTrigger className={getFieldErrorClass('fromTime')}>
+                      <SelectValue placeholder="-- Chọn giờ bắt đầu --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="placeholder">-- Chọn giờ bắt đầu --</SelectItem>
+                      {hourlyTimeOptions.map((time) => (
+                        <SelectItem key={`from-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label
@@ -806,13 +860,26 @@ export default function LeaveRequestModal({
                   >
                     Đến giờ
                   </label>
-                  <TimePicker
-                    value={toTime}
-                    onChange={setToTime}
-                    min={HOURLY_LEAVE_TIME_MIN}
-                    max={HOURLY_LEAVE_TIME_MAX}
-                    step={HOURLY_LEAVE_TIME_STEP_SECONDS}
-                  />
+                  <Select
+                    value={toTime || 'placeholder'}
+                    onValueChange={(value) => {
+                      const nextValue = value === 'placeholder' ? '' : value;
+                      setToTime(nextValue);
+                      if (nextValue) markFieldValid('toTime');
+                    }}
+                  >
+                    <SelectTrigger className={getFieldErrorClass('toTime')}>
+                      <SelectValue placeholder="-- Chọn giờ kết thúc --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="placeholder">-- Chọn giờ kết thúc --</SelectItem>
+                      {hourlyTimeOptions.map((time) => (
+                        <SelectItem key={`to-${time}`} value={time}>
+                          {time}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
@@ -873,10 +940,13 @@ export default function LeaveRequestModal({
               </label>
               <Textarea
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onChange={(e) => {
+                  setReason(e.target.value);
+                  if (e.target.value.trim()) markFieldValid('reason');
+                }}
                 rows={3}
                 placeholder="Nhập lý do nghỉ phép..."
-                className="resize-none"
+                className={`resize-none ${getFieldErrorClass('reason')}`}
               />
             </div>
 
@@ -933,68 +1003,73 @@ export default function LeaveRequestModal({
               </Select>
             </div>
 
-            {/* File attachment */}
-            <div>
-              <label
-                className="flex items-center gap-2 text-sm font-semibold mb-2"
-                style={{ color: '#203430' }}
-              >
-                <Paperclip size={14} style={{ color: '#1DB87A' }} /> File đính kèm (nếu có)
-              </label>
-              {attachedFile ? (
-                <div
-                  className="flex items-center gap-3 px-4 py-3 rounded-lg"
-                  style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
+            {false && (
+              <div>
+                <label
+                  className="flex items-center gap-2 text-sm font-semibold mb-2"
+                  style={{ color: '#203430' }}
                 >
-                  <FileText size={16} style={{ color: '#1DB87A' }} />
-                  <span
-                    className="text-sm font-medium flex-1 truncate"
-                    style={{ color: '#203430' }}
+                  <Paperclip size={14} style={{ color: '#1DB87A' }} /> File đính kèm (nếu có)
+                </label>
+                {attachedFile ? (
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg"
+                    style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
                   >
-                    {attachedFile.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {(attachedFile.size / 1024).toFixed(0)} KB
-                  </span>
-                  <button
-                    onClick={() => setAttachedFile(null)}
-                    className="text-muted-foreground hover:text-red-500 transition-colors"
+                    <FileText size={16} style={{ color: '#1DB87A' }} />
+                    <span
+                      className="text-sm font-medium flex-1 truncate"
+                      style={{ color: '#203430' }}
+                    >
+                      {attachedFile.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {(attachedFile.size / 1024).toFixed(0)} KB
+                    </span>
+                    <button
+                      onClick={() => setAttachedFile(null)}
+                      className="text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className="rounded-lg p-6 text-center cursor-pointer transition-all"
+                    style={{
+                      border: `2px dashed ${dragging ? '#1DB87A' : '#D3F2E7'}`,
+                      background: dragging ? '#f0f9f5' : '#fafffe',
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragging(true);
+                    }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={handleDrop}
                   >
-                    <X size={15} />
-                  </button>
-                </div>
-              ) : (
-                <div
-                  className="rounded-lg p-6 text-center cursor-pointer transition-all"
-                  style={{
-                    border: `2px dashed ${dragging ? '#1DB87A' : '#D3F2E7'}`,
-                    background: dragging ? '#f0f9f5' : '#fafffe',
-                  }}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragging(true);
-                  }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={handleDrop}
-                >
-                  <CloudUpload size={28} className="mx-auto mb-2" style={{ color: '#1DB87A' }} />
-                  <p className="text-sm font-medium" style={{ color: '#203430' }}>
-                    Nhấp để chọn file hoặc kéo thả file vào đây
-                  </p>
-                  <p className="text-xs mt-1 text-muted-foreground">
-                    Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 5MB)
-                  </p>
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
-              />
-            </div>
+                    <CloudUpload
+                      size={28}
+                      className="mx-auto mb-2"
+                      style={{ color: '#1DB87A' }}
+                    />
+                    <p className="text-sm font-medium" style={{ color: '#203430' }}>
+                      Nhấp để chọn file hoặc kéo thả file vào đây
+                    </p>
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 5MB)
+                    </p>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            )}
           </div>
         </div>
 

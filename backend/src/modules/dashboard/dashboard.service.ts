@@ -14,6 +14,24 @@ function buildManagerUserScope(userId: bigint) {
   };
 }
 
+function sanitizeLeaveReasonForViewer<
+  T extends {
+    userId?: bigint;
+    user?: { id?: bigint } | null;
+    reason?: string | null;
+  },
+>(request: T, viewer: { id: bigint; role: UserRole }) {
+  if (viewer.role !== 'EMPLOYEE') return request;
+
+  const ownerId = request.userId ?? request.user?.id;
+  if (ownerId === viewer.id) return request;
+
+  return {
+    ...request,
+    reason: null,
+  };
+}
+
 async function getEmployeeSummary(userId: bigint) {
   const year = new Date().getFullYear();
 
@@ -85,22 +103,25 @@ export async function getCalendarData(
   user: { id: bigint; role: UserRole },
   year: number,
   month: number,
+  scope: 'default' | 'global' = 'default',
 ) {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59);
 
   const statusFilter = { in: ['APPROVED', 'PENDING'] as ('APPROVED' | 'PENDING')[] };
   const where =
-    user.role === 'EMPLOYEE'
-      ? { userId: user.id, fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter }
-      : user.role === 'MANAGER'
-        ? {
-            fromDate: { lte: end },
-            toDate: { gte: start },
-            status: statusFilter,
-            ...buildManagerLeaveScope(user.id),
-          }
-        : { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter };
+    scope === 'global'
+      ? { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter }
+      : user.role === 'EMPLOYEE'
+        ? { userId: user.id, fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter }
+        : user.role === 'MANAGER'
+          ? {
+              fromDate: { lte: end },
+              toDate: { gte: start },
+              status: statusFilter,
+              ...buildManagerLeaveScope(user.id),
+            }
+          : { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter };
 
   const requests = await prisma.leaveRequest.findMany({
     where,
@@ -110,7 +131,7 @@ export async function getCalendarData(
       toDate: true,
       status: true,
       reason: true,
-      user: { select: { fullName: true, username: true, department: true } },
+      user: { select: { id: true, fullName: true, username: true, department: true } },
       leaveType: { select: { code: true, name: true, color: true } },
       approver: { select: { fullName: true } },
     },
@@ -129,6 +150,7 @@ export async function getCalendarData(
   const calendarMap: Record<string, { users: CalendarUser[] }> = {};
 
   for (const r of requests) {
+    const safeRequest = sanitizeLeaveReasonForViewer(r, user);
     const userName = r.user?.fullName?.trim() || r.user?.username || 'NV';
     const status: 'approved' | 'pending' = r.status === 'APPROVED' ? 'approved' : 'pending';
     const leaveType = r.leaveType
@@ -149,7 +171,7 @@ export async function getCalendarData(
           requestId: r.id.toString(),
           name: userName,
           status,
-          reason: r.reason || undefined,
+          reason: safeRequest.reason || undefined,
           leaveType,
           approver,
           department: r.user?.department,
@@ -162,22 +184,30 @@ export async function getCalendarData(
   return calendarMap;
 }
 
-export async function getRecentRequests(user: { id: bigint; role: UserRole }, limit = 10) {
+export async function getRecentRequests(
+  user: { id: bigint; role: UserRole },
+  limit = 10,
+  scope: 'default' | 'global' = 'default',
+) {
   const where =
-    user.role === 'EMPLOYEE'
-      ? { userId: user.id }
-      : user.role === 'MANAGER'
-        ? buildManagerLeaveScope(user.id)
-        : {};
+    scope === 'global'
+      ? {}
+      : user.role === 'EMPLOYEE'
+        ? { userId: user.id }
+        : user.role === 'MANAGER'
+          ? buildManagerLeaveScope(user.id)
+          : {};
   const requests = await prisma.leaveRequest.findMany({
     where,
     include: {
-      user: { select: { id: true, fullName: true } },
+      user: { select: { id: true, fullName: true, username: true, avatar: true } },
       leaveType: { select: { id: true, code: true, name: true, color: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: limit,
   });
 
-  return requests.map(serializeLeaveRequestDates);
+  return requests.map((request) =>
+    serializeLeaveRequestDates(sanitizeLeaveReasonForViewer(request, user)),
+  );
 }

@@ -136,12 +136,30 @@ function canViewRequest(
   requestingUser: AuthUser,
 ) {
   if (requestingUser.role === 'ADMIN' || requestingUser.role === 'HR') return true;
-  if (requestingUser.role === 'EMPLOYEE') return request.userId === requestingUser.id;
+  if (requestingUser.role === 'EMPLOYEE') return true;
   return (
     request.userId === requestingUser.id ||
     request.approverId === requestingUser.id ||
     request.user.managerId === requestingUser.id
   );
+}
+
+function sanitizeLeaveRequestForViewer<
+  T extends {
+    userId?: bigint;
+    user?: { id?: bigint } | null;
+    reason?: string | null;
+  },
+>(request: T, requestingUser: AuthUser) {
+  if (requestingUser.role !== 'EMPLOYEE') return request;
+
+  const ownerId = request.userId ?? request.user?.id;
+  if (ownerId === requestingUser.id) return request;
+
+  return {
+    ...request,
+    reason: null,
+  };
 }
 
 function canApproveRequest(
@@ -402,7 +420,7 @@ export async function getLeaveRequestById(id: bigint, requestingUser: AuthUser) 
     throw Object.assign(new Error('Access denied'), { status: 403 });
   }
 
-  return serializeLeaveRequestDates(request);
+  return serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser));
 }
 
 export async function createLeaveRequest(

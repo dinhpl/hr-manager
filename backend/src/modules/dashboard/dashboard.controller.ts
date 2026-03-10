@@ -16,7 +16,8 @@ export async function getCalendar(req: Request, res: Response, next: NextFunctio
     const now = new Date();
     const year = req.query.year ? Number(req.query.year) : now.getFullYear();
     const month = req.query.month ? Number(req.query.month) : now.getMonth() + 1;
-    const data = await service.getCalendarData(req.user!, year, month);
+    const scope = req.query.scope === 'global' ? 'global' : 'default';
+    const data = await service.getCalendarData(req.user!, year, month, scope);
     sendSuccess(res, data);
   } catch (err) {
     next(err);
@@ -26,7 +27,8 @@ export async function getCalendar(req: Request, res: Response, next: NextFunctio
 export async function getRecentRequests(req: Request, res: Response, next: NextFunction) {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 10;
-    const requests = await service.getRecentRequests(req.user!, limit);
+    const scope = req.query.scope === 'global' ? 'global' : 'default';
+    const requests = await service.getRecentRequests(req.user!, limit, scope);
     sendSuccess(res, requests);
   } catch (err) {
     next(err);

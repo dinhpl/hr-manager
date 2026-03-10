@@ -120,6 +120,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const currentRole = toFrontendRole(userInfo?.role);
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === 'approval') return currentRole !== 'employee';
+    if (item.key === 'reports') return currentRole !== 'employee';
     if (item.key === 'employees' || item.key === 'settings') {
       return currentRole === 'hr' || currentRole === 'admin';
     }

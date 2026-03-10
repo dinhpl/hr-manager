@@ -20,7 +20,7 @@ import {
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
 import CalendarDayDetailModal from '@/components/calendar-day-detail-modal';
 import LeaveRequestModal from '@/components/leave-request-modal';
-import { apiClient, clearAuthSession } from '@/lib/api-client';
+import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import {
   formatDateTimeVN,
   formatDateVN,
@@ -92,6 +92,8 @@ interface DashboardLeaveRequest {
   user?: {
     id?: string;
     fullName?: string | null;
+    username?: string | null;
+    avatar?: string | null;
   };
   leaveType?: {
     id?: string;
@@ -195,7 +197,30 @@ function normalizeStatus(status?: string | null): StatusKey {
 }
 
 function getDisplayName(user?: DashboardLeaveRequest['user']) {
-  return user?.fullName?.trim() || 'Nhân viên';
+  return user?.fullName?.trim() || user?.username?.trim() || 'Nhân viên';
+}
+
+function getAvatarUrl(avatar?: string | null): string | null {
+  if (!avatar) return null;
+  if (avatar.startsWith('http')) return avatar;
+  if (avatar.startsWith('/assets')) return avatar;
+  if (avatar.startsWith('/uploads')) return getApiBaseUrl() + avatar;
+  return null;
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'NV';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function getRecentRequestHeaderClass(header: string) {
+  if (header === 'Từ ngày' || header === 'Đến ngày' || header === 'Số ngày') {
+    return 'px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground';
+  }
+
+  return 'px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground';
 }
 
 function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
@@ -206,7 +231,7 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
     fromDate: formatDateVN(request.fromDate),
     toDate: formatDateVN(request.toDate),
     days: numberValue(request.totalDays),
-    reason: request.reason || '—',
+    reason: request.reason || undefined,
     status: normalizeStatus(request.status),
     submittedAt: formatDateTimeVN(request.createdAt),
     approver: request.approver?.fullName || undefined,
@@ -536,6 +561,7 @@ function EmployeeDashboard({
               <tr style={{ borderBottom: '2px solid #e2ede9' }}>
                 {[
                   'ID',
+                  'Nhân viên',
                   'Loại nghỉ',
                   'Từ ngày',
                   'Đến ngày',
@@ -545,7 +571,7 @@ function EmployeeDashboard({
                 ].map((header) => (
                   <th
                     key={header}
-                    className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    className={getRecentRequestHeaderClass(header)}
                   >
                     {header}
                   </th>
@@ -555,13 +581,15 @@ function EmployeeDashboard({
             <tbody>
               {recentRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Chưa có yêu cầu gần đây.
                   </td>
                 </tr>
               ) : (
                 recentRequests.map((request) => {
                   const status = STATUS_CONFIG[normalizeStatus(request.status)];
+                  const employeeName = getDisplayName(request.user);
+                  const avatarUrl = getAvatarUrl(request.user?.avatar);
                   return (
                     <tr
                       key={request.id}
@@ -571,17 +599,46 @@ function EmployeeDashboard({
                       <td className="px-3 py-3 text-sm font-semibold" style={{ color: '#203430' }}>
                         #{request.id}
                       </td>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={employeeName}
+                              className="h-9 w-9 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
+                              style={{
+                                background:
+                                  'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                              }}
+                            >
+                              {getInitials(employeeName)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold" style={{ color: '#203430' }}>
+                              {employeeName}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
                       <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
                         {request.leaveType?.code || '-'}
                         {request.leaveType?.name ? ` - ${request.leaveType.name}` : ''}
                       </td>
-                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {formatDateVN(request.fromDate)}
                       </td>
-                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {formatDateVN(request.toDate)}
                       </td>
-                      <td className="px-3 py-3 text-sm font-medium" style={{ color: '#203430' }}>
+                      <td
+                        className="px-3 py-3 text-center text-sm font-medium"
+                        style={{ color: '#203430' }}
+                      >
                         {numberValue(request.totalDays)}
                       </td>
                       <td className="px-3 py-3">
@@ -868,7 +925,7 @@ function AdminHRDashboard({
                 ].map((header) => (
                   <th
                     key={header}
-                    className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    className={getRecentRequestHeaderClass(header)}
                   >
                     {header}
                   </th>
@@ -885,6 +942,8 @@ function AdminHRDashboard({
               ) : (
                 recentRequests.map((request) => {
                   const status = STATUS_CONFIG[normalizeStatus(request.status)];
+                  const employeeName = getDisplayName(request.user);
+                  const avatarUrl = getAvatarUrl(request.user?.avatar);
                   return (
                     <tr
                       key={request.id}
@@ -894,17 +953,40 @@ function AdminHRDashboard({
                       <td className="px-3 py-3 text-sm font-semibold" style={{ color: '#203430' }}>
                         #{request.id}
                       </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
-                        {getDisplayName(request.user)}
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={employeeName}
+                              className="h-9 w-9 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div
+                              className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
+                              style={{
+                                background:
+                                  'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                              }}
+                            >
+                              {getInitials(employeeName)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold" style={{ color: '#203430' }}>
+                              {employeeName}
+                            </p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
                         {request.leaveType?.code || '-'}
                         {request.leaveType?.name ? ` - ${request.leaveType.name}` : ''}
                       </td>
-                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {formatDateVN(request.fromDate)}
                       </td>
-                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {formatDateVN(request.toDate)}
                       </td>
                       <td className="px-3 py-3">
@@ -986,9 +1068,9 @@ export default function DashboardPage() {
       const [summaryResponse, calendarResponse, recentResponse] = await Promise.all([
         apiClient.get<DashboardSummary>('/api/dashboard/summary'),
         apiClient.get<CalendarData>(
-          `/api/dashboard/calendar?year=${currentYear}&month=${currentMonth}`,
+          `/api/dashboard/calendar?year=${currentYear}&month=${currentMonth}&scope=global`,
         ),
-        apiClient.get<DashboardLeaveRequest[]>('/api/dashboard/recent-requests'),
+        apiClient.get<DashboardLeaveRequest[]>('/api/dashboard/recent-requests?scope=global'),
       ]);
 
       setSummary(summaryResponse.data);

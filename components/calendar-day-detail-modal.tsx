@@ -252,7 +252,7 @@ export default function CalendarDayDetailModal({
                 {!user.reason && !user.approver && (
                   <div className="px-4 pb-3">
                     <p className="text-sm italic" style={{ color: '#9ca3af' }}>
-                      Không có lý do
+                      Không có thông tin bổ sung
                     </p>
                   </div>
                 )}
