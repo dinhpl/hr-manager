@@ -36,6 +36,8 @@ type ApprovalFlowSettings = {
   requireDocumentTypes?: string[];
 };
 
+const BALANCE_EXEMPT_LEAVE_TYPE_CODES = new Set(['WFH']);
+
 const LEAVE_REQUEST_INCLUDE = {
   user: {
     select: {
@@ -100,6 +102,10 @@ function getLeavePolicySettings(value: unknown): LeavePolicySettings {
 function getApprovalFlowSettings(value: unknown): ApprovalFlowSettings {
   if (!value || typeof value !== 'object') return {};
   return value as ApprovalFlowSettings;
+}
+
+function requiresLeaveBalanceCheck(leaveTypeCode?: string | null) {
+  return !BALANCE_EXEMPT_LEAVE_TYPE_CODES.has((leaveTypeCode ?? '').toUpperCase());
 }
 
 function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery) {
@@ -364,12 +370,14 @@ async function validateLeaveRequestRules(params: {
   }
 
   await assertNoOverlap(params.userId, params.fromDate, params.toDate, params.excludeRequestId);
-  await validateBalanceAvailable(
-    params.userId,
-    params.leaveTypeId,
-    params.totalDays,
-    Number(getVietnamDatePart(params.fromDate).slice(0, 4)),
-  );
+  if (requiresLeaveBalanceCheck(leaveType.code)) {
+    await validateBalanceAvailable(
+      params.userId,
+      params.leaveTypeId,
+      params.totalDays,
+      Number(getVietnamDatePart(params.fromDate).slice(0, 4)),
+    );
+  }
 
   return {
     leaveTypeCode: leaveType.code,
@@ -470,7 +478,7 @@ export async function createLeaveRequest(
       },
     });
 
-    if (shouldAutoApprove) {
+    if (shouldAutoApprove && requiresLeaveBalanceCheck(ruleResult.leaveTypeCode)) {
       await deductBalance(
         tx,
         targetUserId,
@@ -592,31 +600,33 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       throw Object.assign(new Error('Access denied'), { status: 403 });
     }
 
-    const balance = await tx.leaveBalance.findUnique({
-      where: {
-        userId_leaveTypeId_year: {
-          userId: request.userId,
-          leaveTypeId: request.leaveTypeId,
-          year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+    if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+      const balance = await tx.leaveBalance.findUnique({
+        where: {
+          userId_leaveTypeId_year: {
+            userId: request.userId,
+            leaveTypeId: request.leaveTypeId,
+            year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+          },
         },
-      },
-      select: { totalDays: true, usedDays: true },
-    });
-
-    if (!balance) {
-      throw Object.assign(new Error('Leave balance has not been initialized for this user.'), {
-        status: 400,
+        select: { totalDays: true, usedDays: true },
       });
-    }
 
-    const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
-    if (remainingDays < Number(request.totalDays)) {
-      throw Object.assign(
-        new Error(
-          `Insufficient leave balance. Remaining ${remainingDays} day(s), requested ${Number(request.totalDays)}.`,
-        ),
-        { status: 400 },
-      );
+      if (!balance) {
+        throw Object.assign(new Error('Leave balance has not been initialized for this user.'), {
+          status: 400,
+        });
+      }
+
+      const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+      if (remainingDays < Number(request.totalDays)) {
+        throw Object.assign(
+          new Error(
+            `Insufficient leave balance. Remaining ${remainingDays} day(s), requested ${Number(request.totalDays)}.`,
+          ),
+          { status: 400 },
+        );
+      }
     }
 
     await tx.leaveRequest.update({
@@ -629,13 +639,15 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       },
     });
 
-    await deductBalance(
-      tx,
-      request.userId,
-      request.leaveTypeId,
-      Number(request.totalDays),
-      Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
-    );
+    if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+      await deductBalance(
+        tx,
+        request.userId,
+        request.leaveTypeId,
+        Number(request.totalDays),
+        Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+      );
+    }
 
     return serializeRequestById(tx, id);
   });
@@ -733,7 +745,7 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
       data: { status: 'CANCELLED' },
     });
 
-    if (request.status === 'APPROVED') {
+    if (request.status === 'APPROVED' && requiresLeaveBalanceCheck(request.leaveType.code)) {
       await restoreBalance(
         tx,
         request.userId,
@@ -805,34 +817,36 @@ export async function bulkApproveLeaveRequests(
     }
 
     for (const request of pendingRequests) {
-      const balance = await tx.leaveBalance.findUnique({
-        where: {
-          userId_leaveTypeId_year: {
-            userId: request.userId,
-            leaveTypeId: request.leaveTypeId,
-            year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+      if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+        const balance = await tx.leaveBalance.findUnique({
+          where: {
+            userId_leaveTypeId_year: {
+              userId: request.userId,
+              leaveTypeId: request.leaveTypeId,
+              year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+            },
           },
-        },
-        select: { totalDays: true, usedDays: true },
-      });
+          select: { totalDays: true, usedDays: true },
+        });
 
-      if (!balance) {
-        throw Object.assign(
-          new Error(
-            `Leave balance has not been initialized for request #${request.id.toString()}.`,
-          ),
-          { status: 400 },
-        );
-      }
+        if (!balance) {
+          throw Object.assign(
+            new Error(
+              `Leave balance has not been initialized for request #${request.id.toString()}.`,
+            ),
+            { status: 400 },
+          );
+        }
 
-      const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
-      if (remainingDays < Number(request.totalDays)) {
-        throw Object.assign(
-          new Error(
-            `Insufficient leave balance for request #${request.id.toString()}. Remaining ${remainingDays} day(s).`,
-          ),
-          { status: 400 },
-        );
+        const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+        if (remainingDays < Number(request.totalDays)) {
+          throw Object.assign(
+            new Error(
+              `Insufficient leave balance for request #${request.id.toString()}. Remaining ${remainingDays} day(s).`,
+            ),
+            { status: 400 },
+          );
+        }
       }
 
       await tx.leaveRequest.update({
@@ -845,13 +859,15 @@ export async function bulkApproveLeaveRequests(
         },
       });
 
-      await deductBalance(
-        tx,
-        request.userId,
-        request.leaveTypeId,
-        Number(request.totalDays),
-        Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
-      );
+      if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+        await deductBalance(
+          tx,
+          request.userId,
+          request.leaveTypeId,
+          Number(request.totalDays),
+          Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+        );
+      }
     }
 
     const serializedRequests = await Promise.all(

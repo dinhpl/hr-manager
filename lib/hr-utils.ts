@@ -316,11 +316,11 @@ export function buildLeavePolicyHints(
 ) {
   const hints: string[] = [];
 
-  if (typeof leavePolicy?.advanceRequestDays === 'number') {
+  if (typeof leavePolicy?.advanceRequestDays === 'number' && leavePolicy.advanceRequestDays > 0) {
     hints.push(`Gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày.`);
   }
 
-  if (typeof leavePolicy?.maxConsecutiveDays === 'number') {
+  if (typeof leavePolicy?.maxConsecutiveDays === 'number' && leavePolicy.maxConsecutiveDays > 0) {
     hints.push(`Tối đa ${leavePolicy.maxConsecutiveDays} ngày nghỉ liên tiếp mỗi đơn.`);
   }
 

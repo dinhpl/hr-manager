@@ -154,6 +154,7 @@ export default function LeaveRequestPage() {
 
   const days = calcDays();
   const selectedLeaveType = leaveTypes.find((item) => item.code === leaveType);
+  const isSelectedTypeBalanceExempt = selectedLeaveType?.code === 'WFH';
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
   const leaveBalanceSummary = {
@@ -402,6 +403,12 @@ export default function LeaveRequestPage() {
             Thông tin phép hiện tại
           </span>
         </div>
+        {isSelectedTypeBalanceExempt ? (
+          <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
+            Loại nghỉ <strong>{selectedLeaveType?.name ?? 'WFH'}</strong> không kiểm tra số dư
+            phép. Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
+          </p>
+        ) : null}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Phép năm được cấp', value: leaveBalanceSummary.granted },

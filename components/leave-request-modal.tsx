@@ -306,6 +306,7 @@ export default function LeaveRequestModal({
 
   const days = calcDays();
   const selectedLeaveType = leaveTypes.find((item) => item.code === leaveType);
+  const isSelectedTypeBalanceExempt = selectedLeaveType?.code === 'WFH';
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
   const leaveBalanceSummary = {
@@ -507,7 +508,9 @@ export default function LeaveRequestModal({
       toast.success(
         isEditMode
           ? 'Yêu cầu nghỉ phép đã được cập nhật thành công.'
-          : 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
+          : validatedLeaveType.code === 'WFH'
+            ? 'Yêu cầu WFH đã được gửi thành công! Đang chờ phê duyệt.'
+            : 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
       );
 
       resetForm();
@@ -610,6 +613,12 @@ export default function LeaveRequestModal({
                 <span className="text-xs text-muted-foreground">{requestForUser.fullName}</span>
               ) : null}
             </div>
+            {isSelectedTypeBalanceExempt ? (
+              <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
+                Loại nghỉ <strong>{selectedLeaveType?.name ?? 'WFH'}</strong> không kiểm tra số dư
+                phép. Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: 'Phép năm được cấp', value: leaveBalanceSummary.granted },
@@ -771,51 +780,51 @@ export default function LeaveRequestModal({
                 <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <div className="flex gap-3 flex-wrap">
-                {(
-                  [
-                    'FULL_DAY',
-                    'MORNING_HALF_DAY',
-                    'AFTERNOON_HALF_DAY',
-                  ] as LeaveRequestMode[]
-                ).map((mode) => {
-                  const isSelected = durationMode === mode;
-                  return (
-                    <label
-                      key={mode}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer text-sm font-medium transition-all select-none"
-                      style={
-                        isSelected
-                          ? { background: '#D3F2E7', color: '#0E474E', border: '2px solid #1DB87A' }
-                          : {
-                              background: '#f7f7f7',
-                              color: '#6b7f78',
-                              border: '2px solid transparent',
-                            }
-                      }
-                    >
-                      <input
-                        type="radio"
-                        name="durationMode"
-                        value={mode}
-                        checked={isSelected}
-                        onChange={() => setDurationMode(mode)}
-                        className="hidden"
-                      />
-                      <span
-                        className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                        style={{ borderColor: isSelected ? '#1DB87A' : '#c4d4cf' }}
+                {(['FULL_DAY', 'MORNING_HALF_DAY', 'AFTERNOON_HALF_DAY'] as LeaveRequestMode[]).map(
+                  (mode) => {
+                    const isSelected = durationMode === mode;
+                    return (
+                      <label
+                        key={mode}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer text-sm font-medium transition-all select-none"
+                        style={
+                          isSelected
+                            ? {
+                                background: '#D3F2E7',
+                                color: '#0E474E',
+                                border: '2px solid #1DB87A',
+                              }
+                            : {
+                                background: '#f7f7f7',
+                                color: '#6b7f78',
+                                border: '2px solid transparent',
+                              }
+                        }
                       >
-                        {isSelected && (
-                          <span
-                            className="w-2 h-2 rounded-full"
-                            style={{ background: '#1DB87A' }}
-                          />
-                        )}
-                      </span>
-                      {LEAVE_REQUEST_MODE_CONFIG[mode].label}
-                    </label>
-                  );
-                })}
+                        <input
+                          type="radio"
+                          name="durationMode"
+                          value={mode}
+                          checked={isSelected}
+                          onChange={() => setDurationMode(mode)}
+                          className="hidden"
+                        />
+                        <span
+                          className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                          style={{ borderColor: isSelected ? '#1DB87A' : '#c4d4cf' }}
+                        >
+                          {isSelected && (
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ background: '#1DB87A' }}
+                            />
+                          )}
+                        </span>
+                        {LEAVE_REQUEST_MODE_CONFIG[mode].label}
+                      </label>
+                    );
+                  },
+                )}
               </div>
             </div>
 
@@ -1021,10 +1030,10 @@ export default function LeaveRequestModal({
                       className="text-sm font-medium flex-1 truncate"
                       style={{ color: '#203430' }}
                     >
-                      {attachedFile.name}
+                      {attachedFile?.name}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {(attachedFile.size / 1024).toFixed(0)} KB
+                      {(Number(attachedFile?.size) / 1024).toFixed(0)} KB
                     </span>
                     <button
                       onClick={() => setAttachedFile(null)}
@@ -1048,11 +1057,7 @@ export default function LeaveRequestModal({
                     onDragLeave={() => setDragging(false)}
                     onDrop={handleDrop}
                   >
-                    <CloudUpload
-                      size={28}
-                      className="mx-auto mb-2"
-                      style={{ color: '#1DB87A' }}
-                    />
+                    <CloudUpload size={28} className="mx-auto mb-2" style={{ color: '#1DB87A' }} />
                     <p className="text-sm font-medium" style={{ color: '#203430' }}>
                       Nhấp để chọn file hoặc kéo thả file vào đây
                     </p>
