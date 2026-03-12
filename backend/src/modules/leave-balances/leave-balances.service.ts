@@ -1,11 +1,9 @@
 import prisma from '../../config/prisma';
 
-// ── Recalculate annual leave (AL) total_days for ALL active users ──────────
+// ── Recalculate annual leave (AL) and comp-off (CO) balances for ALL active users ──────────
 // Rules:
-//  • Only AL (code='AL') gets pro-rata calculation based on company_join_date
-//  • Other leave types keep their defaultDays
-//  • Pro-rata: if joined mid-year → (months worked in that year / 12) × 12
-//  • If company_join_date is null → default 12 days
+//  • Only AL gets pro-rata calculation based on company_join_date
+//  • CO gets 0 by default (earned from overtime)
 //  • Upsert: if record exists → update totalDays only (preserve usedDays)
 //            if record doesn't exist → create with usedDays = 0
 export async function recalculateAllBalances(year: number) {
@@ -17,10 +15,13 @@ export async function recalculateAllBalances(year: number) {
   const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
   const alType = leaveTypes.find((lt) => lt.code === 'AL');
 
+  // Only process AL and CO
+  const targetLeaveTypes = leaveTypes.filter((lt) => lt.code === 'AL' || lt.code === 'CO');
+
   const results: Array<{ userId: string; fullName: string; totalDays: number }> = [];
 
   for (const user of users) {
-    for (const lt of leaveTypes) {
+    for (const lt of targetLeaveTypes) {
       let totalDays: number;
 
       if (lt.code === 'AL') {
@@ -40,16 +41,16 @@ export async function recalculateAllBalances(year: number) {
             totalDays = 12;
           } else {
             // Joined during target year → pro-rata by month
-            // joinDate month is 0-indexed (0=Jan, 11=Dec)
-            // Months worked = 12 - joinMonth (e.g. joined March = month 2 → 12-2=10 months)
             const joinMonth = joinDate.getMonth(); // 0=Jan
             const monthsWorked = 12 - joinMonth;
-            totalDays = Math.round((monthsWorked / 12) * 12 * 10) / 10; // 1 decimal
+            totalDays = Math.round((monthsWorked / 12) * 12 * 10) / 10;
           }
         }
+      } else if (lt.code === 'CO') {
+        // CO: default 0 (earned from overtime, not auto-allocated)
+        totalDays = 0;
       } else {
-        // Other leave types: use defaultDays as-is
-        totalDays = Number(lt.defaultDays);
+        totalDays = 0;
       }
 
       await prisma.leaveBalance.upsert({
@@ -90,15 +91,25 @@ export async function getUserBalances(userId: bigint, year?: number) {
   });
 }
 
-// Initialize balances for a user from leave_types.default_days (upsert — safe to re-run)
+// Initialize balances for a user (upsert — safe to re-run)
+// Only creates AL and CO balances
 export async function initializeBalancesForUser(userId: bigint, year: number) {
   const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
 
+  // Only AL and CO get initialized
+  const targetLeaveTypes = leaveTypes.filter((lt) => lt.code === 'AL' || lt.code === 'CO');
+
   await Promise.all(
-    leaveTypes.map((lt) =>
+    targetLeaveTypes.map((lt) =>
       prisma.leaveBalance.upsert({
         where: { userId_leaveTypeId_year: { userId, leaveTypeId: lt.id, year } },
-        create: { userId, leaveTypeId: lt.id, year, totalDays: lt.defaultDays, usedDays: 0 },
+        create: {
+          userId,
+          leaveTypeId: lt.id,
+          year,
+          totalDays: lt.code === 'AL' ? 12 : 0, // AL default 12, CO default 0
+          usedDays: 0,
+        },
         update: {}, // don't overwrite existing balance
       }),
     ),
@@ -111,29 +122,35 @@ export async function adjustBalance(id: bigint, totalDays: number) {
 }
 
 // Called inside transaction when leave request is approved
+// If targetLeaveTypeId is provided, deduct from that leave type (e.g., deduct from AL when usesAnnualBalance=true)
 export async function deductBalance(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: bigint,
   leaveTypeId: bigint,
   days: number,
   year: number,
+  targetLeaveTypeId?: bigint,
 ) {
+  const actualLeaveTypeId = targetLeaveTypeId ?? leaveTypeId;
   await tx.leaveBalance.updateMany({
-    where: { userId, leaveTypeId, year },
+    where: { userId, leaveTypeId: actualLeaveTypeId, year },
     data: { usedDays: { increment: days } },
   });
 }
 
 // Called inside transaction when approved request is cancelled/reversed
+// If targetLeaveTypeId is provided, restore to that leave type
 export async function restoreBalance(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: bigint,
   leaveTypeId: bigint,
   days: number,
   year: number,
+  targetLeaveTypeId?: bigint,
 ) {
+  const actualLeaveTypeId = targetLeaveTypeId ?? leaveTypeId;
   await tx.leaveBalance.updateMany({
-    where: { userId, leaveTypeId, year },
+    where: { userId, leaveTypeId: actualLeaveTypeId, year },
     data: { usedDays: { decrement: days } },
   });
 }

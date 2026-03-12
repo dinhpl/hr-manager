@@ -7,6 +7,10 @@ export async function getLeaveTypes(activeOnly = true) {
   });
 }
 
+export async function getLeaveTypeByCode(code: string) {
+  return prisma.leaveType.findUnique({ where: { code } });
+}
+
 export async function createLeaveType(data: {
   code: string;
   name: string;
@@ -14,6 +18,8 @@ export async function createLeaveType(data: {
   defaultDays: number;
   isPaid: boolean;
   color: string;
+  maxConsecutiveDays?: number | null;
+  usesAnnualBalance?: boolean;
 }) {
   const exists = await prisma.leaveType.findUnique({ where: { code: data.code } });
   if (exists) throw Object.assign(new Error('Leave type code already exists'), { status: 409 });
@@ -29,6 +35,8 @@ export async function updateLeaveType(
     isPaid: boolean;
     color: string;
     isActive: boolean;
+    maxConsecutiveDays: number | null;
+    usesAnnualBalance: boolean;
   }>,
 ) {
   const exists = await prisma.leaveType.findUnique({ where: { id }, select: { id: true } });

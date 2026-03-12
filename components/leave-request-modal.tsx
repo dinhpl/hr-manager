@@ -59,6 +59,8 @@ interface LeaveTypeOption {
   id: string;
   code: string;
   name: string;
+  maxConsecutiveDays?: number | null;
+  usesAnnualBalance?: boolean;
 }
 
 interface LeaveBalanceRecord {
@@ -306,7 +308,9 @@ export default function LeaveRequestModal({
 
   const days = calcDays();
   const selectedLeaveType = leaveTypes.find((item) => item.code === leaveType);
-  const isSelectedTypeBalanceExempt = selectedLeaveType?.code === 'WFH';
+  // Uses annual balance: check AL balance (for AL, SL, BL, ML)
+  // Not uses annual balance: exempt from balance check (WFH, CO, BT, UL)
+  const usesAnnualBalance = selectedLeaveType?.usesAnnualBalance === true;
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
   const leaveBalanceSummary = {
@@ -319,9 +323,11 @@ export default function LeaveRequestModal({
 
   const checkBalance = () => {
     if (!selectedLeaveType || days === 0) return null;
-    if (selectedLeaveType.code === 'AL' && days > leaveBalanceSummary.remaining) {
+    // If uses annual balance (AL, SL, BL, ML), check AL balance
+    if (usesAnnualBalance && days > leaveBalanceSummary.remaining) {
       return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.remaining} ngày phép năm. Yêu cầu ${days} ngày sẽ vượt quá số phép hiện có.`;
     }
+    // CO uses its own balance
     if (selectedLeaveType.code === 'CO' && days * 8 > leaveBalanceSummary.compOffHours) {
       return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.compOffHours} giờ comp-off. Yêu cầu ${days * 8} giờ sẽ vượt quá.`;
     }
@@ -613,10 +619,15 @@ export default function LeaveRequestModal({
                 <span className="text-xs text-muted-foreground">{requestForUser.fullName}</span>
               ) : null}
             </div>
-            {isSelectedTypeBalanceExempt ? (
+            {!usesAnnualBalance && selectedLeaveType?.code !== 'CO' ? (
               <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
-                Loại nghỉ <strong>{selectedLeaveType?.name ?? 'WFH'}</strong> không kiểm tra số dư
+                Loại nghỉ <strong>{selectedLeaveType?.name}</strong> không kiểm tra số dư
                 phép. Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
+              </p>
+            ) : null}
+            {usesAnnualBalance && selectedLeaveType?.code !== 'AL' ? (
+              <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
+                Loại nghỉ <strong>{selectedLeaveType?.name}</strong> sẽ trừ vào phép năm.
               </p>
             ) : null}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

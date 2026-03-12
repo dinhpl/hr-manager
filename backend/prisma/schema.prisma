@@ -78,16 +78,18 @@ model User {
 }
 
 model LeaveType {
-  id          BigInt   @id @default(autoincrement())
-  code        String   @unique @db.VarChar(20)
-  name        String   @db.VarChar(255)
-  description String?
-  defaultDays Decimal  @default(0) @map("default_days") @db.Decimal(10, 2)
-  isPaid      Boolean  @default(true) @map("is_paid")
-  color       String   @default("#1DB87A") @db.VarChar(20)
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                   BigInt   @id @default(autoincrement())
+  code                 String   @unique @db.VarChar(20)
+  name                 String   @db.VarChar(255)
+  description          String?
+  defaultDays          Decimal  @default(0) @map("default_days") @db.Decimal(10, 2)
+  isPaid               Boolean  @default(true) @map("is_paid")
+  color                String   @default("#1DB87A") @db.VarChar(20)
+  isActive             Boolean  @default(true) @map("is_active")
+  maxConsecutiveDays  Int?     @map("max_consecutive_days")
+  usesAnnualBalance   Boolean  @default(false) @map("uses_annual_balance")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   leaveRequests LeaveRequest[]
   leaveBalances LeaveBalance[]

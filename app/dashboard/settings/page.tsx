@@ -10,12 +10,19 @@ import {
   RotateCcw,
   Save,
   Settings,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -52,9 +59,23 @@ interface ApprovalFlow {
   requireDocumentTypes: string[];
 }
 
+interface LeaveTypeData {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  defaultDays: number;
+  isPaid: boolean;
+  color: string;
+  isActive: boolean;
+  maxConsecutiveDays?: number | null;
+  usesAnnualBalance: boolean;
+}
+
 const TAB_ITEMS = [
   { id: 'leave', label: 'Chính sách nghỉ phép', icon: Calendar },
   { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
+  { id: 'leave-types', label: 'Loại nghỉ phép', icon: Tag },
 ] as const;
 
 const APPROVER_ROLE_OPTIONS: ApprovalLevel['approverRole'][] = [
@@ -186,6 +207,12 @@ export default function SettingsPage() {
     DEFAULT_APPROVAL_FLOW.requireDocumentTypes.join(', '),
   );
 
+  // Leave Types state
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeData[]>([]);
+  const [editingLeaveType, setEditingLeaveType] = useState<LeaveTypeData | null>(null);
+  const [isLeaveTypeModalOpen, setIsLeaveTypeModalOpen] = useState(false);
+  const [leaveTypeForm, setLeaveTypeForm] = useState<Partial<LeaveTypeData>>({});
+
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -193,9 +220,10 @@ export default function SettingsPage() {
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [leaveResponse, flowResponse] = await Promise.all([
+      const [leaveResponse, flowResponse, leaveTypesResponse] = await Promise.all([
         apiClient.get<LeavePolicy>('/api/settings/leave-policy'),
         apiClient.get<ApprovalFlow>('/api/settings/approval-flow'),
+        apiClient.get<LeaveTypeData[]>('/api/leave-types?activeOnly=false'),
       ]);
       const nextLeavePolicy = normalizeLeavePolicy(leaveResponse.data);
       const nextApprovalFlow = normalizeApprovalFlow(flowResponse.data);
@@ -203,6 +231,7 @@ export default function SettingsPage() {
       setLeavePolicy(nextLeavePolicy);
       setApprovalFlow(nextApprovalFlow);
       setDocumentTypesInput(nextApprovalFlow.requireDocumentTypes.join(', '));
+      setLeaveTypes(leaveTypesResponse.data);
       setEditingLeaveIndex(null);
       setEditingLevelIndex(null);
     } catch (error) {
@@ -770,6 +799,83 @@ export default function SettingsPage() {
                 </div>
               )}
 
+              {activeTab === 'leave-types' && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold" style={{ color: '#203430' }}>
+                      Quản lý loại nghỉ phép
+                    </h3>
+                    <button
+                      onClick={() => {
+                        setEditingLeaveType(null);
+                        setLeaveTypeForm({ isPaid: true, usesAnnualBalance: false, maxConsecutiveDays: 5 });
+                        setIsLeaveTypeModalOpen(true);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                    >
+                      <Plus size={16} /> Thêm loại nghỉ
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border" style={{ borderColor: '#e2ede9' }}>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ background: '#f7f7f7' }}>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold" style={{ color: '#6b7f78' }}>Mã</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold" style={{ color: '#6b7f78' }}>Tên</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold" style={{ color: '#6b7f78' }}>Max ngày liên tiếp</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold" style={{ color: '#6b7f78' }}>Tính phép năm</th>
+                          <th className="px-3 py-2.5 text-left text-xs font-semibold" style={{ color: '#6b7f78' }}>Trạng thái</th>
+                          <th className="px-3 py-2.5 text-right text-xs font-semibold" style={{ color: '#6b7f78' }}>Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaveTypes.map((lt) => (
+                          <tr key={lt.id} className="border-t" style={{ borderColor: '#e2ede9' }}>
+                            <td className="px-3 py-2.5 font-medium" style={{ color: '#203430' }}>{lt.code}</td>
+                            <td className="px-3 py-2.5" style={{ color: '#203430' }}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ background: lt.color }} />
+                                {lt.name}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5" style={{ color: '#6b7f78' }}>{lt.maxConsecutiveDays ?? '-'}</td>
+                            <td className="px-3 py-2.5">
+                              {lt.usesAnnualBalance ? (
+                                <span className="px-2 py-1 rounded text-xs font-medium" style={{ background: '#dcfce7', color: '#166534' }}>Có</span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-xs font-medium" style={{ background: '#f3f4f6', color: '#6b7280' }}>Không</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {lt.isActive ? (
+                                <span className="px-2 py-1 rounded text-xs font-medium" style={{ background: '#dcfce7', color: '#166534' }}>Hoạt động</span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-xs font-medium" style={{ background: '#fef2f2', color: '#dc2626' }}>Không hoạt động</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                onClick={() => {
+                                  setEditingLeaveType(lt);
+                                  setLeaveTypeForm(lt);
+                                  setIsLeaveTypeModalOpen(true);
+                                }}
+                                className="p-1.5 rounded hover:bg-gray-100"
+                                style={{ color: '#6b7f78' }}
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {activeTab === 'approval' && (
                 <div className="space-y-6">
                   <div
@@ -1025,6 +1131,130 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {/* Leave Type Modal */}
+      <Dialog open={isLeaveTypeModalOpen} onOpenChange={setIsLeaveTypeModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLeaveType ? 'Chỉnh sửa loại nghỉ' : 'Thêm loại nghỉ mới'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>Mã *</label>
+              <Input
+                value={leaveTypeForm.code || ''}
+                onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, code: e.target.value.toUpperCase() })}
+                placeholder="VD: AL, SL"
+                disabled={!!editingLeaveType}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>Tên *</label>
+              <Input
+                value={leaveTypeForm.name || ''}
+                onChange={(e) => setLeaveTypeForm({ ...leaveTypeForm, name: e.target.value })}
+                placeholder="VD: Nghỉ phép năm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Hidden: defaultDays is managed by leave-balances service */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>Max ngày liên tiếp</label>
+                <Input
+                  type="number"
+                  value={leaveTypeForm.maxConsecutiveDays ?? ''}
+                  onChange={(e) => setLeaveTypeForm({
+                    ...leaveTypeForm,
+                    maxConsecutiveDays: e.target.value ? Number(e.target.value) : null
+                  })}
+                  placeholder="5"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={leaveTypeForm.isPaid === true}
+                  onCheckedChange={(checked) => setLeaveTypeForm({ ...leaveTypeForm, isPaid: checked === true })}
+                />
+                <span className="text-sm" style={{ color: '#203430' }}>Có lương</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={leaveTypeForm.usesAnnualBalance === true}
+                  onCheckedChange={(checked) => setLeaveTypeForm({ ...leaveTypeForm, usesAnnualBalance: checked === true })}
+                />
+                <span className="text-sm" style={{ color: '#203430' }}>Tính vào phép năm</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>Màu sắc</label>
+              <div className="flex gap-2">
+                {['#1DB87A', '#ef4444', '#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4', '#6b7280', '#374151'].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setLeaveTypeForm({ ...leaveTypeForm, color })}
+                    className={`w-8 h-8 rounded-full border-2 ${leaveTypeForm.color === color ? 'border-gray-800' : 'border-transparent'}`}
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <button
+                onClick={() => setIsLeaveTypeModalOpen(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium"
+                style={{ background: '#f7f7f7', color: '#6b7f78' }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  if (!leaveTypeForm.code || !leaveTypeForm.name) {
+                    toast.error('Vui lòng nhập mã và tên loại nghỉ.');
+                    return;
+                  }
+                  try {
+                    if (editingLeaveType) {
+                      await apiClient.patch(`/api/leave-types/${editingLeaveType.id}`, {
+                        name: leaveTypeForm.name,
+                        defaultDays: leaveTypeForm.defaultDays,
+                        isPaid: leaveTypeForm.isPaid,
+                        color: leaveTypeForm.color,
+                        maxConsecutiveDays: leaveTypeForm.maxConsecutiveDays,
+                        usesAnnualBalance: leaveTypeForm.usesAnnualBalance,
+                      });
+                      toast.success('Cập nhật thành công.');
+                    } else {
+                      await apiClient.post('/api/leave-types', {
+                        code: leaveTypeForm.code,
+                        name: leaveTypeForm.name,
+                        defaultDays: leaveTypeForm.defaultDays ?? 0,
+                        isPaid: leaveTypeForm.isPaid ?? true,
+                        color: leaveTypeForm.color ?? '#1DB87A',
+                        maxConsecutiveDays: leaveTypeForm.maxConsecutiveDays,
+                        usesAnnualBalance: leaveTypeForm.usesAnnualBalance ?? false,
+                      });
+                      toast.success('Thêm mới thành công.');
+                    }
+                    setIsLeaveTypeModalOpen(false);
+                    loadSettings();
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : 'Lỗi khi lưu.');
+                  }
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+              >
+                Lưu
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

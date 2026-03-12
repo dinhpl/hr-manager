@@ -13,6 +13,8 @@ const createSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .default('#1DB87A'),
+  maxConsecutiveDays: z.coerce.number().min(1).optional().nullable(),
+  usesAnnualBalance: z.boolean().default(false),
 });
 
 const updateSchema = createSchema.omit({ code: true }).partial().extend({

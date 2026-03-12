@@ -15,6 +15,7 @@ import {
   createNotification,
 } from '../notifications/notifications.service';
 import { getApprovalFlow, getLeavePolicy } from '../settings/settings.service';
+import { getLeaveTypeByCode } from '../leave-types/leave-types.service';
 import {
   CreateLeaveRequestDto,
   GetLeaveRequestsQuery,
@@ -48,7 +49,7 @@ const LEAVE_REQUEST_INCLUDE = {
       managerId: true,
     },
   },
-  leaveType: { select: { id: true, code: true, name: true, color: true } },
+  leaveType: { select: { id: true, code: true, name: true, color: true, usesAnnualBalance: true, maxConsecutiveDays: true } },
   approver: { select: { id: true, fullName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
@@ -320,7 +321,7 @@ async function validateLeaveRequestRules(params: {
   const [leaveType, leavePolicyRaw, approvalFlowRaw] = await Promise.all([
     prisma.leaveType.findUnique({
       where: { id: params.leaveTypeId },
-      select: { id: true, code: true, isActive: true },
+      select: { id: true, code: true, name: true, isActive: true, maxConsecutiveDays: true, usesAnnualBalance: true },
     }),
     getLeavePolicy(),
     getApprovalFlow(),
@@ -348,12 +349,11 @@ async function validateLeaveRequestRules(params: {
     }
   }
 
-  if (
-    typeof leavePolicy.maxConsecutiveDays === 'number' &&
-    inclusiveDays > leavePolicy.maxConsecutiveDays
-  ) {
+  // Check max consecutive days from leave type first, fallback to global policy
+  const maxConsecutiveDays = leaveType.maxConsecutiveDays ?? leavePolicy.maxConsecutiveDays;
+  if (typeof maxConsecutiveDays === 'number' && inclusiveDays > maxConsecutiveDays) {
     throw Object.assign(
-      new Error(`Leave request exceeds max consecutive days (${leavePolicy.maxConsecutiveDays}).`),
+      new Error(`Loại nghỉ ${leaveType.name} tối đa ${maxConsecutiveDays} ngày liên tiếp.`),
       { status: 400 },
     );
   }
@@ -370,7 +370,20 @@ async function validateLeaveRequestRules(params: {
   }
 
   await assertNoOverlap(params.userId, params.fromDate, params.toDate, params.excludeRequestId);
-  if (requiresLeaveBalanceCheck(leaveType.code)) {
+
+  // Check balance: if usesAnnualBalance, check AL balance; otherwise check leave type's own balance
+  if (leaveType.usesAnnualBalance) {
+    const annualLeaveType = await getLeaveTypeByCode('AL');
+    if (annualLeaveType) {
+      await validateBalanceAvailable(
+        params.userId,
+        annualLeaveType.id,
+        params.totalDays,
+        Number(getVietnamDatePart(params.fromDate).slice(0, 4)),
+      );
+    }
+  } else if (requiresLeaveBalanceCheck(leaveType.code)) {
+    // Only check balance for types that require it (non-exempt types)
     await validateBalanceAvailable(
       params.userId,
       params.leaveTypeId,
@@ -381,6 +394,7 @@ async function validateLeaveRequestRules(params: {
 
   return {
     leaveTypeCode: leaveType.code,
+    usesAnnualBalance: leaveType.usesAnnualBalance,
     autoApproveWFH: Boolean(approvalFlow.autoApproveWFH),
   };
 }
@@ -478,7 +492,20 @@ export async function createLeaveRequest(
       },
     });
 
-    if (shouldAutoApprove && requiresLeaveBalanceCheck(ruleResult.leaveTypeCode)) {
+    // Deduct balance: if usesAnnualBalance, deduct from AL; otherwise deduct from leave type's own balance
+    if (shouldAutoApprove && ruleResult.usesAnnualBalance) {
+      const annualLeaveType = await getLeaveTypeByCode('AL');
+      if (annualLeaveType) {
+        await deductBalance(
+          tx,
+          targetUserId,
+          data.leaveTypeId,
+          totalDays,
+          Number(getVietnamDatePart(fromDate).slice(0, 4)),
+          annualLeaveType.id,
+        );
+      }
+    } else if (shouldAutoApprove && requiresLeaveBalanceCheck(ruleResult.leaveTypeCode)) {
       await deductBalance(
         tx,
         targetUserId,
@@ -600,13 +627,46 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       throw Object.assign(new Error('Access denied'), { status: 403 });
     }
 
-    if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+    const year = Number(getVietnamDatePart(request.fromDate).slice(0, 4));
+
+    // Check balance: if usesAnnualBalance, check AL balance; otherwise check leave type's own balance
+    if (request.leaveType.usesAnnualBalance) {
+      const annualLeaveType = await getLeaveTypeByCode('AL');
+      if (annualLeaveType) {
+        const balance = await tx.leaveBalance.findUnique({
+          where: {
+            userId_leaveTypeId_year: {
+              userId: request.userId,
+              leaveTypeId: annualLeaveType.id,
+              year,
+            },
+          },
+          select: { totalDays: true, usedDays: true },
+        });
+
+        if (!balance) {
+          throw Object.assign(new Error('Leave balance has not been initialized for this user.'), {
+            status: 400,
+          });
+        }
+
+        const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+        if (remainingDays < Number(request.totalDays)) {
+          throw Object.assign(
+            new Error(
+              `Insufficient annual leave balance. Remaining ${remainingDays} day(s), requested ${Number(request.totalDays)}.`,
+            ),
+            { status: 400 },
+          );
+        }
+      }
+    } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
       const balance = await tx.leaveBalance.findUnique({
         where: {
           userId_leaveTypeId_year: {
             userId: request.userId,
             leaveTypeId: request.leaveTypeId,
-            year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+            year,
           },
         },
         select: { totalDays: true, usedDays: true },
@@ -639,13 +699,26 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       },
     });
 
-    if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+    // Deduct balance: if usesAnnualBalance, deduct from AL; otherwise deduct from leave type's own balance
+    if (request.leaveType.usesAnnualBalance) {
+      const annualLeaveType = await getLeaveTypeByCode('AL');
+      if (annualLeaveType) {
+        await deductBalance(
+          tx,
+          request.userId,
+          request.leaveTypeId,
+          Number(request.totalDays),
+          year,
+          annualLeaveType.id,
+        );
+      }
+    } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
       await deductBalance(
         tx,
         request.userId,
         request.leaveTypeId,
         Number(request.totalDays),
-        Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+        year,
       );
     }
 
@@ -745,14 +818,30 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
       data: { status: 'CANCELLED' },
     });
 
-    if (request.status === 'APPROVED' && requiresLeaveBalanceCheck(request.leaveType.code)) {
-      await restoreBalance(
-        tx,
-        request.userId,
-        request.leaveTypeId,
-        Number(request.totalDays),
-        Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
-      );
+    // Restore balance: if usesAnnualBalance, restore to AL; otherwise restore to leave type's own balance
+    if (request.status === 'APPROVED') {
+      const year = Number(getVietnamDatePart(request.fromDate).slice(0, 4));
+      if (request.leaveType.usesAnnualBalance) {
+        const annualLeaveType = await getLeaveTypeByCode('AL');
+        if (annualLeaveType) {
+          await restoreBalance(
+            tx,
+            request.userId,
+            request.leaveTypeId,
+            Number(request.totalDays),
+            year,
+            annualLeaveType.id,
+          );
+        }
+      } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+        await restoreBalance(
+          tx,
+          request.userId,
+          request.leaveTypeId,
+          Number(request.totalDays),
+          year,
+        );
+      }
     }
 
     return serializeRequestById(tx, id);
@@ -817,13 +906,49 @@ export async function bulkApproveLeaveRequests(
     }
 
     for (const request of pendingRequests) {
-      if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+      const year = Number(getVietnamDatePart(request.fromDate).slice(0, 4));
+
+      // Check balance: if usesAnnualBalance, check AL balance; otherwise check leave type's own balance
+      if (request.leaveType.usesAnnualBalance) {
+        const annualLeaveType = await getLeaveTypeByCode('AL');
+        if (annualLeaveType) {
+          const balance = await tx.leaveBalance.findUnique({
+            where: {
+              userId_leaveTypeId_year: {
+                userId: request.userId,
+                leaveTypeId: annualLeaveType.id,
+                year,
+              },
+            },
+            select: { totalDays: true, usedDays: true },
+          });
+
+          if (!balance) {
+            throw Object.assign(
+              new Error(
+                `Leave balance has not been initialized for request #${request.id.toString()}.`,
+              ),
+              { status: 400 },
+            );
+          }
+
+          const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+          if (remainingDays < Number(request.totalDays)) {
+            throw Object.assign(
+              new Error(
+                `Insufficient annual leave balance for request #${request.id.toString()}. Remaining ${remainingDays} day(s).`,
+              ),
+              { status: 400 },
+            );
+          }
+        }
+      } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
         const balance = await tx.leaveBalance.findUnique({
           where: {
             userId_leaveTypeId_year: {
               userId: request.userId,
               leaveTypeId: request.leaveTypeId,
-              year: Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+              year,
             },
           },
           select: { totalDays: true, usedDays: true },
@@ -859,13 +984,26 @@ export async function bulkApproveLeaveRequests(
         },
       });
 
-      if (requiresLeaveBalanceCheck(request.leaveType.code)) {
+      // Deduct balance: if usesAnnualBalance, deduct from AL; otherwise deduct from leave type's own balance
+      if (request.leaveType.usesAnnualBalance) {
+        const annualLeaveType = await getLeaveTypeByCode('AL');
+        if (annualLeaveType) {
+          await deductBalance(
+            tx,
+            request.userId,
+            request.leaveTypeId,
+            Number(request.totalDays),
+            year,
+            annualLeaveType.id,
+          );
+        }
+      } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
         await deductBalance(
           tx,
           request.userId,
           request.leaveTypeId,
           Number(request.totalDays),
-          Number(getVietnamDatePart(request.fromDate).slice(0, 4)),
+          year,
         );
       }
     }

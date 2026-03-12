@@ -153,7 +153,7 @@ export function useNotifications(enabled = true) {
           onmessage(message) {
             if (!message.data) return;
             const event = JSON.parse(message.data) as NotificationStreamEvent;
-
+            console.log('event', event);
             if (event.type === 'notification.created') {
               setItems((current) => upsertNotification(current, event.notification));
               setUnreadCount(event.unreadCount);
