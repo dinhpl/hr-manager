@@ -12,9 +12,14 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
 
   if (err instanceof Error) {
     const status = (err as { status?: number }).status ?? 500;
+    const details = (err as { details?: unknown }).details;
     return res.status(status).json({
       success: false,
-      error: { code: 'SERVER_ERROR', message: err.message },
+      error: {
+        code: 'SERVER_ERROR',
+        message: err.message,
+        ...(details !== undefined ? { details } : {}),
+      },
     });
   }
 

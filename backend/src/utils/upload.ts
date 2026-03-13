@@ -60,3 +60,23 @@ export const uploadAvatar = multer({
     else cb(new Error('Image type not allowed. Use JPG, PNG, GIF, or WEBP.'));
   },
 });
+
+const EXCEL_ALLOWED = [
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/octet-stream',
+];
+
+export const uploadAttendanceExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (EXCEL_ALLOWED.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext)) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('File type not allowed. Use XLS or XLSX.'));
+  },
+});

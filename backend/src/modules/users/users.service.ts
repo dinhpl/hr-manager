@@ -14,6 +14,7 @@ const USER_SELECT = {
   id: true,
   email: true,
   username: true,
+  employeeCode: true,
   fullName: true,
   firstName: true,
   lastName: true,
@@ -49,6 +50,7 @@ export async function getUsers(query: GetUsersQuery) {
         { fullName: { contains: search, mode: 'insensitive' as const } },
         { email: { contains: search, mode: 'insensitive' as const } },
         { username: { contains: search, mode: 'insensitive' as const } },
+        { employeeCode: { contains: search, mode: 'insensitive' as const } },
       ],
     }),
     ...(department && { department }),
@@ -104,21 +106,50 @@ export async function getUserById(id: bigint, requestingUser: AuthUser) {
 }
 
 export async function createUser(data: CreateUserDto) {
-  const { password, managerId, companyJoinDate, ...rest } = data;
+  const {
+    password,
+    managerId,
+    companyJoinDate,
+    email,
+    username,
+    employeeCode,
+    fullName,
+    firstName,
+    lastName,
+    role,
+    department,
+    position,
+    isCountable,
+  } = data;
 
   const existing = await prisma.user.findFirst({
-    where: { OR: [{ email: rest.email }, { username: rest.username }] },
+    where: {
+      OR: [{ email }, { username }, ...(employeeCode ? [{ employeeCode }] : [])],
+    },
   });
-  if (existing) throw Object.assign(new Error('Email or username already exists'), { status: 409 });
+  if (existing) {
+    throw Object.assign(new Error('Email, username, or employee code already exists'), {
+      status: 409,
+    });
+  }
 
   const hashedPassword = await hashPassword(password);
   await syncUsersIdSequence();
 
   const user = await prisma.user.create({
     data: {
-      ...rest,
+      email,
+      username,
+      ...(employeeCode && { employeeCode }),
       password: hashedPassword,
-      ...(managerId && { managerId }),
+      fullName,
+      ...(firstName && { firstName }),
+      ...(lastName && { lastName }),
+      ...(role && { role }),
+      ...(department && { department }),
+      ...(position && { position }),
+      ...(isCountable !== undefined && { isCountable }),
+      ...(managerId && { manager: { connect: { id: managerId } } }),
       ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
     },
     select: USER_SELECT,
@@ -131,14 +162,67 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
   const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!exists) throw Object.assign(new Error('User not found'), { status: 404 });
 
-  const { companyJoinDate, managerId, ...rest } = data;
+  const { password, companyJoinDate, managerId, ...rest } = data;
+
+  if (managerId === id) {
+    throw Object.assign(new Error('User cannot be their own manager'), { status: 400 });
+  }
+
+  if (rest.email) {
+    const duplicated = await prisma.user.findFirst({
+      where: {
+        email: rest.email,
+        id: { not: id },
+      },
+      select: { id: true },
+    });
+
+    if (duplicated) {
+      throw Object.assign(new Error('Email already exists'), { status: 409 });
+    }
+  }
+
+  if (rest.username) {
+    const duplicated = await prisma.user.findFirst({
+      where: {
+        username: rest.username,
+        id: { not: id },
+      },
+      select: { id: true },
+    });
+
+    if (duplicated) {
+      throw Object.assign(new Error('Username already exists'), { status: 409 });
+    }
+  }
+
+  if (rest.employeeCode) {
+    const duplicated = await prisma.user.findFirst({
+      where: {
+        employeeCode: rest.employeeCode,
+        id: { not: id },
+      },
+      select: { id: true },
+    });
+
+    if (duplicated) {
+      throw Object.assign(new Error('Employee code already exists'), { status: 409 });
+    }
+  }
+
+  const hashedPassword = password ? await hashPassword(password) : undefined;
 
   const user = await prisma.user.update({
     where: { id },
     data: {
       ...rest,
-      ...(managerId !== undefined && { managerId }),
-      ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
+      ...(hashedPassword && { password: hashedPassword }),
+      ...(managerId !== undefined && {
+        manager: managerId === null ? { disconnect: true } : { connect: { id: managerId } },
+      }),
+      ...(companyJoinDate !== undefined && {
+        companyJoinDate: companyJoinDate ? new Date(companyJoinDate) : null,
+      }),
     },
     select: USER_SELECT,
   });
@@ -156,7 +240,14 @@ export async function deleteUser(id: bigint) {
 export async function getUsersDropdown() {
   return prisma.user.findMany({
     where: { isActive: true },
-    select: { id: true, fullName: true, username: true, department: true, role: true },
+    select: {
+      id: true,
+      fullName: true,
+      username: true,
+      employeeCode: true,
+      department: true,
+      role: true,
+    },
     orderBy: { fullName: 'asc' },
   });
 }

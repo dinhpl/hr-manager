@@ -6,7 +6,6 @@ import {
   Cake,
   CalendarOff,
   Clock,
-  Eye,
   FileDown,
   Pencil,
   RefreshCw,
@@ -49,6 +48,7 @@ interface EmployeeApiItem {
   id: string | number;
   email: string;
   username?: string | null;
+  employeeCode?: string | null;
   fullName?: string | null;
   firstName?: string | null;
   lastName?: string | null;
@@ -59,19 +59,38 @@ interface EmployeeApiItem {
   teamId?: number | null;
   isCountable?: boolean;
   companyJoinDate?: string | null;
+  manager?: {
+    id: string | number;
+    fullName: string;
+  } | null;
   isActive: boolean;
   createdAt: string;
+}
+
+interface UserDropdownItem {
+  id: string | number;
+  fullName?: string | null;
+  username?: string | null;
+  employeeCode?: string | null;
+  department?: string | null;
+  role?: UserRole | null;
 }
 
 interface EmployeeRow {
   id: string;
   email: string;
+  username: string;
+  employeeCode: string;
   fullName: string;
   firstName: string;
   lastName: string;
   profileImageUrl: string | null;
   role: UserRole;
   department: string;
+  position: string;
+  managerId: string;
+  managerName: string;
+  isCountable: boolean;
   status: EmployeeStatus;
   companyJoinDate: string | null;
 }
@@ -80,9 +99,14 @@ interface EmployeeFormData {
   firstName: string;
   lastName: string;
   email: string;
+  username: string;
+  employeeCode: string;
   password: string;
   role: UserRole;
   department: string;
+  position: string;
+  managerId: string;
+  isCountable: boolean;
   companyJoinDate: string;
   status: EmployeeStatus;
 }
@@ -165,6 +189,24 @@ function splitFullName(fullName: string) {
   };
 }
 
+function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeFormData {
+  return {
+    firstName: '',
+    lastName: '',
+    email: '',
+    username: '',
+    employeeCode: '',
+    password: '',
+    role: 'EMPLOYEE',
+    department: departments[0]?.name ?? '',
+    position: '',
+    managerId: '',
+    isCountable: true,
+    companyJoinDate: '',
+    status: 'active',
+  };
+}
+
 function mapEmployee(item: EmployeeApiItem): EmployeeRow {
   const fullName = getFullName({
     fullName: item.fullName,
@@ -179,12 +221,18 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
   return {
     id: String(item.id),
     email: item.email,
+    username: item.username?.trim() || buildUsernameFromEmail(item.email),
+    employeeCode: item.employeeCode?.trim() || '',
     fullName,
     firstName,
     lastName,
     profileImageUrl: item.avatar ?? null,
     role: item.role ?? 'EMPLOYEE',
     department: item.department?.trim() || 'Chưa phân bổ',
+    position: item.position?.trim() || '',
+    managerId: item.manager ? String(item.manager.id) : '',
+    managerName: item.manager?.fullName?.trim() || '',
+    isCountable: item.isCountable ?? true,
     status: item.isActive ? 'active' : 'inactive',
     companyJoinDate: item.companyJoinDate ?? null,
   };
@@ -193,14 +241,18 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const [managerOptions, setManagerOptions] = useState<UserDropdownItem[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [teamFilter, setTeamFilter] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeRow | null>(null);
   const [editingCellId, setEditingCellId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<'role' | 'department' | null>(null);
+  const [editingField, setEditingField] = useState<'role' | 'department' | 'employeeCode' | null>(
+    null,
+  );
   const [editingValue, setEditingValue] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -217,6 +269,15 @@ export default function EmployeesPage() {
       setDepartments(data ?? []);
     } catch {
       setDepartments([]);
+    }
+  }, []);
+
+  const fetchManagers = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<UserDropdownItem[]>('/api/users/dropdown');
+      setManagerOptions(data ?? []);
+    } catch {
+      setManagerOptions([]);
     }
   }, []);
 
@@ -259,7 +320,8 @@ export default function EmployeesPage() {
 
   useEffect(() => {
     void fetchDepartments();
-  }, [fetchDepartments]);
+    void fetchManagers();
+  }, [fetchDepartments, fetchManagers]);
 
   useEffect(() => {
     void fetchEmployees(true);
@@ -314,20 +376,30 @@ export default function EmployeesPage() {
 
   const handleCellEdit = async (
     employeeId: string,
-    field: 'role' | 'department',
+    field: 'role' | 'department' | 'employeeCode',
     value: string,
   ) => {
-    if (!value) return;
+    if (!value && field !== 'employeeCode') return;
 
     setIsMutating(true);
     try {
       await apiClient.patch(
         `/api/users/${employeeId}`,
-        field === 'role' ? { role: value } : { department: value },
+        field === 'role'
+          ? { role: value }
+          : field === 'department'
+            ? { department: value }
+            : { employeeCode: value.trim() || undefined },
       );
       closeInlineEdit();
-      toast.success(field === 'role' ? 'Đã cập nhật vai trò.' : 'Đã cập nhật phòng ban.');
-      await Promise.all([fetchEmployees(), fetchDepartments()]);
+      toast.success(
+        field === 'role'
+          ? 'Đã cập nhật vai trò.'
+          : field === 'department'
+            ? 'Đã cập nhật phòng ban.'
+            : 'Đã cập nhật mã nhân viên.',
+      );
+      await Promise.all([fetchEmployees(), fetchDepartments(), fetchManagers()]);
     } catch (error) {
       scrollToTop();
       toast.error(error instanceof Error ? error.message : 'Không thể cập nhật nhân viên.');
@@ -342,14 +414,17 @@ export default function EmployeesPage() {
       const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const created = await apiClient.post<EmployeeApiItem>('/api/users', {
         email: formData.email.trim(),
-        username: buildUsernameFromEmail(formData.email),
+        username: formData.username.trim() || buildUsernameFromEmail(formData.email),
+        employeeCode: formData.employeeCode.trim() || undefined,
         password: formData.password,
         fullName,
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         role: formData.role,
         department: formData.department || undefined,
-        position: getRoleLabel(formData.role),
+        position: formData.position.trim() || getRoleLabel(formData.role),
+        managerId: formData.managerId ? formData.managerId : undefined,
+        isCountable: formData.isCountable,
         companyJoinDate: formData.companyJoinDate
           ? toIsoDateTime(formData.companyJoinDate)
           : undefined,
@@ -371,6 +446,37 @@ export default function EmployeesPage() {
     }
   };
 
+  const handleUpdateEmployee = async (employeeId: string, formData: EmployeeFormData) => {
+    setIsMutating(true);
+    try {
+      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+      await apiClient.patch(`/api/users/${employeeId}`, {
+        email: formData.email.trim(),
+        username: formData.username.trim() || buildUsernameFromEmail(formData.email),
+        employeeCode: formData.employeeCode.trim() || null,
+        password: formData.password.trim() || undefined,
+        fullName,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        role: formData.role,
+        department: formData.department || null,
+        position: formData.position.trim() || null,
+        managerId: formData.managerId ? formData.managerId : null,
+        isCountable: formData.isCountable,
+        companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : null,
+        isActive: formData.status === 'active',
+      });
+
+      setEditingEmployee(null);
+      toast.success('Đã cập nhật thông tin nhân viên.');
+      await Promise.all([fetchEmployees(), fetchDepartments(), fetchManagers()]);
+    } catch (error) {
+      throw error instanceof Error ? error : new Error('Không thể cập nhật nhân viên.');
+    } finally {
+      setIsMutating(false);
+    }
+  };
+
   const handleDeleteEmployee = async (employeeId: string, fullName: string) => {
     if (
       !window.confirm(
@@ -384,7 +490,7 @@ export default function EmployeesPage() {
     try {
       await apiClient.delete(`/api/users/${employeeId}`);
       toast.success('Đã chuyển nhân viên sang trạng thái không hoạt động.');
-      await fetchEmployees();
+      await Promise.all([fetchEmployees(), fetchManagers()]);
     } catch (error) {
       scrollToTop();
       toast.error(error instanceof Error ? error.message : 'Không thể xóa nhân viên.');
@@ -586,7 +692,7 @@ export default function EmployeesPage() {
                     handleSearch();
                   }
                 }}
-                placeholder="Tìm theo tên, email..."
+                placeholder="Tìm theo tên, email, mã nhân viên..."
               />
             </div>
             <button
@@ -649,6 +755,7 @@ export default function EmployeesPage() {
                 {[
                   'Avatar',
                   'Họ tên',
+                  'Mã NV',
                   'Email',
                   'Phòng ban',
                   'Vai trò',
@@ -669,7 +776,7 @@ export default function EmployeesPage() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -679,7 +786,7 @@ export default function EmployeesPage() {
               ) : employees.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -739,6 +846,46 @@ export default function EmployeesPage() {
                         <p className="font-semibold whitespace-nowrap" style={{ color: '#203430' }}>
                           {employee.fullName}
                         </p>
+                      </td>
+                      <td className="px-3 py-3 min-w-[120px]">
+                        {editingCellId === employee.id && editingField === 'employeeCode' ? (
+                          <div onClick={(event) => event.stopPropagation()}>
+                            <Input
+                              autoFocus
+                              value={editingValue}
+                              onChange={(event) => setEditingValue(event.target.value)}
+                              onBlur={() => {
+                                void handleCellEdit(employee.id, 'employeeCode', editingValue);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  void handleCellEdit(employee.id, 'employeeCode', editingValue);
+                                }
+                              }}
+                              placeholder="Nhập mã nhân viên"
+                              className="h-8"
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingCellId(employee.id);
+                              setEditingField('employeeCode');
+                              setEditingValue(employee.employeeCode);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
+                            style={{
+                              color: employee.employeeCode ? '#203430' : '#b45309',
+                              background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
+                            }}
+                          >
+                            {employee.employeeCode || 'Chưa có mã'}
+                            <Pencil size={10} style={{ color: '#f59e0b' }} />
+                          </button>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
                         {employee.email}
@@ -842,9 +989,9 @@ export default function EmployeesPage() {
                         >
                           <button
                             type="button"
-                            disabled
-                            title="Chỉnh sửa hiện hỗ trợ inline ở phòng ban và vai trò"
-                            className="w-6 h-6 rounded flex items-center justify-center cursor-not-allowed opacity-40"
+                            onClick={() => setEditingEmployee(employee)}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                            title="Chỉnh sửa nhân viên"
                           >
                             <Pencil size={13} style={{ color: '#f59e0b' }} />
                           </button>
@@ -976,8 +1123,10 @@ export default function EmployeesPage() {
           </div>
 
           <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
-            <AddEmployeeForm
+            <EmployeeForm
+              mode="create"
               departments={departments}
+              managerOptions={managerOptions}
               onSubmit={handleCreateEmployee}
               onClose={() => setIsAddModalOpen(false)}
               isSubmitting={isMutating}
@@ -985,44 +1134,150 @@ export default function EmployeesPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={Boolean(editingEmployee)}
+        onOpenChange={(open) => !open && setEditingEmployee(null)}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
+        >
+          <DialogHeader className="sr-only">
+            <DialogTitle>Chỉnh sửa nhân viên</DialogTitle>
+            <DialogDescription>
+              Cập nhật toàn bộ thông tin hồ sơ và tài khoản nhân viên.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div
+            className="flex items-center justify-between border-b bg-white px-6 py-4"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-10 w-10 items-center justify-center rounded-xl"
+                style={{ background: '#fff7ed' }}
+              >
+                <Pencil size={20} style={{ color: '#f59e0b' }} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold" style={{ color: '#203430' }}>
+                  Chỉnh sửa nhân viên
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Cập nhật hồ sơ, trạng thái làm việc và có thể đặt mật khẩu mới
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setEditingEmployee(null)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-gray-100"
+              style={{ color: '#6b7f78' }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="max-h-[calc(90vh-88px)] overflow-y-auto">
+            {editingEmployee ? (
+              <EmployeeForm
+                mode="edit"
+                departments={departments}
+                managerOptions={managerOptions}
+                initialData={editingEmployee}
+                onSubmit={(formData) => handleUpdateEmployee(editingEmployee.id, formData)}
+                onClose={() => setEditingEmployee(null)}
+                isSubmitting={isMutating}
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function AddEmployeeForm({
+function EmployeeForm({
+  mode,
   departments,
+  managerOptions,
+  initialData,
   onSubmit,
   onClose,
   isSubmitting,
 }: {
+  mode: 'create' | 'edit';
   departments: DepartmentItem[];
+  managerOptions: UserDropdownItem[];
+  initialData?: EmployeeRow;
   onSubmit: (data: EmployeeFormData) => Promise<void>;
   onClose: () => void;
   isSubmitting: boolean;
 }) {
-  const [formData, setFormData] = useState<EmployeeFormData>({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    role: 'EMPLOYEE',
-    department: departments[0]?.name ?? '',
-    companyJoinDate: '',
-    status: 'active',
-  });
+  const [formData, setFormData] = useState<EmployeeFormData>(() =>
+    initialData
+      ? {
+          firstName: initialData.firstName,
+          lastName: initialData.lastName,
+          email: initialData.email,
+          username: initialData.username,
+          employeeCode: initialData.employeeCode,
+          password: '',
+          role: initialData.role,
+          department: initialData.department === 'Chưa phân bổ' ? '' : initialData.department,
+          position: initialData.position,
+          managerId: initialData.managerId,
+          isCountable: initialData.isCountable,
+          companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
+          status: initialData.status,
+        }
+      : getDefaultEmployeeFormData(departments),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string>('');
 
   useEffect(() => {
-    setFormData((prev) => ({
-      ...prev,
-      department: prev.department || departments[0]?.name || '',
-    }));
-  }, [departments]);
+    setFormData(
+      initialData
+        ? {
+            firstName: initialData.firstName,
+            lastName: initialData.lastName,
+            email: initialData.email,
+            username: initialData.username,
+            employeeCode: initialData.employeeCode,
+            password: '',
+            role: initialData.role,
+            department: initialData.department === 'Chưa phân bổ' ? '' : initialData.department,
+            position: initialData.position,
+            managerId: initialData.managerId,
+            isCountable: initialData.isCountable,
+            companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
+            status: initialData.status,
+          }
+        : getDefaultEmployeeFormData(departments),
+    );
+    setErrors({});
+    setSubmitError('');
+  }, [departments, initialData]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      if (name === 'email') {
+        const generatedFromPreviousEmail = buildUsernameFromEmail(prev.email);
+        const nextGeneratedUsername = buildUsernameFromEmail(value);
+        const shouldSyncUsername = !prev.username || prev.username === generatedFromPreviousEmail;
+
+        return {
+          ...prev,
+          email: value,
+          ...(shouldSyncUsername ? { username: nextGeneratedUsername } : {}),
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
     }
@@ -1040,6 +1295,14 @@ function AddEmployeeForm({
     if (submitError) setSubmitError('');
   };
 
+  const handleBooleanChange = (name: 'isCountable', value: boolean) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: '' }));
+    }
+    if (submitError) setSubmitError('');
+  };
+
   const validateForm = () => {
     const nextErrors: Record<string, string> = {};
 
@@ -1047,8 +1310,15 @@ function AddEmployeeForm({
     if (!formData.lastName.trim()) nextErrors.lastName = 'Tên là bắt buộc';
     if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
       nextErrors.email = 'Email không hợp lệ';
-    if (!formData.password) nextErrors.password = 'Mật khẩu là bắt buộc';
-    if (formData.password.length < 6) nextErrors.password = 'Mật khẩu phải ít nhất 6 ký tự';
+    if (!formData.username.trim()) nextErrors.username = 'Username là bắt buộc';
+    if (formData.username.trim().length < 3) nextErrors.username = 'Username phải ít nhất 3 ký tự';
+    if (mode === 'create' && !formData.password) nextErrors.password = 'Mật khẩu là bắt buộc';
+    if (formData.password && formData.password.length < 6) {
+      nextErrors.password = 'Mật khẩu phải ít nhất 6 ký tự';
+    }
+    if (initialData && formData.managerId === initialData.id) {
+      nextErrors.managerId = 'Nhân viên không thể tự làm quản lý trực tiếp';
+    }
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -1064,11 +1334,38 @@ function AddEmployeeForm({
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim(),
+        username: formData.username.trim(),
+        employeeCode: formData.employeeCode.trim(),
+        position: formData.position.trim(),
       });
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Không thể tạo nhân viên mới.');
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : mode === 'create'
+            ? 'Không thể tạo nhân viên mới.'
+            : 'Không thể cập nhật nhân viên.',
+      );
     }
   };
+
+  const accountSummary = [
+    {
+      label: mode === 'create' ? 'Trạng thái khi tạo' : 'Trạng thái hiện tại',
+      value: formData.status === 'active' ? 'Đang làm việc' : 'Tạm nghỉ',
+    },
+    { label: 'Vai trò hệ thống', value: getRoleLabel(formData.role) },
+    { label: 'Đăng nhập', value: formData.username.trim() || 'Username + email' },
+    {
+      label: 'Bảo mật',
+      value:
+        mode === 'create'
+          ? 'Mật khẩu tối thiểu 6 ký tự'
+          : formData.password
+            ? 'Sẽ cập nhật mật khẩu mới'
+            : 'Giữ nguyên mật khẩu hiện tại',
+    },
+  ];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 p-6">
@@ -1079,19 +1376,11 @@ function AddEmployeeForm({
         <div className="mb-3 flex items-center gap-2">
           <Shield size={15} style={{ color: '#1DB87A' }} />
           <span className="text-sm font-semibold" style={{ color: '#0E474E' }}>
-            Thông tin tạo tài khoản
+            {mode === 'create' ? 'Thông tin tạo tài khoản' : 'Thông tin cập nhật tài khoản'}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {[
-            {
-              label: 'Trạng thái khi tạo',
-              value: formData.status === 'active' ? 'Đang làm việc' : 'Tạm nghỉ',
-            },
-            { label: 'Vai trò hệ thống', value: getRoleLabel(formData.role) },
-            { label: 'Đăng nhập', value: 'Email công ty' },
-            { label: 'Bảo mật', value: 'Mật khẩu tối thiểu 6 ký tự' },
-          ].map((item) => (
+          {accountSummary.map((item) => (
             <div key={item.label} className="text-center">
               <p className="text-sm font-bold" style={{ color: '#1DB87A' }}>
                 {item.value}
@@ -1173,17 +1462,55 @@ function AddEmployeeForm({
 
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                Mật khẩu
+                Username
+              </label>
+              <Input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Ví dụ: pham.long"
+                className={errors.username ? 'border-red-500' : undefined}
+              />
+              {errors.username && <p className="mt-1 text-xs text-red-500">{errors.username}</p>}
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Mã nhân viên
+              </label>
+              <Input
+                type="text"
+                name="employeeCode"
+                value={formData.employeeCode}
+                onChange={handleChange}
+                placeholder="Ví dụ: 00025"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Có thể để trống khi tạo, nhưng cần cập nhật trước khi import attendance.
+              </p>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                {mode === 'create' ? 'Mật khẩu' : 'Mật khẩu mới'}
               </label>
               <Input
                 type="password"
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Tối thiểu 6 ký tự"
+                placeholder={
+                  mode === 'create' ? 'Tối thiểu 6 ký tự' : 'Để trống nếu không đổi mật khẩu'
+                }
                 className={errors.password ? 'border-red-500' : undefined}
               />
               {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
+              {mode === 'edit' ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Chỉ nhập khi cần đặt lại mật khẩu cho nhân viên.
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1221,13 +1548,16 @@ function AddEmployeeForm({
                 Phòng ban
               </label>
               <Select
-                value={formData.department}
-                onValueChange={(value) => handleFieldChange('department', value)}
+                value={formData.department || 'no-department'}
+                onValueChange={(value) =>
+                  handleFieldChange('department', value === 'no-department' ? '' : value)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="no-department">Chưa phân bổ</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.code} value={dept.name}>
                       {dept.name}
@@ -1238,12 +1568,69 @@ function AddEmployeeForm({
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Chức danh
+              </label>
+              <Input
+                type="text"
+                name="position"
+                value={formData.position}
+                onChange={handleChange}
+                placeholder="Ví dụ: Senior Developer"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Quản lý trực tiếp
+              </label>
+              <Select
+                value={formData.managerId || 'no-manager'}
+                onValueChange={(value) =>
+                  handleFieldChange('managerId', value === 'no-manager' ? '' : value)
+                }
+              >
+                <SelectTrigger className={errors.managerId ? 'border-red-500' : undefined}>
+                  <SelectValue placeholder="Chọn quản lý" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-manager">Không gán quản lý</SelectItem>
+                  {managerOptions
+                    .filter((manager) => String(manager.id) !== initialData?.id)
+                    .map((manager) => {
+                      const managerId = String(manager.id);
+                      const managerLabel =
+                        manager.fullName?.trim() ||
+                        manager.username?.trim() ||
+                        manager.employeeCode?.trim() ||
+                        `User #${managerId}`;
+
+                      return (
+                        <SelectItem key={managerId} value={managerId}>
+                          {manager.employeeCode
+                            ? `${managerLabel} (${manager.employeeCode})`
+                            : managerLabel}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+              {errors.managerId && <p className="mt-1 text-xs text-red-500">{errors.managerId}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
                 Ngày tham gia công ty
               </label>
               <DatePicker
                 value={formData.companyJoinDate}
                 onChange={(value) => handleFieldChange('companyJoinDate', value)}
               />
+              <button
+                type="button"
+                onClick={() => handleFieldChange('companyJoinDate', '')}
+                className="mt-2 text-xs font-medium"
+                style={{ color: '#6b7f78' }}
+              >
+                Xóa ngày tham gia
+              </button>
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
@@ -1261,6 +1648,28 @@ function AddEmployeeForm({
                   <SelectItem value="inactive">Tạm nghỉ</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="sm:col-span-2">
+              <div
+                className="flex items-center justify-between rounded-xl border px-4 py-3"
+                style={{ borderColor: '#e2ede9', background: '#f8faf9' }}
+              >
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                    Tính vào nhân sự chính thức
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Tắt mục này nếu tài khoản không nên được tính vào một số thống kê nhân sự.
+                  </p>
+                </div>
+                <Checkbox
+                  checked={formData.isCountable}
+                  onCheckedChange={(checked) =>
+                    handleBooleanChange('isCountable', checked === true)
+                  }
+                  aria-label="Tính vào nhân sự chính thức"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1282,8 +1691,14 @@ function AddEmployeeForm({
           style={{ background: '#1DB87A' }}
           disabled={isSubmitting}
         >
-          <UserPlus size={15} />
-          {isSubmitting ? 'Đang tạo...' : 'Thêm nhân viên'}
+          {mode === 'create' ? <UserPlus size={15} /> : <Pencil size={15} />}
+          {isSubmitting
+            ? mode === 'create'
+              ? 'Đang tạo...'
+              : 'Đang cập nhật...'
+            : mode === 'create'
+              ? 'Thêm nhân viên'
+              : 'Lưu thay đổi'}
         </Button>
       </div>
     </form>

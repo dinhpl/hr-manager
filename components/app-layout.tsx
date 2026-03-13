@@ -12,6 +12,7 @@ import {
   Users,
   BarChart3,
   Settings,
+  Table2,
   Menu,
   X,
   CalendarDays,
@@ -63,6 +64,12 @@ const NAV_ITEMS = [
     label: 'Quản lý nhân viên',
     icon: Users,
     key: 'employees',
+  },
+  {
+    href: '/dashboard/attendance',
+    label: 'Chấm công',
+    icon: Table2,
+    key: 'attendance',
   },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
   { href: '/dashboard/reports', label: 'Báo cáo', icon: BarChart3, key: 'reports' },
@@ -121,7 +128,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === 'approval') return currentRole !== 'employee';
     if (item.key === 'reports') return currentRole !== 'employee';
-    if (item.key === 'employees' || item.key === 'settings') {
+    if (item.key === 'employees' || item.key === 'settings' || item.key === 'attendance') {
       return currentRole === 'hr' || currentRole === 'admin';
     }
     return true;
