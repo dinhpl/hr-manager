@@ -352,6 +352,40 @@ export default function EmployeesPage() {
       });
   }, [employees]);
 
+  const roleDistribution = useMemo(() => {
+    if (!employees.length) return [];
+
+    const total = employees.length;
+    const grouped = employees.reduce<Record<string, number>>((acc, employee) => {
+      acc[employee.role] = (acc[employee.role] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    const roleColors: Record<string, { color: string; iconBg: string }> = {
+      ADMIN: { color: '#ef4444', iconBg: '#fef2f2' }, // Red
+      HR: { color: '#8b5cf6', iconBg: '#f5f3ff' }, // Purple
+      MANAGER: { color: '#f59e0b', iconBg: '#fffbeb' }, // Amber
+      EMPLOYEE: { color: '#3b82f6', iconBg: '#eff6ff' }, // Blue
+    };
+
+    return Object.entries(grouped)
+      .sort(([, countA], [, countB]) => countB - countA)
+      .map(([role, count]) => {
+        const pct = Math.round((count / total) * 100);
+        const label = ROLE_OPTIONS.find((r) => r.value === role)?.label || role;
+        const palette = roleColors[role] || { color: '#6b7f78', iconBg: '#f0f4f2' };
+
+        return {
+          role,
+          label,
+          count,
+          pct,
+          color: palette.color,
+          iconBg: palette.iconBg,
+        };
+      });
+  }, [employees]);
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
@@ -846,6 +880,14 @@ export default function EmployeesPage() {
                         <p className="font-semibold whitespace-nowrap" style={{ color: '#203430' }}>
                           {employee.fullName}
                         </p>
+                        {employee.department && (
+                          <p
+                            className="truncate text-[11px] font-medium mt-0.5"
+                            style={{ color: '#6b7f78' }}
+                          >
+                            {employee.department}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-3 min-w-[120px]">
                         {editingCellId === employee.id && editingField === 'employeeCode' ? (
@@ -1025,37 +1067,67 @@ export default function EmployeesPage() {
             </h3>
           </div>
           {departmentDistribution.length > 0 ? (
-            <div className="space-y-3">
-              {departmentDistribution.map((department) => (
-                <div key={department.label} className="flex items-center gap-3">
-                  <span
-                    className="text-xs font-bold text-white px-2 py-0.5 rounded w-20 text-center shrink-0"
-                    style={{ background: department.color }}
-                  >
-                    {department.code}
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span style={{ color: '#203430' }}>{department.label}</span>
-                      <span className="font-semibold" style={{ color: '#6b7f78' }}>
-                        {department.count} người ({department.pct}%)
-                      </span>
+            <div className="space-y-4 pt-2">
+              {departmentDistribution.map((department) => {
+                const words = department.label.trim().split(' ').filter(Boolean);
+                let initials = '';
+
+                if (words.length >= 2) {
+                  initials = (words[0][0] + words[1][0]).toUpperCase();
+                } else {
+                  const upperLetters = department.label.replace(/[^A-Z]/g, '');
+                  initials =
+                    upperLetters.length >= 2
+                      ? upperLetters.slice(0, 2)
+                      : department.label.slice(0, 2).toUpperCase();
+                }
+
+                return (
+                  <div key={department.label} className="flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs shrink-0"
+                          style={{ background: `${department.color}15`, color: department.color }}
+                        >
+                          {initials}
+                        </div>
+                        <span className="font-semibold text-sm" style={{ color: '#203430' }}>
+                          {department.label}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-bold text-sm" style={{ color: '#203430' }}>
+                          {department.count}
+                        </span>
+                        <span className="text-xs font-medium" style={{ color: '#6b7f78' }}>
+                          người
+                        </span>
+                        <div
+                          className="text-xs font-bold px-1.5 py-0.5 rounded-md ml-1 min-w-[44px] text-center"
+                          style={{ background: `${department.color}10`, color: department.color }}
+                        >
+                          {department.pct}%
+                        </div>
+                      </div>
                     </div>
-                    <div
-                      className="h-2 rounded-full overflow-hidden"
-                      style={{ background: '#f0f4f2' }}
-                    >
+                    <div className="pl-11 pr-1">
                       <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${department.pct}%`,
-                          background: department.color,
-                        }}
-                      />
+                        className="h-2 w-full rounded-full overflow-hidden"
+                        style={{ background: '#f0f4f2' }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${department.pct}%`,
+                            background: department.color,
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm" style={{ color: '#6b7f78' }}>
@@ -1064,21 +1136,80 @@ export default function EmployeesPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
+        {/* ĐỀ XUẤT THAY THẾ: Cơ cấu vai trò nhân sự */}
+        <div
+          className="bg-white rounded-xl border p-5 flex flex-col"
+          style={{ borderColor: '#e2ede9' }}
+        >
           <div className="flex items-center gap-2 mb-4">
-            <Clock size={15} style={{ color: '#1DB87A' }} />
+            <Shield size={15} style={{ color: '#1DB87A' }} />
             <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-              Hoạt động gần đây
+              Cơ cấu vai trò nhân sự
             </h3>
           </div>
-          <div
-            className="rounded-xl border border-dashed p-4 text-sm"
-            style={{ borderColor: '#d6e5df', color: '#6b7f78' }}
-          >
-            Backend hiện chưa có feed hoạt động cho trang này, nên khu vực này đang được giữ ở trạng
-            thái an toàn.
+
+          <div className="flex-1 flex flex-col justify-center">
+            {roleDistribution.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4">
+                {roleDistribution.map((role) => (
+                  <div
+                    key={role.role}
+                    className="border rounded-xl p-3 flex flex-col justify-between hover:-translate-y-0.5 transition-transform"
+                    style={{ borderColor: '#e2ede9', backgroundColor: '#fafdfa' }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: role.iconBg, color: role.color }}
+                      >
+                        <span className="font-bold text-xs" style={{ color: role.color }}>
+                          {role.label.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span
+                        className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
+                        style={{ background: '#f0f4f2', color: '#6b7f78' }}
+                      >
+                        {role.pct}%
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold mb-0.5" style={{ color: '#203430' }}>
+                        {role.count}
+                      </h4>
+                      <p className="text-[11px] font-semibold" style={{ color: '#6b7f78' }}>
+                        {role.label}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: '#6b7f78' }}>
+                Chưa có dữ liệu vai trò.
+              </p>
+            )}
           </div>
         </div>
+
+        {/* 
+          TẠM ẨN: Hoạt động gần đây 
+          <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Clock size={15} style={{ color: '#1DB87A' }} />
+              <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
+                Hoạt động gần đây
+              </h3>
+            </div>
+            <div
+              className="rounded-xl border border-dashed p-4 text-sm"
+              style={{ borderColor: '#d6e5df', color: '#6b7f78' }}
+            >
+              Backend hiện chưa có feed hoạt động cho trang này, nên khu vực này đang được giữ ở trạng
+              thái an toàn.
+            </div>
+          </div>
+        */}
       </div>
 
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
@@ -1656,10 +1787,11 @@ function EmployeeForm({
               >
                 <div>
                   <p className="text-sm font-semibold" style={{ color: '#203430' }}>
-                    Tính vào nhân sự chính thức
+                    Cho phép hiển thị & tính toán Chấm công
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Tắt mục này nếu tài khoản không nên được tính vào một số thống kê nhân sự.
+                    Tắt mục này nếu tài khoản là bot hoặc không cần thống kê lịch làm việc trên bảng
+                    chấm công.
                   </p>
                 </div>
                 <Checkbox

@@ -11,3 +11,6 @@ settingsRouter.get('/leave-policy', ctrl.getLeavePolicy);
 settingsRouter.patch('/leave-policy', requireRoles('ADMIN'), ctrl.updateLeavePolicy);
 settingsRouter.get('/approval-flow', ctrl.getApprovalFlow);
 settingsRouter.patch('/approval-flow', requireRoles('ADMIN'), ctrl.updateApprovalFlow);
+
+settingsRouter.get('/attendance', ctrl.getAttendance);
+settingsRouter.patch('/attendance', requireRoles('ADMIN', 'HR'), ctrl.updateAttendance);

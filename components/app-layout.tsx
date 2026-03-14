@@ -87,6 +87,7 @@ interface UserInfo {
   email: string;
   fullName: string;
   role: string;
+  systemRole?: string | null;
   department?: string | null;
   position?: string | null;
   avatar?: string | null;
@@ -125,10 +126,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const displayName = userInfo?.fullName || userInfo?.username || 'Người dùng';
   const roleTitle = userInfo ? getRoleLabel(userInfo.role) : '';
   const currentRole = toFrontendRole(userInfo?.role);
+  const isSystemAdmin = userInfo?.systemRole?.toUpperCase() === 'ADMIN';
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === 'approval') return currentRole !== 'employee';
     if (item.key === 'reports') return currentRole !== 'employee';
-    if (item.key === 'employees' || item.key === 'settings' || item.key === 'attendance') {
+    if (item.key === 'attendance') {
+      return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
+    }
+    if (item.key === 'employees' || item.key === 'settings') {
       return currentRole === 'hr' || currentRole === 'admin';
     }
     return true;

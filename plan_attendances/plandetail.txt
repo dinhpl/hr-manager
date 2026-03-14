@@ -1,0 +1,94 @@
+### Attendance Management – Data Display & Import Feature
+
+#### 1. Mục tiêu
+
+Xây dựng chức năng **hiển thị và quản lý dữ liệu chấm công (Attendance)** cho toàn bộ nhân viên.
+
+Hệ thống cần cung cấp:
+
+* Màn hình xem **lịch sử chấm công theo tháng**
+* Hiển thị **check-in / check-out / work hours**
+* Cho phép **import dữ liệu chấm công từ file Excel**
+
+---
+
+#### 2. Menu
+
+Thêm menu mới trong hệ thống:
+
+**Attendance → View Attendance**
+
+Menu này dùng để xem lịch sử chấm công của tất cả nhân viên.
+
+---
+
+#### 3. Database Table
+
+Table: `attendances`
+
+| Field      | Type                   | Description                     |
+| ---------- | ---------------------- | ------------------------------- |
+| id         | bigint (PK)            | ID                              |
+| user_id    | bigint (FK → users.id) | Nhân viên                       |
+| date       | date                   | Ngày làm việc                   |
+| check_in   | datetime               | Giờ vào                         |
+| check_out  | datetime               | Giờ ra                          |
+| work_hours | decimal(5,2)           | Tổng giờ làm                    |
+| status     | varchar                | present / late / absent / leave |
+| note       | text                   | Ghi chú                         |
+| created_at | timestamp              | Created time                    |
+| updated_at | timestamp              | Updated time                    |
+
+---
+
+#### 4. Import dữ liệu
+
+Cho phép **Import dữ liệu chấm công từ file Excel**:
+
+File mẫu:
+`plan_attendances/28Feb2026_Finally.xls`
+
+Yêu cầu:
+
+* Parse dữ liệu từ Excel
+* Map dữ liệu vào bảng `attendances`
+* Validate dữ liệu trước khi insert
+* Hiển thị lỗi nếu format không đúng
+
+---
+
+#### 5. UI Requirement
+
+Tham khảo thiết kế từ file:
+
+`plan_attendances/image.png`
+
+Yêu cầu màn hình:
+
+* Hiển thị **dữ liệu chấm công theo tháng**
+* Hiển thị **toàn bộ nhân viên trong hệ thống**
+* Mỗi nhân viên hiển thị:
+
+  * Check-in
+  * Check-out
+  * Work hours
+* Layout dạng **bảng theo ngày trong tháng** giống file thiết kế
+
+---
+
+#### 6. Chức năng bổ sung (nếu cần)
+
+* Filter theo **tháng / năm**
+* Search theo **nhân viên**
+* Export Excel
+* Pagination khi số lượng nhân viên lớn
+
+---
+
+#### 7. Kết quả mong muốn
+
+Một màn hình **Attendance Monthly View** cho phép:
+
+* Xem lịch sử chấm công của tất cả nhân viên
+* Theo dõi check-in / check-out / work hours theo từng ngày trong tháng
+* Import dữ liệu từ Excel để cập nhật bảng `attendances`

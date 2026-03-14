@@ -405,8 +405,8 @@ export default function LeaveRequestPage() {
         </div>
         {isSelectedTypeBalanceExempt ? (
           <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
-            Loại nghỉ <strong>{selectedLeaveType?.name ?? 'WFH'}</strong> không kiểm tra số dư
-            phép. Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
+            Loại nghỉ <strong>{selectedLeaveType?.name ?? 'WFH'}</strong> không kiểm tra số dư phép.
+            Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
           </p>
         ) : null}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

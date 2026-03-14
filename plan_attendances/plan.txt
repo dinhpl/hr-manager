@@ -1,0 +1,238 @@
+Attendance Monthly View + Import Excel
+
+1. Mục tiêu
+- Xây dựng màn hình xem chấm công theo tháng cho toàn bộ nhân viên.
+- Cho phép import dữ liệu từ file Excel `plan_attendances/28Feb2026_Finally.xls`.
+- Hiển thị dữ liệu theo dạng bảng tháng, mỗi dòng là một nhân viên, mỗi cột là một ngày.
+
+2. Phạm vi chức năng
+- Thêm menu mới: `Attendance -> View Attendance`.
+- Thêm route frontend dự kiến: `/dashboard/attendance`.
+- Chỉ role `HR` và `ADMIN` được import dữ liệu.
+- Role `MANAGER` có thể xem nếu scope dữ liệu được phép; nếu chưa có scope team rõ ràng thì phase đầu chỉ mở cho `HR` và `ADMIN`.
+
+3. Database
+- Bổ sung field mới vào bảng `users`:
+- `employee_code` varchar unique null
+- Field này dùng để map với cột `Mã nhân viên` trong file Excel attendance.
+- Dữ liệu `employee_code` sẽ được cập nhật thủ công trên bảng `users` trước khi thực hiện import attendance.
+- Tạo bảng `attendances` với các cột:
+- `id` bigint primary key
+- `user_id` bigint foreign key -> `users.id`
+- `date` date
+- `check_in` datetime
+- `check_out` datetime
+- `work_hours` decimal(5,2)
+- `status` varchar
+- `note` text
+- `created_at` timestamp
+- `updated_at` timestamp
+
+4. Quy tắc dữ liệu
+- `users.employee_code` là source of truth để map attendance import.
+- Không import attendance nếu user chưa có `employee_code`.
+- Mỗi user chỉ có tối đa 1 bản ghi attendance cho mỗi ngày.
+- Nên thêm unique key `(user_id, date)`.
+- `status` nên chuẩn hóa trước khi code:
+- `present`: có đủ dữ liệu làm việc
+- `late`: đi làm nhưng không đủ giờ hoặc check-in muộn
+- `absent`: nghỉ không đi làm
+- `leave`: nghỉ phép đã được duyệt
+- Nếu import có dữ liệu giờ vào/ra nhưng không có status, backend tự suy ra status mặc định là `present`.
+- `work_hours` là nguồn hiển thị chính trong cell; `check_in/check_out` dùng cho detail tooltip hoặc modal.
+
+5. UI theo thiết kế tham chiếu
+- Nguồn tham chiếu: `plan_attendances/image.png`.
+- Màn hình gồm:
+- ô search nhân viên
+- filter chips trạng thái như `Leave`, `Absent`, `Active`
+- bộ chọn tháng / năm
+- bảng monthly matrix
+- Cột đầu là thông tin nhân viên: avatar, tên, chức danh.
+- Các cột tiếp theo là ngày trong tháng, tiêu đề theo thứ.
+- Mỗi cell hiển thị badge theo trạng thái:
+- `8 Hours`, `8h 39m`, `4h 36m` cho ngày có chấm công
+- `Leave`, `Absent`, `Active` cho trạng thái đặc biệt
+- Các ngày ngoài phạm vi hoặc không có dữ liệu hiển thị trống / sọc nền như ảnh.
+- Nên có horizontal scroll cho tháng có nhiều cột.
+
+6. API backend đề xuất
+- Module mới: `backend/src/modules/attendances/`
+- Cấu trúc theo chuẩn repo:
+- `attendances.router.ts`
+- `attendances.controller.ts`
+- `attendances.service.ts`
+- `attendances.validation.ts`
+- API đề xuất:
+- `GET /api/attendances/monthly?month=8&year=2025&search=&statuses=leave,absent`
+- `POST /api/attendances/import`
+- `GET /api/attendances/import-template` nếu sau này cần tải file mẫu
+
+7. Response shape cho monthly view
+- Trả về:
+- `month`, `year`, `days[]`
+- `employees[]`
+- Mỗi employee gồm:
+- thông tin user cơ bản: `id`, `name`, `avatar`, `position`
+- `recordsByDate`
+- Mỗi record gồm:
+- `date`
+- `status`
+- `workHours`
+- `checkIn`
+- `checkOut`
+- `note`
+- Backend nên reshape dữ liệu sẵn cho frontend để tránh page tự pivot dữ liệu lớn.
+
+8. Import Excel
+- Dùng thư viện parse Excel phù hợp cho `.xls`, ưu tiên `xlsx`.
+- Quy trình import:
+- upload file
+- parse sheet đầu tiên
+- map cột Excel -> DTO nội bộ
+- validate từng dòng
+- đối chiếu `user` bắt buộc theo `users.employee_code`
+- upsert vào `attendances`
+- trả về summary: tổng dòng, thành công, thất bại, danh sách lỗi
+- Validate tối thiểu:
+- user tồn tại
+- user phải có `employee_code` khớp với `Mã nhân viên`
+- date hợp lệ
+- check_in <= check_out nếu cả hai cùng có
+- work_hours >= 0
+- không insert trùng `(user_id, date)` mà phải update/upsert
+- Nếu format file thực tế khác spec, cần thêm bước mapping header linh hoạt.
+
+8.1. Mapping thực tế đã xác nhận từ file `28Feb2026_Finally.xls`
+- Workbook có `1` sheet: `Sheet1`.
+- Dòng tiêu đề chính:
+- Row 2: `CHI TIẾT CHẤM CÔNG`
+- Row 3 là header thật để import.
+- Header thực tế theo thứ tự cột:
+- `STT`
+- `Mã nhân viên`
+- `Tên nhân viên`
+- `Phòng ban`
+- `Ngày`
+- `Thứ`
+- `Giờ vào`
+- `Giờ ra`
+- `Trễ`
+- `Sớm`
+- `Công`
+- `Tổng giờ`
+- `Tăng ca`
+- `Tổng toàn bộ`
+- `Ca`
+- Dữ liệu thực tế hiện có:
+- `56` dòng dữ liệu
+- `2` nhân viên: `00001 / Tong Quan` và `00002 / NGUYỄN LÂM THẢO`
+- `Phòng ban` đang để trống
+- `Ca` hiện có giá trị `V` và `HC`
+- File hiện là dữ liệu nguồn theo từng dòng `1 nhân viên + 1 ngày`, không phải matrix theo tháng
+
+8.2. Mapping import vào bảng `attendances`
+- `attendances.user_id`
+- map từ `Mã nhân viên`
+- lookup bắt buộc theo `users.employee_code`
+- không fallback sang `username`, `email`, hoặc `Tên nhân viên`
+- nếu không tìm thấy `employee_code` tương ứng thì dòng import phải fail rõ ràng
+- `attendances.date`
+- map từ cột `Ngày`
+- format đọc được thực tế là ngày Excel, parse ra `YYYY-MM-DD`
+- `attendances.check_in`
+- map từ cột `Giờ vào`
+- nếu ô trống thì lưu `null`
+- nếu chỉ có giờ, backend ghép với `date` để tạo datetime
+- `attendances.check_out`
+- map từ cột `Giờ ra`
+- nếu ô trống thì lưu `null`
+- `attendances.work_hours`
+- map chính từ cột `Tổng giờ`
+- giá trị thực tế đọc được dạng số giờ thập phân như `7.92`, `8`, `4.82`
+- không lấy từ cột `Tổng toàn bộ`
+- `attendances.note`
+- phase đầu có thể map từ tổng hợp:
+- `Ca=<value>; Trễ=<value>; Sớm=<value>; Công=<value>; Tăng ca=<value>; Tổng toàn bộ=<value>`
+- hoặc tách sang cột phụ nếu sau này mở rộng schema
+- `attendances.status`
+- file hiện tại không có cột `status` trực tiếp, cần suy diễn
+
+8.3. Rule suy diễn `status` từ file thực tế
+- Nếu `Giờ vào` và `Giờ ra` đều trống, `Tổng giờ = 0`, và `Ca = V`:
+- suy diễn `status = absent` hoặc `off`
+- với schema hiện tại chỉ có `present / late / absent / leave`, nên phase đầu map thành `absent`
+- Nếu có `Giờ vào` hoặc có `Tổng giờ > 0`:
+- suy diễn `status = present`
+- Nếu `Trễ > 0`:
+- suy diễn `status = late`
+- File hiện tại không có tín hiệu đủ chắc để suy diễn `leave`
+- Nếu cần `leave`, phải join thêm từ bảng `leave_requests` đã approved
+
+8.4. Kết luận kỹ thuật cho importer
+- Attendance import có pre-condition:
+- bảng `users` đã được cập nhật thủ công `employee_code` đầy đủ trước khi import
+- nên có màn hình quản lý nhân viên hoặc script/admin step để nhập `employee_code`
+- Importer phải chấp nhận nhiều dòng chỉ có `check_in` nhưng chưa có `check_out`
+- Thực tế file hiện có:
+- `11` dòng có `check_in` nhưng không có `check_out`
+- `3` dòng có đủ `check_in` và `check_out`
+- Không được coi thiếu `check_out` là lỗi format cứng
+- Chỉ nên báo lỗi khi:
+- không map được `Mã nhân viên` -> `users.employee_code`
+- `Ngày` không hợp lệ
+- giờ sai định dạng
+- duplicate conflict mà không upsert được
+
+8.5. Thay đổi schema liên quan `users`
+- Cần thêm field Prisma:
+- `employeeCode String? @unique @map("employee_code") @db.VarChar(50)`
+- Field này cần được trả ra ở:
+- `GET /api/users`
+- `GET /api/users/:id`
+- create/update user DTO nếu muốn chỉnh từ UI
+- Nếu phase đầu chưa có UI chỉnh sửa riêng, có thể cập nhật trực tiếp DB hoặc seed/admin script trước khi import.
+
+9. Frontend implementation
+- Thêm menu item trong `components/app-layout.tsx`.
+- Tạo page mới `app/dashboard/attendance/page.tsx`.
+- Dùng `lib/api-client.ts` cho toàn bộ API calls.
+- Tách helper format giờ / badge màu vào `lib/hr-utils.ts` hoặc file helper attendance riêng nếu logic đủ lớn.
+- UI nên chia thành:
+- toolbar filters
+- import action
+- monthly attendance table
+- detail popover / tooltip cho từng cell nếu cần
+
+10. Phân phase triển khai
+- Phase 1: thêm `users.employee_code` + schema attendance + migration
+- Phase 1.1: cập nhật dữ liệu `employee_code` thủ công cho users
+- Phase 2: backend module `attendances` + API monthly view
+- Phase 3: import Excel endpoint + validation + upsert
+- Phase 4: frontend menu + page monthly matrix
+- Phase 5: polish filter/search/month-year + import result feedback
+- Phase 6: test dữ liệu lớn, scroll, timezone, mobile fallback
+
+11. Test cases cần có
+- Import file hợp lệ tạo mới attendance records.
+- Import lại cùng file sẽ update/upsert, không tạo duplicate.
+- Filter theo tháng / năm trả đúng số ngày.
+- Search theo tên nhân viên hoạt động đúng.
+- Filter theo status hoạt động đúng.
+- User không đủ quyền không import được.
+- Dữ liệu thiếu `check_out` hoặc sai format phải trả lỗi rõ ràng.
+
+12. Acceptance criteria
+- Bảng `users` có field `employee_code`.
+- Import attendance chỉ chạy khi map được `Mã nhân viên` với `users.employee_code`.
+- Có menu `Attendance`.
+- Có màn hình monthly attendance hiển thị toàn bộ nhân viên theo tháng.
+- Có search và filter cơ bản.
+- Import file Excel thành công và dữ liệu xuất hiện ngay trên màn hình.
+- UI bám layout bảng theo ảnh tham chiếu.
+- Backend trả dữ liệu đủ nhanh để dùng với số lượng nhân viên vừa phải.
+
+13. Ghi chú triển khai
+- Cần kiểm tra cấu trúc thực tế của file `28Feb2026_Finally.xls` trước khi khóa mapping import.
+- Nên ưu tiên desktop-first vì layout bảng tháng rất rộng.
+- Nếu số lượng nhân viên lớn, phase đầu có thể thêm pagination theo employee list và giữ cột ngày cố định theo tháng đang xem.

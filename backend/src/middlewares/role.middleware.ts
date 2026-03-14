@@ -10,7 +10,10 @@ export function requireRoles(...roles: UserRole[]) {
         .json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
     }
 
-    if (!roles.includes(req.user.role)) {
+    const hasRole = roles.includes(req.user.role);
+    const hasSystemAdmin = roles.includes('ADMIN') && req.user.systemRole === 'ADMIN';
+
+    if (!hasRole && !hasSystemAdmin) {
       return res.status(403).json({
         success: false,
         error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },

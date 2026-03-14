@@ -49,7 +49,16 @@ const LEAVE_REQUEST_INCLUDE = {
       managerId: true,
     },
   },
-  leaveType: { select: { id: true, code: true, name: true, color: true, usesAnnualBalance: true, maxConsecutiveDays: true } },
+  leaveType: {
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      color: true,
+      usesAnnualBalance: true,
+      maxConsecutiveDays: true,
+    },
+  },
   approver: { select: { id: true, fullName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
@@ -321,7 +330,14 @@ async function validateLeaveRequestRules(params: {
   const [leaveType, leavePolicyRaw, approvalFlowRaw] = await Promise.all([
     prisma.leaveType.findUnique({
       where: { id: params.leaveTypeId },
-      select: { id: true, code: true, name: true, isActive: true, maxConsecutiveDays: true, usesAnnualBalance: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+        maxConsecutiveDays: true,
+        usesAnnualBalance: true,
+      },
     }),
     getLeavePolicy(),
     getApprovalFlow(),
@@ -713,13 +729,7 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
         );
       }
     } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
-      await deductBalance(
-        tx,
-        request.userId,
-        request.leaveTypeId,
-        Number(request.totalDays),
-        year,
-      );
+      await deductBalance(tx, request.userId, request.leaveTypeId, Number(request.totalDays), year);
     }
 
     return serializeRequestById(tx, id);

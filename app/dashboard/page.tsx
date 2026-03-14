@@ -569,10 +569,7 @@ function EmployeeDashboard({
                   'Trạng thái',
                   'Thao tác',
                 ].map((header) => (
-                  <th
-                    key={header}
-                    className={getRecentRequestHeaderClass(header)}
-                  >
+                  <th key={header} className={getRecentRequestHeaderClass(header)}>
                     {header}
                   </th>
                 ))}
@@ -611,15 +608,17 @@ function EmployeeDashboard({
                             <div
                               className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
                               style={{
-                                background:
-                                  'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
                               }}
                             >
                               {getInitials(employeeName)}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold" style={{ color: '#203430' }}>
+                            <p
+                              className="truncate text-sm font-semibold"
+                              style={{ color: '#203430' }}
+                            >
                               {employeeName}
                             </p>
                           </div>
@@ -923,10 +922,7 @@ function AdminHRDashboard({
                   'Trạng thái',
                   'Thao tác',
                 ].map((header) => (
-                  <th
-                    key={header}
-                    className={getRecentRequestHeaderClass(header)}
-                  >
+                  <th key={header} className={getRecentRequestHeaderClass(header)}>
                     {header}
                   </th>
                 ))}
@@ -965,15 +961,17 @@ function AdminHRDashboard({
                             <div
                               className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
                               style={{
-                                background:
-                                  'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
                               }}
                             >
                               {getInitials(employeeName)}
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold" style={{ color: '#203430' }}>
+                            <p
+                              className="truncate text-sm font-semibold"
+                              style={{ color: '#203430' }}
+                            >
                               {employeeName}
                             </p>
                           </div>

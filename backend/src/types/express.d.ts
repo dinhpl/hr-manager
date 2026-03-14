@@ -8,6 +8,7 @@ declare global {
         id: bigint;
         email: string;
         role: UserRole;
+        systemRole?: string | null;
         username: string;
       };
     }

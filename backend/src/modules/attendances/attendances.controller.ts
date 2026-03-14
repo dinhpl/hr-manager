@@ -1,7 +1,20 @@
 import { NextFunction, Request, Response } from 'express';
 import { sendSuccess } from '../../utils/response';
-import { getMonthlyAttendancesSchema } from './attendances.validation';
+import {
+  getMonthlyAttendancesSchema,
+  updateAttendanceParamsSchema,
+  updateAttendanceSchema,
+} from './attendances.validation';
 import * as attendancesService from './attendances.service';
+
+export async function getAvailableMonths(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await attendancesService.getAvailableMonths();
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function getMonthly(req: Request, res: Response, next: NextFunction) {
   try {
@@ -21,6 +34,17 @@ export async function importAttendanceExcel(req: Request, res: Response, next: N
 
     const result = await attendancesService.importAttendanceExcel(req.file.buffer);
     sendSuccess(res, result, undefined, 201);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateAttendance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = updateAttendanceParamsSchema.parse(req.params);
+    const data = updateAttendanceSchema.parse(req.body);
+    const result = await attendancesService.updateAttendance(id, data);
+    sendSuccess(res, result);
   } catch (error) {
     next(error);
   }

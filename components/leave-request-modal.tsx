@@ -621,8 +621,8 @@ export default function LeaveRequestModal({
             </div>
             {!usesAnnualBalance && selectedLeaveType?.code !== 'CO' ? (
               <p className="mb-3 text-xs" style={{ color: '#0E474E' }}>
-                Loại nghỉ <strong>{selectedLeaveType?.name}</strong> không kiểm tra số dư
-                phép. Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
+                Loại nghỉ <strong>{selectedLeaveType?.name}</strong> không kiểm tra số dư phép. Các
+                số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
               </p>
             ) : null}
             {usesAnnualBalance && selectedLeaveType?.code !== 'AL' ? (

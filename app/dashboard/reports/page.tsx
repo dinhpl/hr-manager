@@ -738,6 +738,19 @@ export default function ReportsPage() {
                     : 0,
                 );
 
+                const words = department.label.trim().split(' ').filter(Boolean);
+                let initials = '';
+
+                if (words.length >= 2) {
+                  initials = (words[0][0] + words[1][0]).toUpperCase();
+                } else {
+                  const upperLetters = department.label.replace(/[^A-Z]/g, '');
+                  initials =
+                    upperLetters.length >= 2
+                      ? upperLetters.slice(0, 2)
+                      : department.label.slice(0, 2).toUpperCase();
+                }
+
                 return (
                   <div
                     key={department.label}
@@ -753,7 +766,7 @@ export default function ReportsPage() {
                           className="rounded px-2 py-0.5 text-xs font-bold text-white"
                           style={{ background: department.color }}
                         >
-                          {department.label.slice(0, 2).toUpperCase()}
+                          {initials}
                         </span>
                         <span className="text-sm font-semibold" style={{ color: '#203430' }}>
                           {department.label}

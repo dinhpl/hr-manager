@@ -3,6 +3,7 @@ import prisma from '../../config/prisma';
 const SETTINGS_KEYS = {
   LEAVE_POLICY: 'leave_policy',
   APPROVAL_FLOW: 'approval_flow',
+  ATTENDANCE: 'attendance',
 } as const;
 
 const DEFAULTS: Record<string, unknown> = {
@@ -23,6 +24,11 @@ const DEFAULTS: Record<string, unknown> = {
     ],
     autoApproveWFH: false,
     requireDocumentTypes: ['SL', 'ML'],
+  },
+  attendance: {
+    fulfillmentCase: 'case_1',
+    hoursDisplayCase: 'case_1',
+    showRanking: true,
   },
 };
 
@@ -53,4 +59,12 @@ export async function getApprovalFlow() {
 
 export async function updateApprovalFlow(value: unknown) {
   return updateSetting(SETTINGS_KEYS.APPROVAL_FLOW, value);
+}
+
+export async function getAttendance() {
+  return getSetting(SETTINGS_KEYS.ATTENDANCE);
+}
+
+export async function updateAttendance(value: unknown) {
+  return updateSetting(SETTINGS_KEYS.ATTENDANCE, value);
 }

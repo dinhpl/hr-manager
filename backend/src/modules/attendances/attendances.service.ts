@@ -1,6 +1,10 @@
 import prisma from '../../config/prisma';
 import { buildMeta, getPaginationParams } from '../../utils/pagination';
-import { GetMonthlyAttendancesQuery, type AttendanceStatusValue } from './attendances.validation';
+import {
+  GetMonthlyAttendancesQuery,
+  UpdateAttendanceDto,
+  type AttendanceStatusValue,
+} from './attendances.validation';
 import * as XLSX from 'xlsx';
 
 const USER_ATTENDANCE_SELECT = {
@@ -13,6 +17,7 @@ const USER_ATTENDANCE_SELECT = {
   department: true,
   position: true,
   avatar: true,
+  isCountable: true,
 } as const;
 
 const REQUIRED_HEADERS = [
@@ -126,6 +131,11 @@ function toUtcDateTime(dateValue: string, timeValue: string | null) {
   return new Date(Date.UTC(year, month - 1, day, hours - 7, minutes, 0, 0));
 }
 
+function timeValueToMinutes(value: string) {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
 function deriveStatus(row: ImportRow): AttendanceStatusValue {
   if (row.lateMinutes > 0) return 'late';
   if (row.checkIn || row.workHours > 0) return 'present';
@@ -222,6 +232,23 @@ async function getPagedUsers(query: GetMonthlyAttendancesQuery) {
   return { users: pagedUsers, total: allUsers.length, page, limit };
 }
 
+export async function getAvailableMonths() {
+  const result = await prisma.$queryRaw<Array<{ year: number; month: number }>>`
+    SELECT DISTINCT 
+      EXTRACT(YEAR FROM date)::int AS year,
+      EXTRACT(MONTH FROM date)::int AS month
+    FROM attendances
+    ORDER BY year DESC, month DESC
+  `;
+
+  return result.map((item) => ({
+    year: item.year,
+    month: item.month,
+    value: `${item.year}-${String(item.month).padStart(2, '0')}`,
+    label: `Tháng ${item.month}/${item.year}`,
+  }));
+}
+
 export async function getMonthlyAttendances(query: GetMonthlyAttendancesQuery) {
   const { users, total, page, limit } = await getPagedUsers(query);
   const { start, end } = monthBounds(query.year, query.month);
@@ -265,6 +292,7 @@ export async function getMonthlyAttendances(query: GetMonthlyAttendancesQuery) {
           department: user.department,
           position: user.position,
           avatar: user.avatar,
+          isCountable: user.isCountable,
           recordsByDate: Object.fromEntries(
             Array.from(records.entries()).map(([date, record]) => [
               date,
@@ -511,5 +539,51 @@ export async function importAttendanceExcel(fileBuffer: Buffer) {
     updated,
     failedRows: errors.length,
     errors,
+  };
+}
+
+export async function updateAttendance(id: bigint, data: UpdateAttendanceDto) {
+  const existing = await prisma.attendance.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      date: true,
+    },
+  });
+
+  if (!existing) {
+    throw Object.assign(new Error('Attendance record not found'), { status: 404 });
+  }
+
+  if (
+    data.checkIn &&
+    data.checkOut &&
+    timeValueToMinutes(data.checkIn) > timeValueToMinutes(data.checkOut)
+  ) {
+    throw Object.assign(new Error('Check-in time cannot be later than check-out time'), {
+      status: 400,
+    });
+  }
+
+  const dateValue = toIsoDate(existing.date);
+  const updated = await prisma.attendance.update({
+    where: { id },
+    data: {
+      status: data.status,
+      checkIn: toUtcDateTime(dateValue, data.checkIn ?? null),
+      checkOut: toUtcDateTime(dateValue, data.checkOut ?? null),
+      workHours: data.workHours,
+      note: data.note ?? null,
+    },
+  });
+
+  return {
+    id: updated.id.toString(),
+    date: toIsoDate(updated.date),
+    status: updated.status,
+    workHours: Number(updated.workHours),
+    checkIn: updated.checkIn?.toISOString() ?? null,
+    checkOut: updated.checkOut?.toISOString() ?? null,
+    note: updated.note,
   };
 }

@@ -37,3 +37,21 @@ export async function updateApprovalFlow(req: Request, res: Response, next: Next
     next(err);
   }
 }
+
+export async function getAttendance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await service.getAttendance();
+    sendSuccess(res, data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateAttendance(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.updateAttendance(req.body);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
