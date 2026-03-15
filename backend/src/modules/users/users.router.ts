@@ -9,6 +9,7 @@ export const usersRouter: IRouter = Router();
 usersRouter.use(authMiddleware);
 
 usersRouter.get('/dropdown', ctrl.getUsersDropdown); // ALL roles — handover dropdown in leave form
+usersRouter.get('/birthdays', requireRoles('HR', 'ADMIN', 'MANAGER'), ctrl.getBirthdaysByMonth);
 usersRouter.get('/', requireRoles('HR', 'ADMIN', 'MANAGER'), ctrl.getUsers);
 usersRouter.get('/:id', ctrl.getUserById);
 usersRouter.post('/', requireRoles('HR', 'ADMIN'), ctrl.createUser);

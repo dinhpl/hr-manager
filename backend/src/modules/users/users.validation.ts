@@ -8,6 +8,11 @@ const nullableEmployeeCodeSchema = z.union([employeeCodeSchema, z.literal(''), z
 const nullableDepartmentSchema = z.union([departmentSchema, z.literal(''), z.null()]);
 const nullablePositionSchema = z.union([positionSchema, z.literal(''), z.null()]);
 const nullableDateTimeSchema = z.union([z.string().datetime(), z.literal(''), z.null()]);
+const nullableDateSchema = z.union([
+  z.string().regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/).transform((v) => (v.includes('T') ? v : `${v}T00:00:00.000Z`)),
+  z.literal(''),
+  z.null(),
+]);
 
 export const getUsersQuerySchema = z.object({
   search: z.string().optional(),
@@ -32,6 +37,7 @@ export const createUserSchema = z.object({
   managerId: z.coerce.bigint().optional(),
   isCountable: z.boolean().optional(),
   companyJoinDate: z.string().datetime().optional(),
+  birthday: z.string().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -52,6 +58,9 @@ export const updateUserSchema = z.object({
   managerId: z.union([z.coerce.bigint(), z.null()]).optional(),
   isCountable: z.boolean().optional(),
   companyJoinDate: nullableDateTimeSchema
+    .optional()
+    .transform((value) => (value === '' ? null : value)),
+  birthday: nullableDateSchema
     .optional()
     .transform((value) => (value === '' ? null : value)),
   isActive: z.boolean().optional(),

@@ -18,7 +18,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
-import CalendarDayDetailModal from '@/components/calendar-day-detail-modal';
+import CalendarDayDetailModal, {
+  CalendarDayBirthday,
+  CalendarDayHoliday,
+  CalendarDayUser,
+} from '@/components/calendar-day-detail-modal';
 import LeaveRequestModal from '@/components/leave-request-modal';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import {
@@ -67,15 +71,8 @@ type DashboardSummary = DashboardEmployeeSummary | DashboardManagerSummary;
 type CalendarData = Record<
   string,
   {
-    users: {
-      requestId?: string;
-      name: string;
-      status: 'approved' | 'pending';
-      reason?: string;
-      leaveType?: { code: string; name: string; color: string };
-      approver?: string;
-      department?: string | null;
-    }[];
+    users: CalendarDayUser[];
+    holidays: CalendarDayHoliday[];
   }
 >;
 
@@ -107,6 +104,8 @@ interface DashboardLeaveRequest {
   } | null;
 }
 
+type BirthdayData = Record<string, CalendarDayBirthday[]>;
+
 interface SharedDashboardProps {
   currentMonth: number;
   currentYear: number;
@@ -114,7 +113,12 @@ interface SharedDashboardProps {
   recentRequests: DashboardLeaveRequest[];
   onNextMonth: () => void;
   onOpenDetail: (request: DashboardLeaveRequest) => void;
-  onOpenDayDetail: (date: string, users: CalendarData[string]['users']) => void;
+  onOpenDayDetail: (
+    date: string,
+    users: CalendarData[string]['users'],
+    holidays: CalendarData[string]['holidays'],
+    birthdays?: CalendarDayBirthday[],
+  ) => void;
   onOpenRequestModal: () => void;
   onPrevMonth: () => void;
 }
@@ -244,11 +248,18 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
 function CalendarGrid({
   calendarData,
   calendarDays,
+  birthdayData,
   onDayClick,
 }: {
   calendarData: CalendarData;
   calendarDays: ReturnType<typeof getCalendarDays>;
-  onDayClick?: (date: string, users: CalendarData[string]['users']) => void;
+  birthdayData?: BirthdayData;
+  onDayClick?: (
+    date: string,
+    users: CalendarData[string]['users'],
+    holidays: CalendarData[string]['holidays'],
+    birthdays?: CalendarDayBirthday[],
+  ) => void;
 }) {
   const todayStr = useMemo(() => {
     const d = new Date();
@@ -274,22 +285,33 @@ function CalendarGrid({
           {calendarDays.map((cell, index) => {
             const data = calendarData[cell.dateStr];
             const users = data?.users ?? [];
+            const holidays = data?.holidays ?? [];
+            const birthdays = birthdayData?.[cell.dateStr] ?? [];
             const hasPending = users.some((u) => u.status === 'pending');
             const isToday = cell.dateStr === todayStr;
             const isCurrentMonth = cell.month === 'current';
-
             const hasUsers = users.length > 0;
+            const hasHolidays = holidays.length > 0;
+            const hasBirthdays = birthdays.length > 0;
+            const hasEvents = hasUsers || hasHolidays || hasBirthdays;
+            const visibleHolidayCount = Math.min(holidays.length, 2);
+            const visibleBirthdayCount = Math.min(birthdays.length, 1);
+            const visibleUserCount = Math.min(users.length, Math.max(0, 3 - visibleHolidayCount - visibleBirthdayCount));
+            const hiddenCount = holidays.length + birthdays.length + users.length - visibleHolidayCount - visibleBirthdayCount - visibleUserCount;
             return (
               <div
                 key={`${cell.dateStr}-${index}`}
                 className={`flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors ${
-                  hasUsers && isCurrentMonth
-                    ? 'cursor-pointer hover:bg-green-50/50'
+                  hasEvents && isCurrentMonth
+                    ? 'cursor-pointer hover:bg-orange-50/70'
                     : 'hover:bg-gray-50/50'
                 }`}
+                style={{
+                  background: hasHolidays && isCurrentMonth ? '#fffaf5' : undefined,
+                }}
                 onClick={() => {
-                  if (hasUsers && isCurrentMonth && onDayClick) {
-                    onDayClick(cell.dateStr, users);
+                  if (hasEvents && isCurrentMonth && onDayClick) {
+                    onDayClick(cell.dateStr, users, holidays, birthdays.length > 0 ? birthdays : undefined);
                   }
                 }}
               >
@@ -311,9 +333,24 @@ function CalendarGrid({
                     <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400" />
                   )}
                 </div>
+                {isCurrentMonth &&
+                  holidays.slice(0, visibleHolidayCount).map((holiday) => (
+                    <div
+                      key={holiday.id}
+                      className="truncate rounded-[4px] px-1.5 py-[3px] text-[9px] font-semibold leading-none"
+                      style={{
+                        background: '#ffedd5',
+                        color: '#c2410c',
+                        borderLeft: '2px solid #ea580c',
+                      }}
+                      title={holiday.name}
+                    >
+                      {holiday.name}
+                    </div>
+                  ))}
                 {/* Event chips */}
                 {isCurrentMonth &&
-                  users.slice(0, 3).map((u, i) => (
+                  users.slice(0, visibleUserCount).map((u, i) => (
                     <div
                       key={i}
                       className="truncate rounded-[4px] px-1.5 py-[3px] text-[9px] font-semibold leading-none"
@@ -327,10 +364,21 @@ function CalendarGrid({
                       {u.name}
                     </div>
                   ))}
+                {isCurrentMonth &&
+                  birthdays.slice(0, visibleBirthdayCount).map((b, i) => (
+                    <div
+                      key={`b-${i}`}
+                      className="truncate rounded-[4px] px-1.5 py-[3px] text-[9px] font-semibold leading-none"
+                      style={{ background: '#fce7f3', color: '#9d174d', borderLeft: '2px solid #ec4899' }}
+                      title={`🎂 ${b.name}`}
+                    >
+                      🎂 {b.name}
+                    </div>
+                  ))}
                 {/* Overflow */}
-                {isCurrentMonth && users.length > 3 && (
+                {isCurrentMonth && hiddenCount > 0 && (
                   <span className="pl-1 text-[9px] font-medium text-gray-400">
-                    +{users.length - 3} khác
+                    +{hiddenCount} khác
                   </span>
                 )}
               </div>
@@ -472,7 +520,7 @@ function EmployeeDashboard({
           </div>
 
           {/* Legend */}
-          <div className="mb-3 flex items-center gap-4">
+          <div className="mb-3 flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span
                 className="inline-block h-3 w-2.5 rounded-sm"
@@ -487,11 +535,21 @@ function EmployeeDashboard({
               />
               <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
+            {birthdayData && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-3 w-2.5 rounded-sm"
+                  style={{ background: '#fce7f3', borderLeft: '2px solid #ec4899' }}
+                />
+                <span className="text-xs text-gray-500">Sinh nhật</span>
+              </div>
+            )}
           </div>
 
           <CalendarGrid
             calendarDays={calendarDays}
             calendarData={calendarData}
+            birthdayData={birthdayData}
             onDayClick={onOpenDayDetail}
           />
         </div>
@@ -685,6 +743,7 @@ function AdminHRDashboard({
   recentRequests,
   summary,
   userRole,
+  birthdayData,
   onNextMonth,
   onOpenDetail,
   onOpenDayDetail,
@@ -693,6 +752,7 @@ function AdminHRDashboard({
 }: SharedDashboardProps & {
   summary: DashboardManagerSummary['stats'];
   userRole: Exclude<UserRole, 'employee'>;
+  birthdayData?: BirthdayData;
 }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
@@ -821,7 +881,7 @@ function AdminHRDashboard({
           </div>
 
           {/* Legend */}
-          <div className="mb-3 flex items-center gap-4">
+          <div className="mb-3 flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span
                 className="inline-block h-3 w-2.5 rounded-sm"
@@ -836,11 +896,21 @@ function AdminHRDashboard({
               />
               <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
+            {birthdayData && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-3 w-2.5 rounded-sm"
+                  style={{ background: '#fce7f3', borderLeft: '2px solid #ec4899' }}
+                />
+                <span className="text-xs text-gray-500">Sinh nhật</span>
+              </div>
+            )}
           </div>
 
           <CalendarGrid
             calendarDays={calendarDays}
             calendarData={calendarData}
+            birthdayData={birthdayData}
             onDayClick={onOpenDayDetail}
           />
         </div>
@@ -868,6 +938,40 @@ function AdminHRDashboard({
               Xem chi tiết →
             </Link>
           </div>
+
+          {/* Birthday this month card */}
+          {birthdayData && Object.values(birthdayData).flat().length > 0 && (
+            <div
+              className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
+              style={{ border: '1px solid #e2ede9' }}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold" style={{ color: '#203430' }}>
+                  🎂 Sinh nhật tháng này
+                </h3>
+              </div>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {Object.entries(birthdayData)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .flatMap(([dateStr, people]) =>
+                    people.map((p) => (
+                      <div key={`${dateStr}-${p.id}`} className="flex items-center gap-2">
+                        <div
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                          style={{ background: 'linear-gradient(135deg, #f472b6 0%, #db2777 100%)' }}
+                        >
+                          {p.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold truncate" style={{ color: '#203430' }}>{p.name}</p>
+                          <p className="text-[10px]" style={{ color: '#6b7f78' }}>{dateStr.slice(8, 10)}/{dateStr.slice(5, 7)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+              </div>
+            </div>
+          )}
 
           <div
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
@@ -1031,6 +1135,7 @@ export default function DashboardPage() {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [calendarData, setCalendarData] = useState<CalendarData>({});
+  const [birthdayData, setBirthdayData] = useState<BirthdayData>({});
   const [recentRequests, setRecentRequests] = useState<DashboardLeaveRequest[]>([]);
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(now.getMonth() + 1);
@@ -1038,6 +1143,8 @@ export default function DashboardPage() {
   const [selectedDayDetail, setSelectedDayDetail] = useState<{
     date: string;
     users: CalendarData[string]['users'];
+    holidays: CalendarData[string]['holidays'];
+    birthdays?: CalendarDayBirthday[];
   } | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -1083,6 +1190,18 @@ export default function DashboardPage() {
     }
   }, [currentMonth, currentYear]);
 
+  const loadBirthdayData = useCallback(async (role: string) => {
+    if (role !== 'HR' && role !== 'ADMIN') return;
+    try {
+      const response = await apiClient.get<BirthdayData>(
+        `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
+      );
+      setBirthdayData(response.data || {});
+    } catch {
+      setBirthdayData({});
+    }
+  }, [currentMonth, currentYear]);
+
   useEffect(() => {
     void loadCurrentUser();
   }, [loadCurrentUser]);
@@ -1090,6 +1209,12 @@ export default function DashboardPage() {
   useEffect(() => {
     void loadDashboardData();
   }, [loadDashboardData]);
+
+  useEffect(() => {
+    if (userInfo?.role) {
+      void loadBirthdayData(userInfo.role);
+    }
+  }, [loadBirthdayData, userInfo?.role]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) {
@@ -1182,7 +1307,7 @@ export default function DashboardPage() {
           summary={summary.stats}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
-          onOpenDayDetail={(date, users) => setSelectedDayDetail({ date, users })}
+          onOpenDayDetail={(date, users, holidays, birthdays) => setSelectedDayDetail({ date, users, holidays, birthdays })}
           onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
           onPrevMonth={handlePrevMonth}
         />
@@ -1191,6 +1316,7 @@ export default function DashboardPage() {
           currentMonth={currentMonth}
           currentYear={currentYear}
           calendarData={calendarData}
+          birthdayData={birthdayData}
           recentRequests={recentRequests}
           summary={
             summary.type === 'employee'
@@ -1206,7 +1332,7 @@ export default function DashboardPage() {
           userRole={currentRole === 'employee' ? 'manager' : currentRole}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
-          onOpenDayDetail={(date, users) => setSelectedDayDetail({ date, users })}
+          onOpenDayDetail={(date, users, holidays, birthdays) => setSelectedDayDetail({ date, users, holidays, birthdays })}
           onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
           onPrevMonth={handlePrevMonth}
         />
@@ -1216,6 +1342,8 @@ export default function DashboardPage() {
       <CalendarDayDetailModal
         date={selectedDayDetail?.date}
         users={selectedDayDetail?.users}
+        holidays={selectedDayDetail?.holidays}
+        birthdays={selectedDayDetail?.birthdays}
         onClose={() => setSelectedDayDetail(null)}
         onViewDetail={(user) => void handleOpenCalendarRequestDetail(user)}
       />

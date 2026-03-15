@@ -11,6 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:holidays": "tsx prisma/seed-holidays.ts",
     "format": "prettier --config ../.prettierrc --ignore-path ../.prettierignore --write \"src/**/*.{ts,tsx,js,jsx}\" \"prisma/**/*.{ts,js}\" \"*.json\"",
     "format:check": "prettier --config ../.prettierrc --ignore-path ../.prettierignore --check \"src/**/*.{ts,tsx,js,jsx}\" \"prisma/**/*.{ts,js}\" \"*.json\"",
     "test": "vitest run",

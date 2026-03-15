@@ -14,6 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import SettingsHolidaysTab from '@/components/settings-holidays-tab';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
@@ -71,6 +72,7 @@ const TAB_ITEMS = [
   { id: 'leave', label: 'Chính sách nghỉ phép', icon: Calendar },
   { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
   { id: 'leave-types', label: 'Loại nghỉ phép', icon: Tag },
+  { id: 'holidays', label: 'Ngày nghỉ lễ', icon: Calendar },
 ] as const;
 
 const APPROVER_ROLE_OPTIONS: ApprovalLevel['approverRole'][] = [
@@ -1186,6 +1188,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'holidays' && <SettingsHolidaysTab />}
             </>
           )}
         </div>

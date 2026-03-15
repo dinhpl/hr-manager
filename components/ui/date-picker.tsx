@@ -14,6 +14,9 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  captionLayout?: 'label' | 'dropdown';
+  fromYear?: number;
+  toYear?: number;
 }
 
 function parseDateValue(value?: string): Date | undefined {
@@ -35,6 +38,9 @@ export function DatePicker({
   placeholder = 'Pick a date',
   className,
   disabled = false,
+  captionLayout = 'label',
+  fromYear,
+  toYear,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -72,6 +78,10 @@ export function DatePicker({
           selected={selectedDate}
           onSelect={handleDateSelect}
           disabled={disabled}
+          captionLayout={captionLayout}
+          {...(fromYear !== undefined && { startMonth: new Date(fromYear, 0) })}
+          {...(toYear !== undefined && { endMonth: new Date(toYear, 11) })}
+          fixedWeeks
           initialFocus
         />
       </PopoverContent>

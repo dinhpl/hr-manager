@@ -1,4 +1,5 @@
 import { PrismaClient, UserRole } from '@prisma/client';
+import { seedDefaultHolidays } from './holiday-seed';
 
 const prisma = new PrismaClient();
 
@@ -578,6 +579,15 @@ async function main() {
     ],
     skipDuplicates: true,
   });
+
+  const holidaySeedResult = await seedDefaultHolidays(prisma);
+  if (holidaySeedResult.skipped) {
+    console.log('📅 Holiday bootstrap skipped during full seed because no default data was found.');
+  } else {
+    console.log(
+      `📅 Seeded ${holidaySeedResult.created}/${holidaySeedResult.totalDefaults} default holidays.`,
+    );
+  }
 
   // Sync auto-increment sequences after bulk insert with explicit ids
   await Promise.all([

@@ -20,5 +20,9 @@ else
   echo "[entrypoint] DB already has $USER_COUNT users — skipping seed to preserve existing data."
 fi
 
+echo "[entrypoint] Bootstrapping default holidays if holiday table is empty..."
+npx tsx prisma/seed-holidays.ts
+echo "[entrypoint] Holiday bootstrap complete."
+
 echo "[entrypoint] Starting server..."
 exec node dist/server.js

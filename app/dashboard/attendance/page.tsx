@@ -53,6 +53,8 @@ type AttendanceDay = {
   day: number;
   weekday: number;
   isWeekend: boolean;
+  isHoliday: boolean;
+  holidayNames: string[];
 };
 
 type AttendanceRecord = {
@@ -212,6 +214,36 @@ function formatHours(value: number) {
   return `${hours}h${String(minutes).padStart(2, '0')}m`;
 }
 
+function getDayHeaderStyles(day: AttendanceDay) {
+  if (day.isHoliday) {
+    return {
+      background: '#fff7ed',
+      color: '#c2410c',
+      widthClass: 'min-w-[140px]',
+    };
+  }
+
+  if (day.isWeekend) {
+    return {
+      background: '#fafafa',
+      color: '#9ca3af',
+      widthClass: 'min-w-[40px]',
+    };
+  }
+
+  return {
+    background: '#f8faf9',
+    color: '#203430',
+    widthClass: 'min-w-[110px]',
+  };
+}
+
+function getAttendanceCellBackground(day: AttendanceDay) {
+  if (day.isHoliday) return '#fffaf5';
+  if (day.isWeekend) return '#fafafa';
+  return '#fff';
+}
+
 function getAvatarUrl(avatar?: string | null) {
   if (!avatar) return null;
   if (avatar.startsWith('http') || avatar.startsWith('/assets')) return avatar;
@@ -326,6 +358,19 @@ function computeAttendanceView(
     displayHours,
     actualHours,
   };
+}
+
+function shouldHideHolidayAbsentRecord(
+  day: AttendanceDay | undefined,
+  record: Pick<AttendanceRecord, 'status' | 'checkIn' | 'checkOut'> | undefined | null,
+) {
+  return Boolean(
+    day?.isHoliday &&
+      record &&
+      record.status === 'absent' &&
+      !record.checkIn &&
+      !record.checkOut,
+  );
 }
 
 function getStatusStyle(status: AttendanceDisplayStatus) {
@@ -543,6 +588,11 @@ export default function AttendancePage() {
     return Array.from(depts).sort();
   }, [data]);
 
+  const attendanceDayMap = useMemo(
+    () => Object.fromEntries((data?.days ?? []).map((day) => [day.date, day])),
+    [data],
+  );
+
   const filteredEmployees = useMemo(() => {
     // Only keep employees that are countable (true) or don't have this property defined
     const employees = data?.employees?.filter((emp) => emp.isCountable !== false) ?? [];
@@ -555,11 +605,13 @@ export default function AttendancePage() {
     if (!selectedStatuses.length) return filtered;
 
     return filtered.filter((employee) =>
-      Object.values(employee.recordsByDate).some((record) =>
-        selectedStatuses.includes(computeAttendanceView(record, settings).status),
-      ),
+      Object.values(employee.recordsByDate).some((record) => {
+        const day = attendanceDayMap[record.date];
+        if (shouldHideHolidayAbsentRecord(day, record)) return false;
+        return selectedStatuses.includes(computeAttendanceView(record, settings).status);
+      }),
     );
-  }, [data, selectedStatuses, settings, selectedDepartment]);
+  }, [attendanceDayMap, data, selectedStatuses, settings, selectedDepartment]);
 
   const handleSaveSettings = async () => {
     setIsSettingsSaving(true);
@@ -579,23 +631,29 @@ export default function AttendancePage() {
 
     return [...filteredEmployees].sort((a, b) => {
       const totalA = Object.values(a.recordsByDate).reduce((sum, record) => {
+        const day = attendanceDayMap[record.date];
+        if (shouldHideHolidayAbsentRecord(day, record)) return sum;
         const view = computeAttendanceView(record, settings);
         return sum + view.displayHours;
       }, 0);
 
       const totalB = Object.values(b.recordsByDate).reduce((sum, record) => {
+        const day = attendanceDayMap[record.date];
+        if (shouldHideHolidayAbsentRecord(day, record)) return sum;
         const view = computeAttendanceView(record, settings);
         return sum + view.displayHours;
       }, 0);
 
       return sortOrder === 'asc' ? totalA - totalB : totalB - totalA;
     });
-  }, [filteredEmployees, sortOrder, settings]);
+  }, [attendanceDayMap, filteredEmployees, sortOrder, settings]);
 
   const topEmployees = useMemo(() => {
     const employees = data?.employees?.filter((emp) => emp.isCountable !== false) ?? [];
     const mapped = employees.map((emp) => {
       const totalMonthHours = Object.values(emp.recordsByDate).reduce((sum, record) => {
+        const day = attendanceDayMap[record.date];
+        if (shouldHideHolidayAbsentRecord(day, record)) return sum;
         const view = computeAttendanceView(record, settings);
         return sum + view.displayHours;
       }, 0);
@@ -606,7 +664,7 @@ export default function AttendancePage() {
       .filter((emp) => emp.totalMonthHours > 0)
       .sort((a, b) => b.totalMonthHours - a.totalMonthHours)
       .slice(0, 3);
-  }, [data, settings]);
+  }, [attendanceDayMap, data, settings]);
 
   const stats = useMemo(() => {
     let activeDays = 0;
@@ -615,6 +673,8 @@ export default function AttendancePage() {
 
     sortedEmployees.forEach((employee) => {
       Object.values(employee.recordsByDate).forEach((record) => {
+        const day = attendanceDayMap[record.date];
+        if (shouldHideHolidayAbsentRecord(day, record)) return;
         const view = computeAttendanceView(record, settings);
         if (view.status === 'present') activeDays += 1;
         if (view.status === 'insufficient') insufficientDays += 1;
@@ -628,7 +688,7 @@ export default function AttendancePage() {
       insufficientDays,
       absentDays,
     };
-  }, [sortedEmployees, settings]);
+  }, [attendanceDayMap, sortedEmployees, settings]);
 
   const canEdit = isAttendanceEditor(viewer);
 
@@ -1129,22 +1189,37 @@ export default function AttendancePage() {
                 {data?.days.map((day) => (
                   <th
                     key={day.date}
-                    className={`border-r px-3 py-3 font-semibold text-center ${
-                      day.isWeekend ? 'min-w-[40px]' : 'min-w-[110px]'
-                    }`}
+                    className={`border-r px-3 py-3 font-semibold text-center ${getDayHeaderStyles(day).widthClass}`}
                     style={{
-                      background: day.isWeekend ? '#fafafa' : '#f8faf9',
+                      background: getDayHeaderStyles(day).background,
                       borderColor: '#e2ede9',
-                      color: day.isWeekend ? '#9ca3af' : '#203430',
+                      color: getDayHeaderStyles(day).color,
                     }}
+                    title={day.holidayNames.join(', ') || undefined}
                   >
                     <div className="space-y-0.5">
-                      <p className={day.isWeekend ? 'text-[10px]' : ''}>
+                      <p className={day.isWeekend && !day.isHoliday ? 'text-[10px]' : ''}>
                         {WEEKDAY_LABELS[day.weekday]}
                       </p>
-                      <p className={`font-bold ${day.isWeekend ? 'text-xs' : 'text-sm'}`}>
+                      <p
+                        className={`font-bold ${
+                          day.isWeekend && !day.isHoliday ? 'text-xs' : 'text-sm'
+                        }`}
+                      >
                         {day.day}
                       </p>
+                      {day.isHoliday && day.holidayNames.length > 0 && (
+                        <div className="space-y-0.5 pt-1">
+                          {day.holidayNames.slice(0, 2).map((name) => (
+                            <p key={name} className="line-clamp-2 text-[10px] font-semibold leading-relaxed">
+                              {name}
+                            </p>
+                          ))}
+                          {day.holidayNames.length > 2 && (
+                            <p className="text-[10px] font-medium">+{day.holidayNames.length - 2}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -1253,21 +1328,37 @@ export default function AttendancePage() {
 
                       {data?.days.map((day) => {
                         const record = employee.recordsByDate[day.date];
-                        const view = record ? computeAttendanceView(record, settings) : null;
+                        const hiddenHolidayAbsent = shouldHideHolidayAbsentRecord(day, record);
+                        const view =
+                          record && !hiddenHolidayAbsent ? computeAttendanceView(record, settings) : null;
                         const statusStyle = view ? getStatusStyle(view.status) : null;
 
                         return (
                           <td
                             key={`${employee.id}-${day.date}`}
                             className={`border-r border-t align-center ${
-                              day.isWeekend ? 'px-2 py-2' : 'px-3 py-3'
+                              day.isWeekend && !day.isHoliday ? 'px-2 py-2' : 'px-3 py-3'
                             }`}
                             style={{
                               borderColor: '#e2ede9',
-                              background: day.isWeekend ? '#fafafa' : '#fff',
+                              background: getAttendanceCellBackground(day),
                             }}
                           >
-                            {day.isWeekend ? (
+                            {day.isHoliday && (!record || hiddenHolidayAbsent) ? (
+                              <div className="flex h-full items-center justify-center">
+                                <div
+                                  className="rounded-lg border px-2.5 py-1.5 text-center text-[10px] font-semibold"
+                                  style={{
+                                    borderColor: '#fdba74',
+                                    background: '#fff',
+                                    color: '#c2410c',
+                                  }}
+                                  title={day.holidayNames.join(', ')}
+                                >
+                                  {day.holidayNames[0] || 'Lễ'}
+                                </div>
+                              </div>
+                            ) : day.isWeekend ? (
                               <div className="flex h-full items-center justify-center">
                                 <div
                                   className="rounded-lg px-2 py-1 text-center text-[10px] font-medium"

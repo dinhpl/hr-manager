@@ -25,6 +25,7 @@ const USER_SELECT = {
   teamId: true,
   isCountable: true,
   companyJoinDate: true,
+  birthday: true,
   isActive: true,
   createdAt: true,
   manager: { select: { id: true, fullName: true } },
@@ -110,6 +111,7 @@ export async function createUser(data: CreateUserDto) {
     password,
     managerId,
     companyJoinDate,
+    birthday,
     email,
     username,
     employeeCode,
@@ -151,6 +153,7 @@ export async function createUser(data: CreateUserDto) {
       ...(isCountable !== undefined && { isCountable }),
       ...(managerId && { manager: { connect: { id: managerId } } }),
       ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
+      ...(birthday && { birthday: new Date(birthday) }),
     },
     select: USER_SELECT,
   });
@@ -162,7 +165,7 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
   const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!exists) throw Object.assign(new Error('User not found'), { status: 404 });
 
-  const { password, companyJoinDate, managerId, ...rest } = data;
+  const { password, companyJoinDate, birthday, managerId, ...rest } = data;
 
   if (managerId === id) {
     throw Object.assign(new Error('User cannot be their own manager'), { status: 400 });
@@ -223,6 +226,9 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
       ...(companyJoinDate !== undefined && {
         companyJoinDate: companyJoinDate ? new Date(companyJoinDate) : null,
       }),
+      ...(birthday !== undefined && {
+        birthday: birthday ? new Date(birthday) : null,
+      }),
     },
     select: USER_SELECT,
   });
@@ -234,6 +240,39 @@ export async function deleteUser(id: bigint) {
   if (!exists) throw Object.assign(new Error('User not found'), { status: 404 });
   // Soft delete only
   await prisma.user.update({ where: { id }, data: { isActive: false } });
+}
+
+// Birthday map for a given month: "YYYY-MM-DD" → list of employees with birthday that day
+export async function getUsersBirthdaysByMonth(year: number, month: number) {
+  const users = await prisma.user.findMany({
+    where: { birthday: { not: null }, isActive: true },
+    select: {
+      id: true,
+      fullName: true,
+      department: true,
+      position: true,
+      birthday: true,
+    },
+  });
+
+  const result: Record<string, { id: string; name: string; department: string | null; position: string | null }[]> = {};
+
+  for (const user of users) {
+    const bday = user.birthday!;
+    if (bday.getMonth() + 1 === month) {
+      const day = bday.getDate();
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (!result[dateStr]) result[dateStr] = [];
+      result[dateStr].push({
+        id: String(user.id),
+        name: user.fullName,
+        department: user.department,
+        position: user.position,
+      });
+    }
+  }
+
+  return result;
 }
 
 // Dropdown for leave-request form handover selector

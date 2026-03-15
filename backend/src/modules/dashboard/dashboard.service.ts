@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma';
 import { UserRole } from '@prisma/client';
 import { serializeLeaveRequestDates } from '../../utils/date-time';
+import { getHolidayMapForMonth } from '../holidays/holidays.service';
 
 function buildManagerLeaveScope(userId: bigint) {
   return {
@@ -123,19 +124,22 @@ export async function getCalendarData(
             }
           : { fromDate: { lte: end }, toDate: { gte: start }, status: statusFilter };
 
-  const requests = await prisma.leaveRequest.findMany({
-    where,
-    select: {
-      id: true,
-      fromDate: true,
-      toDate: true,
-      status: true,
-      reason: true,
-      user: { select: { id: true, fullName: true, username: true, department: true } },
-      leaveType: { select: { code: true, name: true, color: true } },
-      approver: { select: { fullName: true } },
-    },
-  });
+  const [requests, holidayMap] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where,
+      select: {
+        id: true,
+        fromDate: true,
+        toDate: true,
+        status: true,
+        reason: true,
+        user: { select: { id: true, fullName: true, username: true, department: true } },
+        leaveType: { select: { code: true, name: true, color: true } },
+        approver: { select: { fullName: true } },
+      },
+    }),
+    getHolidayMapForMonth(year, month),
+  ]);
 
   // Build map: dateStr → list of { name, status, reason, leaveType, approver } entries per user per day
   type CalendarUser = {
@@ -147,7 +151,17 @@ export async function getCalendarData(
     approver?: string;
     department?: string | null;
   };
-  const calendarMap: Record<string, { users: CalendarUser[] }> = {};
+  const calendarMap: Record<
+    string,
+    { users: CalendarUser[]; holidays: { id: string; name: string }[] }
+  > = {};
+
+  Object.entries(holidayMap).forEach(([date, holidays]) => {
+    calendarMap[date] = {
+      users: [],
+      holidays,
+    };
+  });
 
   for (const r of requests) {
     const safeRequest = sanitizeLeaveReasonForViewer(r, user);
@@ -161,7 +175,7 @@ export async function getCalendarData(
     const cur = new Date(r.fromDate);
     while (cur <= r.toDate) {
       const key = cur.toISOString().slice(0, 10);
-      if (!calendarMap[key]) calendarMap[key] = { users: [] };
+      if (!calendarMap[key]) calendarMap[key] = { users: [], holidays: [] };
       // Avoid duplicate same user on same day (edge case: overlapping requests)
       const alreadyAdded = calendarMap[key].users.some(
         (u) => u.name === userName && u.status === status,

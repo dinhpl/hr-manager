@@ -65,6 +65,7 @@ interface EmployeeApiItem {
   } | null;
   isActive: boolean;
   createdAt: string;
+  birthday?: string | null;
 }
 
 interface UserDropdownItem {
@@ -93,6 +94,7 @@ interface EmployeeRow {
   isCountable: boolean;
   status: EmployeeStatus;
   companyJoinDate: string | null;
+  birthday: string | null;
 }
 
 interface EmployeeFormData {
@@ -108,6 +110,7 @@ interface EmployeeFormData {
   managerId: string;
   isCountable: boolean;
   companyJoinDate: string;
+  birthday: string;
   status: EmployeeStatus;
 }
 
@@ -203,6 +206,7 @@ function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeForm
     managerId: '',
     isCountable: true,
     companyJoinDate: '',
+    birthday: '',
     status: 'active',
   };
 }
@@ -235,6 +239,7 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
     isCountable: item.isCountable ?? true,
     status: item.isActive ? 'active' : 'inactive',
     companyJoinDate: item.companyJoinDate ?? null,
+    birthday: item.birthday ? item.birthday.slice(0, 10) : null,
   };
 }
 
@@ -462,6 +467,7 @@ export default function EmployeesPage() {
         companyJoinDate: formData.companyJoinDate
           ? toIsoDateTime(formData.companyJoinDate)
           : undefined,
+        birthday: formData.birthday ? toIsoDateTime(formData.birthday) : undefined,
       });
 
       if (formData.status === 'inactive') {
@@ -498,6 +504,7 @@ export default function EmployeesPage() {
         managerId: formData.managerId ? formData.managerId : null,
         isCountable: formData.isCountable,
         companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : null,
+        birthday: formData.birthday ? toIsoDateTime(formData.birthday) : null,
         isActive: formData.status === 'active',
       });
 
@@ -560,6 +567,14 @@ export default function EmployeesPage() {
       setIsRecalculating(false);
     }
   };
+
+  const birthdayThisMonthCount = useMemo(() => {
+    const thisMonth = new Date().getMonth() + 1;
+    return employees.filter((emp) => {
+      if (!emp.birthday) return false;
+      return new Date(emp.birthday).getMonth() + 1 === thisMonth;
+    }).length;
+  }, [employees]);
 
   return (
     <div className="space-y-5">
@@ -641,7 +656,7 @@ export default function EmployeesPage() {
           },
           {
             label: 'Sinh nhật tháng này',
-            value: '—',
+            value: birthdayThisMonthCount.toString(),
             icon: Cake,
             color: '#06b6d4',
             bg: '#ecfeff',
@@ -794,6 +809,7 @@ export default function EmployeesPage() {
                   'Phòng ban',
                   'Vai trò',
                   'Ngày tham gia',
+                  'Sinh nhật',
                   'Trạng thái',
                   'Thao tác',
                 ].map((heading) => (
@@ -810,7 +826,7 @@ export default function EmployeesPage() {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -820,7 +836,7 @@ export default function EmployeesPage() {
               ) : employees.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -1016,6 +1032,14 @@ export default function EmployeesPage() {
                         style={{ color: '#6b7f78' }}
                       >
                         {formatDateVN(employee.companyJoinDate)}
+                      </td>
+                      <td
+                        className="px-3 py-3 text-xs whitespace-nowrap"
+                        style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
+                      >
+                        {employee.birthday
+                          ? `🎂 ${employee.birthday!.slice(0, 10).split('-').reverse().join('/')}`
+                          : '—'}
                       </td>
                       <td className="px-3 py-3">
                         <span
@@ -1361,6 +1385,7 @@ function EmployeeForm({
           managerId: initialData.managerId,
           isCountable: initialData.isCountable,
           companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
+          birthday: initialData.birthday?.slice(0, 10) ?? '',
           status: initialData.status,
         }
       : getDefaultEmployeeFormData(departments),
@@ -1384,6 +1409,7 @@ function EmployeeForm({
             managerId: initialData.managerId,
             isCountable: initialData.isCountable,
             companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
+            birthday: initialData.birthday?.slice(0, 10) ?? '',
             status: initialData.status,
           }
         : getDefaultEmployeeFormData(departments),
@@ -1762,6 +1788,28 @@ function EmployeeForm({
               >
                 Xóa ngày tham gia
               </button>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Ngày sinh 🎂
+              </label>
+              <DatePicker
+                value={formData.birthday}
+                onChange={(value) => handleFieldChange('birthday', value)}
+                captionLayout="dropdown"
+                fromYear={1950}
+                toYear={new Date().getFullYear()}
+              />
+              {formData.birthday && (
+                <button
+                  type="button"
+                  onClick={() => handleFieldChange('birthday', '')}
+                  className="mt-2 text-xs font-medium"
+                  style={{ color: '#6b7f78' }}
+                >
+                  Xóa ngày sinh
+                </button>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>

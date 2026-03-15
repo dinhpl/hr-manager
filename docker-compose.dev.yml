@@ -32,6 +32,7 @@ services:
         pnpm exec prisma db push --accept-data-loss &&
         USER_COUNT=$(node -e \"const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.user.count().then(n => { console.log(n); return p['$disconnect'](); }).catch(() => { console.log(0); process.exit(0); });\") &&
         if [ \"$USER_COUNT\" = \"0\" ]; then pnpm exec tsx prisma/seed.ts; fi &&
+        pnpm exec tsx prisma/seed-holidays.ts &&
         mkdir -p uploads &&
         pnpm dev
       "

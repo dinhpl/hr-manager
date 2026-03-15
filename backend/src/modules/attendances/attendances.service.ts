@@ -6,6 +6,7 @@ import {
   type AttendanceStatusValue,
 } from './attendances.validation';
 import * as XLSX from 'xlsx';
+import { getHolidayMapForMonth } from '../holidays/holidays.service';
 
 const USER_ATTENDANCE_SELECT = {
   id: true,
@@ -172,6 +173,18 @@ function buildDayColumns(year: number, month: number) {
   });
 }
 
+function buildDayColumnsWithHoliday(
+  year: number,
+  month: number,
+  holidayMap: Record<string, { id: string; name: string }[]>,
+) {
+  return buildDayColumns(year, month).map((day) => ({
+    ...day,
+    isHoliday: Boolean(holidayMap[day.date]?.length),
+    holidayNames: holidayMap[day.date]?.map((holiday) => holiday.name) ?? [],
+  }));
+}
+
 function buildUserSearchWhere(search?: string) {
   if (!search) return {};
 
@@ -252,19 +265,23 @@ export async function getAvailableMonths() {
 export async function getMonthlyAttendances(query: GetMonthlyAttendancesQuery) {
   const { users, total, page, limit } = await getPagedUsers(query);
   const { start, end } = monthBounds(query.year, query.month);
-  const days = buildDayColumns(query.year, query.month);
   const userIds = users.map((user) => user.id);
 
-  const attendances = userIds.length
-    ? await prisma.attendance.findMany({
-        where: {
-          userId: { in: userIds },
-          date: { gte: start, lt: end },
-          ...(query.statuses?.length ? { status: { in: query.statuses } } : {}),
-        },
-        orderBy: [{ userId: 'asc' }, { date: 'asc' }],
-      })
-    : [];
+  const [attendances, holidayMap] = await Promise.all([
+    userIds.length
+      ? prisma.attendance.findMany({
+          where: {
+            userId: { in: userIds },
+            date: { gte: start, lt: end },
+            ...(query.statuses?.length ? { status: { in: query.statuses } } : {}),
+          },
+          orderBy: [{ userId: 'asc' }, { date: 'asc' }],
+        })
+      : Promise.resolve([]),
+    getHolidayMapForMonth(query.year, query.month),
+  ]);
+
+  const days = buildDayColumnsWithHoliday(query.year, query.month, holidayMap);
 
   const recordsByUser = new Map<string, Map<string, (typeof attendances)[number]>>();
   attendances.forEach((attendance) => {

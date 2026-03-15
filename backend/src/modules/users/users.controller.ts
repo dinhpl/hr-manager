@@ -13,6 +13,17 @@ export async function getUsers(req: Request, res: Response, next: NextFunction) 
   }
 }
 
+export async function getBirthdaysByMonth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const year = parseInt(String(req.query.year)) || new Date().getFullYear();
+    const month = parseInt(String(req.query.month)) || new Date().getMonth() + 1;
+    const data = await usersService.getUsersBirthdaysByMonth(year, month);
+    sendSuccess(res, data);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getUsersDropdown(req: Request, res: Response, next: NextFunction) {
   try {
     const users = await usersService.getUsersDropdown();
