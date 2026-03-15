@@ -167,14 +167,30 @@ export async function adjustBalance(
     seniorityDays?: number;
     compOffDays?: number;
     wfhDays?: number;
+    usedCarryOverDays?: number;
   },
 ) {
   return prisma.leaveBalance.update({ where: { id }, data });
 }
 
+/**
+ * Parse a "MM-DD" string + year into a Date at midnight (local).
+ * Returns null if the string is malformed.
+ */
+function parseResetCarryOverDate(mmdd: string | undefined, year: number): Date | null {
+  if (!mmdd) return null;
+  const parts = mmdd.split('-');
+  if (parts.length !== 2) return null;
+  const month = Number(parts[0]);
+  const day = Number(parts[1]);
+  if (!month || !day) return null;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
 // Called inside transaction when leave request is approved
 // If targetLeaveTypeId is provided, deduct from that leave type (e.g., deduct from AL when usesAnnualBalance=true)
 // isCompOff=true → deduct from usedCompOffDays instead of usedDays
+// fromDate + resetCarryOverDate → carry-over logic for AL deductions
 export async function deductBalance(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: bigint,
@@ -183,17 +199,56 @@ export async function deductBalance(
   year: number,
   targetLeaveTypeId?: bigint,
   isCompOff?: boolean,
+  fromDate?: Date,
+  resetCarryOverDate?: string,
 ) {
   const actualLeaveTypeId = targetLeaveTypeId ?? leaveTypeId;
+
+  if (isCompOff) {
+    await tx.leaveBalance.updateMany({
+      where: { userId, leaveTypeId: actualLeaveTypeId, year },
+      data: { usedCompOffDays: { increment: days } },
+    });
+    return;
+  }
+
+  // Carry-over logic: if fromDate is before the reset date and carry-over remains, use it first
+  const resetDate = parseResetCarryOverDate(resetCarryOverDate, year);
+  if (fromDate && resetDate && fromDate < resetDate) {
+    const balance = await tx.leaveBalance.findFirst({
+      where: { userId, leaveTypeId: actualLeaveTypeId, year },
+      select: { carryOverDays: true, usedCarryOverDays: true },
+    });
+    if (balance) {
+      const remainingCarryOver = Math.max(
+        0,
+        Number(balance.carryOverDays) - Number(balance.usedCarryOverDays),
+      );
+      if (remainingCarryOver > 0) {
+        const takeFromCarryOver = Math.min(remainingCarryOver, days);
+        const takeFromUsed = days - takeFromCarryOver;
+        await tx.leaveBalance.updateMany({
+          where: { userId, leaveTypeId: actualLeaveTypeId, year },
+          data: {
+            usedCarryOverDays: { increment: takeFromCarryOver },
+            ...(takeFromUsed > 0 ? { usedDays: { increment: takeFromUsed } } : {}),
+          },
+        });
+        return;
+      }
+    }
+  }
+
   await tx.leaveBalance.updateMany({
     where: { userId, leaveTypeId: actualLeaveTypeId, year },
-    data: isCompOff ? { usedCompOffDays: { increment: days } } : { usedDays: { increment: days } },
+    data: { usedDays: { increment: days } },
   });
 }
 
 // Called inside transaction when approved request is cancelled/reversed
 // If targetLeaveTypeId is provided, restore to that leave type
 // isCompOff=true → decrement usedCompOffDays instead of usedDays
+// fromDate + resetCarryOverDate → reverse carry-over logic
 export async function restoreBalance(
   tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   userId: bigint,
@@ -202,12 +257,42 @@ export async function restoreBalance(
   year: number,
   targetLeaveTypeId?: bigint,
   isCompOff?: boolean,
+  fromDate?: Date,
+  resetCarryOverDate?: string,
 ) {
   const actualLeaveTypeId = targetLeaveTypeId ?? leaveTypeId;
+
+  if (isCompOff) {
+    await tx.leaveBalance.updateMany({
+      where: { userId, leaveTypeId: actualLeaveTypeId, year },
+      data: { usedCompOffDays: { decrement: days } },
+    });
+    return;
+  }
+
+  // Reverse carry-over logic: restore to same buckets that were deducted
+  const resetDate = parseResetCarryOverDate(resetCarryOverDate, year);
+  if (fromDate && resetDate && fromDate < resetDate) {
+    const balance = await tx.leaveBalance.findFirst({
+      where: { userId, leaveTypeId: actualLeaveTypeId, year },
+      select: { usedCarryOverDays: true, usedDays: true },
+    });
+    if (balance) {
+      const restoreToCarryOver = Math.min(days, Number(balance.usedCarryOverDays));
+      const restoreToUsed = days - restoreToCarryOver;
+      await tx.leaveBalance.updateMany({
+        where: { userId, leaveTypeId: actualLeaveTypeId, year },
+        data: {
+          usedCarryOverDays: { decrement: restoreToCarryOver },
+          ...(restoreToUsed > 0 ? { usedDays: { decrement: restoreToUsed } } : {}),
+        },
+      });
+      return;
+    }
+  }
+
   await tx.leaveBalance.updateMany({
     where: { userId, leaveTypeId: actualLeaveTypeId, year },
-    data: isCompOff
-      ? { usedCompOffDays: { decrement: days } }
-      : { usedDays: { decrement: days } },
+    data: { usedDays: { decrement: days } },
   });
 }

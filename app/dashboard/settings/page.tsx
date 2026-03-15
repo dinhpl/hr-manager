@@ -39,6 +39,7 @@ interface AnnualLeaveRule {
 interface LeavePolicy {
   annualLeaveRules: AnnualLeaveRule[];
   carryOverLimit: number;
+  resetCarryOverDate: string;
   advanceRequestDays: number;
   maxConsecutiveDays: number;
 }
@@ -89,6 +90,7 @@ const DEFAULT_LEAVE_POLICY: LeavePolicy = {
     { fromYear: 5, toYear: 999, days: 18 },
   ],
   carryOverLimit: 5,
+  resetCarryOverDate: '03-31',
   advanceRequestDays: 1,
   maxConsecutiveDays: 30,
 };
@@ -127,6 +129,10 @@ function normalizeLeavePolicy(raw: Partial<LeavePolicy> | null | undefined): Lea
       days: toSafeNumber(rule?.days, DEFAULT_LEAVE_POLICY.annualLeaveRules[index]?.days ?? 0),
     })),
     carryOverLimit: toSafeNumber(raw?.carryOverLimit, DEFAULT_LEAVE_POLICY.carryOverLimit),
+    resetCarryOverDate:
+      typeof raw?.resetCarryOverDate === 'string' && raw.resetCarryOverDate
+        ? raw.resetCarryOverDate
+        : DEFAULT_LEAVE_POLICY.resetCarryOverDate,
     advanceRequestDays: toSafeNumber(
       raw?.advanceRequestDays,
       DEFAULT_LEAVE_POLICY.advanceRequestDays,
@@ -199,7 +205,6 @@ export default function SettingsPage() {
     approverRole: 'MANAGER',
     timeLimit: 24,
   });
-  const [carryOverExpiryDate, setCarryOverExpiryDate] = useState('2026-03-31');
   const [documentTypesInput, setDocumentTypesInput] = useState(
     DEFAULT_APPROVAL_FLOW.requireDocumentTypes.join(', '),
   );
@@ -752,17 +757,22 @@ export default function SettingsPage() {
                           className="block text-xs font-semibold mb-2"
                           style={{ color: '#6b7f78' }}
                         >
-                          Hạn sử dụng
+                          Ngày reset carry-over
                         </label>
                         <div className="flex items-center gap-2">
                           <DatePicker
-                            value={carryOverExpiryDate}
-                            onChange={setCarryOverExpiryDate}
+                            value={`2000-${leavePolicy.resetCarryOverDate}`}
+                            onChange={(val) =>
+                              setLeavePolicy((prev) => ({
+                                ...prev,
+                                resetCarryOverDate: val.slice(5),
+                              }))
+                            }
                             className="flex-1"
                           />
                         </div>
                         <p className="text-xs mt-1" style={{ color: '#6b7f78' }}>
-                          Trường này hiện chưa có key tương ứng trong backend nên chỉ giữ ở UI.
+                          Ngày reset hàng năm (chỉ dùng tháng/ngày). Phép chuyển tiếp hết hạn sau ngày này.
                         </p>
                       </div>
                       <div>

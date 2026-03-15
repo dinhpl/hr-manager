@@ -183,8 +183,9 @@ model LeaveBalance {
   seniorityDays    Decimal  @default(0) @map("seniority_days") @db.Decimal(10, 2)
   compOffDays      Decimal  @default(0) @map("comp_off_days") @db.Decimal(10, 2)
   wfhDays          Decimal  @default(0) @map("wfh_days") @db.Decimal(10, 2)
-  usedDays         Decimal  @default(0) @map("used_days") @db.Decimal(10, 2)
-  usedCompOffDays  Decimal  @default(0) @map("used_comp_off_days") @db.Decimal(10, 2)
+  usedDays             Decimal  @default(0) @map("used_days") @db.Decimal(10, 2)
+  usedCarryOverDays    Decimal  @default(0) @map("used_carry_over_days") @db.Decimal(10, 2)
+  usedCompOffDays      Decimal  @default(0) @map("used_comp_off_days") @db.Decimal(10, 2)
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

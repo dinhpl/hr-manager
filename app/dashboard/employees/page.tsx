@@ -125,6 +125,7 @@ interface LeaveBalanceApiRow {
   compOffDays: number | string;
   wfhDays: number | string;
   usedDays: number | string;
+  usedCarryOverDays: number | string;
   usedCompOffDays: number | string;
   user: {
     id: string;
@@ -299,7 +300,9 @@ export default function EmployeesPage() {
     seniorityDays: '',
     compOffDays: '',
     wfhDays: '',
+    usedCarryOverDays: '',
   });
+  const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const scrollToTop = useCallback(() => {
@@ -387,6 +390,12 @@ export default function EmployeesPage() {
   useEffect(() => {
     if (activeTab === 'leave-balances') {
       void fetchLeaveBalances(balanceYear);
+      apiClient
+        .get<{ resetCarryOverDate?: string }>('/api/settings/leave-policy')
+        .then(({ data }) => {
+          if (data?.resetCarryOverDate) setResetCarryOverDate(data.resetCarryOverDate);
+        })
+        .catch(() => {});
     }
   }, [activeTab, balanceYear, fetchLeaveBalances]);
 
@@ -634,6 +643,7 @@ export default function EmployeesPage() {
       seniorityDays: String(row.seniorityDays),
       compOffDays: String(row.compOffDays),
       wfhDays: String(row.wfhDays),
+      usedCarryOverDays: String(row.usedCarryOverDays ?? 0),
     });
   };
 
@@ -647,6 +657,7 @@ export default function EmployeesPage() {
         seniorityDays: parseFloat(balanceForm.seniorityDays) || 0,
         compOffDays: parseFloat(balanceForm.compOffDays) || 0,
         wfhDays: parseFloat(balanceForm.wfhDays) || 0,
+        usedCarryOverDays: parseFloat(balanceForm.usedCarryOverDays) || 0,
       });
       setEditingBalance(null);
       toast.success('Đã cập nhật số ngày phép.');
@@ -1428,6 +1439,7 @@ export default function EmployeesPage() {
                       `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
                       'Comp-Off',
                       'WFH',
+                      'Đã dùng CO\n(carry-over)',
                       'Đã dùng (AL)',
                       'Đã dùng (CO)',
                       'Còn lại (AL)',
@@ -1445,7 +1457,7 @@ export default function EmployeesPage() {
                   {isLoadingBalances ? (
                     <tr>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         className="px-3 py-8 text-center text-sm"
                         style={{ color: '#6b7f78' }}
                       >
@@ -1455,7 +1467,7 @@ export default function EmployeesPage() {
                   ) : leaveBalances.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         className="px-3 py-8 text-center text-sm"
                         style={{ color: '#6b7f78' }}
                       >
@@ -1465,10 +1477,17 @@ export default function EmployeesPage() {
                     </tr>
                   ) : (
                     leaveBalances.map((row) => {
+                      const today = new Date();
+                      const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
+                      const resetDate = new Date(today.getFullYear(), (resetMM || 3) - 1, resetDD || 31);
+                      const effectiveCarryOver =
+                        today < resetDate
+                          ? Math.max(0, Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0))
+                          : 0;
                       const alRemaining =
                         Number(row.annualDays) +
-                        Number(row.carryOverDays) +
-                        Number(row.seniorityDays) -
+                        Number(row.seniorityDays) +
+                        effectiveCarryOver -
                         Number(row.usedDays);
                       const coRemaining = Number(row.compOffDays) - Number(row.usedCompOffDays);
                       const isAL = row.leaveType.code === 'AL';
@@ -1521,6 +1540,9 @@ export default function EmployeesPage() {
                             style={{ color: '#203430' }}
                           >
                             {Number(row.wfhDays)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
+                            {isAL ? Number(row.usedCarryOverDays ?? 0) : '—'}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
                             {isAL ? Number(row.usedDays) : '—'}
@@ -1581,15 +1603,12 @@ export default function EmployeesPage() {
             </div>
             <div className="p-6 space-y-4">
               {[
-                { key: 'annualDays', label: 'Phép năm (annualDays)', show: true },
-                {
-                  key: 'carryOverDays',
-                  label: 'Chuyển tiếp từ năm trước (carryOverDays)',
-                  show: true,
-                },
-                { key: 'seniorityDays', label: 'Thâm niên (seniorityDays)', show: true },
-                { key: 'compOffDays', label: 'Comp-Off tích lũy (compOffDays)', show: true },
-                { key: 'wfhDays', label: 'WFH (wfhDays)', show: true },
+                { key: 'annualDays', label: 'Phép năm (annualDays)' },
+                { key: 'carryOverDays', label: 'Chuyển tiếp từ năm trước (carryOverDays)' },
+                { key: 'usedCarryOverDays', label: 'Đã dùng carry-over (usedCarryOverDays)' },
+                { key: 'seniorityDays', label: 'Thâm niên (seniorityDays)' },
+                { key: 'compOffDays', label: 'Comp-Off tích lũy (compOffDays)' },
+                { key: 'wfhDays', label: 'WFH (wfhDays)' },
               ].map(({ key, label }) => (
                 <div key={key}>
                   <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>

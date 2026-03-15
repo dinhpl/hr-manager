@@ -14,6 +14,7 @@ const DEFAULTS: Record<string, unknown> = {
       { fromYear: 5, toYear: 999, days: 18 },
     ],
     carryOverLimit: 5,
+    resetCarryOverDate: '03-31',
     advanceRequestDays: 1,
     maxConsecutiveDays: 30,
   },

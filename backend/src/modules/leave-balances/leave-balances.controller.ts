@@ -58,6 +58,7 @@ export async function adjustBalance(req: Request, res: Response, next: NextFunct
         seniorityDays: z.coerce.number().min(0).optional(),
         compOffDays: z.coerce.number().min(0).optional(),
         wfhDays: z.coerce.number().min(0).optional(),
+        usedCarryOverDays: z.coerce.number().min(0).optional(),
       })
       .parse(req.body);
     const balance = await service.adjustBalance(BigInt(String(req.params.id)), data);
