@@ -64,6 +64,7 @@ interface EmployeeLeaveBalance {
   compOffDays: number;
   wfhDays: number;
   usedDays: number;
+  usedCarryOverDays: number;
   usedCompOffDays: number;
 }
 
@@ -74,6 +75,7 @@ interface BalanceApiRecord {
   compOffDays: number | string;
   wfhDays: number | string;
   usedDays: number | string;
+  usedCarryOverDays: number | string;
   usedCompOffDays: number | string;
   leaveType: { code: string; name: string };
 }
@@ -436,7 +438,13 @@ function CalendarGrid({
   );
 }
 
-function LeaveBalanceCards({ leaveBalance }: { leaveBalance?: EmployeeLeaveBalance | null }) {
+function LeaveBalanceCards({
+  leaveBalance,
+  resetCarryOverDate = '03-31',
+}: {
+  leaveBalance?: EmployeeLeaveBalance | null;
+  resetCarryOverDate?: string;
+}) {
   const todayVN = new Date();
   const todayMonth = todayVN.getMonth() + 1;
   const thisYear = todayVN.getFullYear();
@@ -444,21 +452,43 @@ function LeaveBalanceCards({ leaveBalance }: { leaveBalance?: EmployeeLeaveBalan
 
   const annualDays = leaveBalance ? Number(leaveBalance.annualDays) : 0;
   const carryOverDays = leaveBalance ? Number(leaveBalance.carryOverDays) : 0;
+  const usedCarryOverDays = leaveBalance ? Number(leaveBalance.usedCarryOverDays) : 0;
   const seniorityDays = leaveBalance ? Number(leaveBalance.seniorityDays) : 0;
   const usedDays = leaveBalance ? Number(leaveBalance.usedDays) : 0;
   const wfhDays = leaveBalance ? Number(leaveBalance.wfhDays) : 0;
 
+  // Carry-over expiry warning
+  const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
+  const resetDate = new Date(thisYear, (resetMM || 3) - 1, resetDD || 31);
+  const remainingCarryOver = Math.max(0, carryOverDays - usedCarryOverDays);
+  const showCarryOverWarning = remainingCarryOver > 0 && todayVN < resetDate;
+
   const proratedAllocation = Math.min(annualDays, todayMonth);
   const remainingToMonth = Math.max(
     0,
-    proratedAllocation + carryOverDays + seniorityDays - usedDays,
+    proratedAllocation + (todayVN < resetDate ? remainingCarryOver : 0) + seniorityDays - usedDays,
   );
-  const remainingFullYear = Math.max(0, annualDays + carryOverDays + seniorityDays - usedDays);
+  const remainingFullYear = Math.max(0, annualDays + seniorityDays + (todayVN < resetDate ? remainingCarryOver : 0) - usedDays);
 
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
+  const resetDateLabel = `${String(resetDD || 31).padStart(2, '0')}/${String(resetMM || 3).padStart(2, '0')}/${thisYear}`;
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="space-y-3">
+      {showCarryOverWarning && (
+        <div
+          className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium"
+          style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' }}
+        >
+          <span>⚠</span>
+          <span>
+            Phép năm {prevYear} còn{' '}
+            <strong>{fmt(remainingCarryOver)} ngày</strong> sẽ hết hạn vào {resetDateLabel}
+          </span>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
       <div
         className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
         style={{ border: '1px solid #e2ede9', borderTop: '3px solid #a78bfa' }}
@@ -579,6 +609,7 @@ function LeaveBalanceCards({ leaveBalance }: { leaveBalance?: EmployeeLeaveBalan
         <p className="text-xs text-muted-foreground">ngày còn lại</p>
       </div>
     </div>
+    </div>
   );
 }
 
@@ -589,6 +620,7 @@ function EmployeeDashboard({
   recentRequests,
   summary,
   leaveBalance,
+  resetCarryOverDate,
   onNextMonth,
   onOpenDetail,
   onOpenDayDetail,
@@ -597,6 +629,7 @@ function EmployeeDashboard({
 }: SharedDashboardProps & {
   summary: DashboardEmployeeSummary['stats'];
   leaveBalance?: EmployeeLeaveBalance | null;
+  resetCarryOverDate?: string;
 }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
@@ -619,7 +652,7 @@ function EmployeeDashboard({
 
   return (
     <div className="space-y-5">
-      <LeaveBalanceCards leaveBalance={leaveBalance} />
+      <LeaveBalanceCards leaveBalance={leaveBalance} resetCarryOverDate={resetCarryOverDate} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Calendar card */}
@@ -876,6 +909,7 @@ function AdminHRDashboard({
   userRole,
   birthdayData,
   leaveBalance,
+  resetCarryOverDate,
   onNextMonth,
   onOpenDetail,
   onOpenDayDetail,
@@ -886,6 +920,7 @@ function AdminHRDashboard({
   userRole: Exclude<UserRole, 'employee'>;
   birthdayData?: BirthdayData;
   leaveBalance?: EmployeeLeaveBalance | null;
+  resetCarryOverDate?: string;
 }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
@@ -944,7 +979,7 @@ function AdminHRDashboard({
 
   return (
     <div className="space-y-5">
-      <LeaveBalanceCards leaveBalance={leaveBalance} />
+      <LeaveBalanceCards leaveBalance={leaveBalance} resetCarryOverDate={resetCarryOverDate} />
       {/* <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {adminStats.map((stat) => (
           <div
@@ -1294,6 +1329,7 @@ export default function DashboardPage() {
     birthdays?: CalendarDayBirthday[];
   } | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<EmployeeLeaveBalance | null>(null);
+  const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
   const [leaveDefaultDate, setLeaveDefaultDate] = useState<string | undefined>(undefined);
   const [editLeaveData, setEditLeaveData] = useState<LeaveRequestData | null>(null);
@@ -1318,7 +1354,13 @@ export default function DashboardPage() {
 
   const loadLeaveBalance = useCallback(async () => {
     try {
-      const response = await apiClient.get<BalanceApiRecord[]>('/api/leave-balances');
+      const [response, policyResponse] = await Promise.all([
+        apiClient.get<BalanceApiRecord[]>('/api/leave-balances'),
+        apiClient.get<{ resetCarryOverDate?: string }>('/api/settings/leave-policy').catch(() => ({ data: { resetCarryOverDate: undefined } })),
+      ]);
+      if (policyResponse.data?.resetCarryOverDate) {
+        setResetCarryOverDate(policyResponse.data.resetCarryOverDate);
+      }
       const records = response.data || [];
       const alRecord = records.find((r) => r.leaveType?.code === 'AL');
       if (alRecord) {
@@ -1326,6 +1368,7 @@ export default function DashboardPage() {
           annualDays: Number(alRecord.annualDays),
           carryOverDays: Number(alRecord.carryOverDays),
           seniorityDays: Number(alRecord.seniorityDays),
+          usedCarryOverDays: Number(alRecord.usedCarryOverDays ?? 0),
           compOffDays: Number(alRecord.compOffDays),
           wfhDays: Number(alRecord.wfhDays),
           usedDays: Number(alRecord.usedDays),
@@ -1524,6 +1567,7 @@ export default function DashboardPage() {
           recentRequests={recentRequests}
           summary={summary.stats}
           leaveBalance={leaveBalance}
+          resetCarryOverDate={resetCarryOverDate}
           onNextMonth={handleNextMonth}
           onOpenDetail={(request) => { setSelectedRawRequest(request); setSelectedDetail(toDetailData(request)); }}
           onOpenDayDetail={(date, users, holidays, birthdays) => {
@@ -1544,6 +1588,7 @@ export default function DashboardPage() {
           calendarData={calendarData}
           birthdayData={birthdayData}
           leaveBalance={leaveBalance}
+          resetCarryOverDate={resetCarryOverDate}
           recentRequests={recentRequests}
           summary={
             summary.type === 'employee'
