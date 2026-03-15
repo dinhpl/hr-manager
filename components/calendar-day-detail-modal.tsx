@@ -33,6 +33,7 @@ interface CalendarDayDetailModalProps {
   birthdays?: CalendarDayBirthday[];
   onClose: () => void;
   onViewDetail: (user: CalendarDayUser) => void;
+  onAddLeave?: () => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -67,6 +68,7 @@ export default function CalendarDayDetailModal({
   birthdays,
   onClose,
   onViewDetail,
+  onAddLeave,
 }: CalendarDayDetailModalProps) {
   const dayUsers = users ?? [];
   const dayHolidays = holidays ?? [];
@@ -362,9 +364,20 @@ export default function CalendarDayDetailModal({
 
         {/* Footer */}
         <div
-          className="flex justify-end px-6 py-4 border-t shrink-0"
+          className="flex items-center justify-between px-6 py-4 border-t shrink-0"
           style={{ borderColor: '#e2ede9' }}
         >
+          {onAddLeave ? (
+            <button
+              onClick={onAddLeave}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+            >
+              + Thêm Nghỉ Phép
+            </button>
+          ) : (
+            <div />
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors hover:bg-gray-50 border"

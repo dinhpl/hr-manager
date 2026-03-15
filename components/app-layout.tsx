@@ -130,9 +130,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === 'approval') return currentRole !== 'employee';
     if (item.key === 'reports') return currentRole !== 'employee';
-    if (item.key === 'attendance') {
-      return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
-    }
+    // if (item.key === 'attendance') {
+    //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
+    // }
     if (item.key === 'employees' || item.key === 'settings') {
       return currentRole === 'hr' || currentRole === 'admin';
     }

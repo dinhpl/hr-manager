@@ -52,7 +52,13 @@ interface LeaveRequestItem {
   toDate: string;
   totalDays: number | string;
   reason?: string | null;
-  handoverPerson?: string | null;
+  durationMode?: string | null;
+  fromTime?: string | null;
+  toTime?: string | null;
+  handoverPerson?: {
+    id?: string;
+    fullName?: string | null;
+  } | null;
   attachmentUrl?: string | null;
   createdAt: string;
   approvedAt?: string | null;
@@ -154,7 +160,7 @@ function toDetailData(request: LeaveRequestItem): LeaveDetailData {
     toDate: formatDateVN(request.toDate),
     days: numberValue(request.totalDays),
     reason: request.reason || '—',
-    handover: request.handoverPerson || '-',
+    handover: request.handoverPerson?.fullName || '-',
     status: 'pending',
     submittedAt: formatDateTimeVN(request.createdAt),
     employeeName: request.user?.fullName || 'Nhân viên',
@@ -715,7 +721,11 @@ export default function ApprovalPage() {
                       </p>
                       <p className="text-xs" style={{ color: '#6b7f78' }}>
                         <strong style={{ color: '#203430' }}>Người bàn giao:</strong>{' '}
-                        {request.handoverPerson || '-'}
+                        {request.handoverPerson?.fullName || '-'}
+                      </p>
+                      <p className="text-xs" style={{ color: '#6b7f78' }}>
+                        <strong style={{ color: '#203430' }}>Người duyệt:</strong>{' '}
+                        {request.approver?.fullName || '-'}
                       </p>
                       <p className="text-xs" style={{ color: '#6b7f78' }}>
                         Gửi: {formatDateTimeVN(request.createdAt)}

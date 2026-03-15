@@ -21,7 +21,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/date-picker';
-import { TimePicker } from '@/components/ui/time-picker';
 import {
   Select,
   SelectContent,
@@ -38,11 +37,7 @@ import {
   countCalendarDays,
   getVietnamTodayDateInput,
   getLeaveRequestPolicyValidation,
-  getDateTimeValue,
   getLeaveRequestApiPayload,
-  HOURLY_LEAVE_TIME_MAX,
-  HOURLY_LEAVE_TIME_MIN,
-  HOURLY_LEAVE_TIME_STEP_SECONDS,
   type ApprovalFlowConfig,
   type LeavePolicyConfig,
   LEAVE_REQUEST_MODE_CONFIG,
@@ -59,8 +54,12 @@ interface LeaveTypeOption {
 
 interface LeaveBalanceRecord {
   id: string;
-  totalDays: number | string;
+  annualDays: number | string;
+  carryOverDays: number | string;
+  seniorityDays: number | string;
+  compOffDays: number | string;
   usedDays: number | string;
+  usedCompOffDays: number | string;
   leaveType: {
     code: string;
     name: string;
@@ -93,8 +92,6 @@ export default function LeaveRequestPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [durationMode, setDurationMode] = useState<LeaveRequestMode>('FULL_DAY');
-  const [fromTime, setFromTime] = useState('08:00');
-  const [toTime, setToTime] = useState('17:15');
   const [reason, setReason] = useState('');
   const [handoverPerson, setHandoverPerson] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -139,15 +136,8 @@ export default function LeaveRequestPage() {
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
     const base = countCalendarDays(fromDate, toDate);
-    if (durationMode === 'MORNING_HALF_DAY' || durationMode === 'AFTERNOON_HALF_DAY') {
+    if (durationMode === 'HALF_DAY_AM' || durationMode === 'HALF_DAY_PM') {
       return base * 0.5;
-    }
-    if (durationMode === 'HOURLY') {
-      if (!fromTime || !toTime) return 0;
-      const hours =
-        (getDateTimeValue(`2000-01-01 ${toTime}`) - getDateTimeValue(`2000-01-01 ${fromTime}`)) /
-        3600000;
-      return Math.max(0, hours / 8);
     }
     return base;
   };
@@ -158,11 +148,18 @@ export default function LeaveRequestPage() {
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
   const leaveBalanceSummary = {
-    granted: numberValue(annualBalance?.totalDays),
+    granted:
+      numberValue(annualBalance?.annualDays) +
+      numberValue(annualBalance?.carryOverDays) +
+      numberValue(annualBalance?.seniorityDays),
     used: numberValue(annualBalance?.usedDays),
-    remaining: numberValue(annualBalance?.totalDays) - numberValue(annualBalance?.usedDays),
+    remaining:
+      numberValue(annualBalance?.annualDays) +
+      numberValue(annualBalance?.carryOverDays) +
+      numberValue(annualBalance?.seniorityDays) -
+      numberValue(annualBalance?.usedDays),
     compOffHours:
-      (numberValue(compOffBalance?.totalDays) - numberValue(compOffBalance?.usedDays)) * 8,
+      (numberValue(compOffBalance?.compOffDays) - numberValue(compOffBalance?.usedCompOffDays)) * 8,
   };
 
   const checkBalance = () => {
@@ -187,17 +184,6 @@ export default function LeaveRequestPage() {
     leavePolicy,
     approvalFlow,
   });
-
-  useEffect(() => {
-    if (durationMode === 'HOURLY') {
-      setFromTime((current) => current || HOURLY_LEAVE_TIME_MIN);
-      setToTime((current) => current || HOURLY_LEAVE_TIME_MAX);
-      return;
-    }
-
-    setFromTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultFromTime);
-    setToTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultToTime);
-  }, [durationMode]);
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
@@ -236,8 +222,6 @@ export default function LeaveRequestPage() {
     setFromDate('');
     setToDate('');
     setDurationMode('FULL_DAY');
-    setFromTime('08:00');
-    setToTime('17:15');
     setReason('');
     setHandoverPerson('');
     setAttachedFile(null);
@@ -261,17 +245,6 @@ export default function LeaveRequestPage() {
       return;
     }
 
-    if (
-      durationMode === 'HOURLY' &&
-      getDateTimeValue(`2000-01-01 ${toTime}`) <= getDateTimeValue(`2000-01-01 ${fromTime}`)
-    ) {
-      setAlert({
-        type: 'warning',
-        message: 'Giờ kết thúc phải lớn hơn giờ bắt đầu.',
-      });
-      return;
-    }
-
     if (days <= 0) {
       setAlert({
         type: 'warning',
@@ -285,24 +258,10 @@ export default function LeaveRequestPage() {
       return;
     }
 
-    const handoverName = handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? '';
-
-    const composedReason = [
-      reason.trim(),
-      durationMode !== 'FULL_DAY'
-        ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
-        : null,
-      durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
     const leaveRequestPayload = getLeaveRequestApiPayload({
       date: fromDate,
       endDate: toDate,
       mode: durationMode,
-      startTime: fromTime,
-      endTime: toTime,
     });
 
     const formData = new FormData();
@@ -310,12 +269,10 @@ export default function LeaveRequestPage() {
     formData.append('fromDate', leaveRequestPayload.fromDate);
     formData.append('toDate', leaveRequestPayload.toDate);
     formData.append('durationMode', leaveRequestPayload.durationMode);
-    formData.append('fromTime', leaveRequestPayload.fromTime);
-    formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
-    formData.append('reason', composedReason);
+    formData.append('reason', reason.trim());
     if (handoverPerson) {
-      formData.append('handoverPerson', handoverName);
+      formData.append('handoverPersonId', handoverPerson);
     }
     if (attachedFile) {
       formData.append('attachment', attachedFile);
@@ -510,14 +467,7 @@ export default function LeaveRequestPage() {
               <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div className="flex gap-3 flex-wrap">
-              {(
-                [
-                  'FULL_DAY',
-                  'MORNING_HALF_DAY',
-                  'AFTERNOON_HALF_DAY',
-                  'HOURLY',
-                ] as LeaveRequestMode[]
-              ).map((mode) => {
+              {(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM'] as LeaveRequestMode[]).map((mode) => {
                 const isSelected = durationMode === mode;
                 return (
                   <label
@@ -556,39 +506,6 @@ export default function LeaveRequestPage() {
             </div>
           </div>
 
-          {/* Time fields (hourly) */}
-          {durationMode === 'HOURLY' && (
-            <div
-              className="grid grid-cols-2 gap-4 p-4 rounded-lg"
-              style={{ background: '#f7f7f7', border: '1px dashed #D3F2E7' }}
-            >
-              <div>
-                <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#203430' }}>
-                  Từ giờ
-                </label>
-                <TimePicker
-                  value={fromTime}
-                  onChange={setFromTime}
-                  min={HOURLY_LEAVE_TIME_MIN}
-                  max={HOURLY_LEAVE_TIME_MAX}
-                  step={HOURLY_LEAVE_TIME_STEP_SECONDS}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold mb-1.5 block" style={{ color: '#203430' }}>
-                  Đến giờ
-                </label>
-                <TimePicker
-                  value={toTime}
-                  onChange={setToTime}
-                  min={HOURLY_LEAVE_TIME_MIN}
-                  max={HOURLY_LEAVE_TIME_MAX}
-                  step={HOURLY_LEAVE_TIME_STEP_SECONDS}
-                />
-              </div>
-            </div>
-          )}
-
           {/* Calculation */}
           {days > 0 && (
             <div
@@ -598,7 +515,6 @@ export default function LeaveRequestPage() {
               <Calculator size={16} style={{ color: '#d97706' }} />
               <span className="text-sm" style={{ color: '#92400e' }}>
                 Số ngày nghỉ tính toán: <strong>{days}</strong> ngày
-                {durationMode === 'HOURLY' && ` (${days * 8} giờ)`}
               </span>
             </div>
           )}

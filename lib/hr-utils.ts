@@ -1,5 +1,5 @@
 export type FrontendRole = 'employee' | 'manager' | 'hr' | 'admin';
-export type LeaveRequestMode = 'FULL_DAY' | 'MORNING_HALF_DAY' | 'AFTERNOON_HALF_DAY' | 'HOURLY';
+export type LeaveRequestMode = 'FULL_DAY' | 'HALF_DAY_AM' | 'HALF_DAY_PM';
 
 export type LeavePolicyConfig = {
   advanceRequestDays?: number;
@@ -15,15 +15,11 @@ const API_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/;
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const VN_OFFSET_MINUTES = 7 * 60;
 
-export const HOURLY_LEAVE_TIME_MIN = '08:00';
-export const HOURLY_LEAVE_TIME_MAX = '17:15';
-export const HOURLY_LEAVE_TIME_STEP_SECONDS = 15 * 60;
-
 export const LEAVE_REQUEST_MODE_CONFIG: Record<
   LeaveRequestMode,
   {
     label: string;
-    apiDurationMode: 'FULL_DAY' | 'HALF_DAY' | 'HOURLY';
+    apiDurationMode: 'FULL_DAY' | 'HALF_DAY_AM' | 'HALF_DAY_PM';
     defaultFromTime: string;
     defaultToTime: string;
   }
@@ -34,23 +30,17 @@ export const LEAVE_REQUEST_MODE_CONFIG: Record<
     defaultFromTime: '08:00',
     defaultToTime: '17:15',
   },
-  MORNING_HALF_DAY: {
+  HALF_DAY_AM: {
     label: 'Nghỉ buổi sáng',
-    apiDurationMode: 'HALF_DAY',
+    apiDurationMode: 'HALF_DAY_AM',
     defaultFromTime: '08:00',
     defaultToTime: '11:45',
   },
-  AFTERNOON_HALF_DAY: {
+  HALF_DAY_PM: {
     label: 'Nghỉ buổi chiều',
-    apiDurationMode: 'HALF_DAY',
+    apiDurationMode: 'HALF_DAY_PM',
     defaultFromTime: '13:00',
     defaultToTime: '17:15',
-  },
-  HOURLY: {
-    label: 'Theo giờ',
-    apiDurationMode: 'HOURLY',
-    defaultFromTime: HOURLY_LEAVE_TIME_MIN,
-    defaultToTime: HOURLY_LEAVE_TIME_MAX,
   },
 };
 
@@ -205,20 +195,8 @@ export function toIsoDateTime(value: string, endOfDay = false) {
   return new Date(`${value}${suffix}`).toISOString();
 }
 
-export function getLeaveRequestTimeRange(
-  mode: LeaveRequestMode,
-  startTime?: string,
-  endTime?: string,
-) {
+export function getLeaveRequestTimeRange(mode: LeaveRequestMode) {
   const config = LEAVE_REQUEST_MODE_CONFIG[mode];
-
-  if (mode === 'HOURLY') {
-    return {
-      fromTime: startTime || config.defaultFromTime,
-      toTime: endTime || config.defaultToTime,
-    };
-  }
-
   return {
     fromTime: config.defaultFromTime,
     toTime: config.defaultToTime,
@@ -229,22 +207,14 @@ export function getLeaveRequestApiPayload(params: {
   date: string;
   endDate?: string;
   mode: LeaveRequestMode;
-  startTime?: string;
-  endTime?: string;
 }) {
-  const { fromTime, toTime } = getLeaveRequestTimeRange(
-    params.mode,
-    params.startTime,
-    params.endTime,
-  );
-  const toDate = params.mode === 'HOURLY' ? params.date : params.endDate || params.date;
+  const { fromTime, toTime } = getLeaveRequestTimeRange(params.mode);
+  const toDate = params.endDate || params.date;
 
   return {
     durationMode: LEAVE_REQUEST_MODE_CONFIG[params.mode].apiDurationMode,
     fromDate: buildApiDateTime(params.date, fromTime),
     toDate: buildApiDateTime(toDate, toTime),
-    fromTime,
-    toTime,
   };
 }
 
@@ -253,32 +223,12 @@ export function getTimeInputValue(value?: string | Date | null) {
   return formatted ? formatted.slice(11, 16) : '';
 }
 
-export function inferLeaveRequestModeFromRange(
-  fromDate?: string | Date | null,
-  toDate?: string | Date | null,
-  reason?: string | null,
-) {
-  if (reason?.includes('Hình thức nghỉ: Nghỉ buổi sáng')) {
-    return 'MORNING_HALF_DAY' satisfies LeaveRequestMode;
-  }
-  if (reason?.includes('Hình thức nghỉ: Nghỉ buổi chiều')) {
-    return 'AFTERNOON_HALF_DAY' satisfies LeaveRequestMode;
-  }
-  if (reason?.includes('Hình thức nghỉ: Theo giờ') || reason?.includes('Khung giờ:')) {
-    return 'HOURLY' satisfies LeaveRequestMode;
-  }
-
-  const fromTime = getTimeInputValue(fromDate);
-  const toTime = getTimeInputValue(toDate);
-
-  if (!fromTime || !toTime) return 'FULL_DAY' satisfies LeaveRequestMode;
-  if (fromTime === '08:00' && toTime === '11:45')
-    return 'MORNING_HALF_DAY' satisfies LeaveRequestMode;
-  if (fromTime === '13:00' && toTime === '17:15') {
-    return 'AFTERNOON_HALF_DAY' satisfies LeaveRequestMode;
-  }
-  if (fromTime !== '08:00' || toTime !== '17:15') return 'HOURLY' satisfies LeaveRequestMode;
-  return 'FULL_DAY' satisfies LeaveRequestMode;
+export function inferLeaveRequestModeFromDbValue(
+  durationMode?: string | null,
+): LeaveRequestMode {
+  if (durationMode === 'HALF_DAY_AM') return 'HALF_DAY_AM';
+  if (durationMode === 'HALF_DAY_PM') return 'HALF_DAY_PM';
+  return 'FULL_DAY';
 }
 
 export function getLeaveRequestReasonInput(reason?: string | null) {
@@ -395,6 +345,20 @@ export function countCalendarDays(fromDate: string, toDate: string): number {
 
 export function getDateTimeValue(value?: string | Date | null) {
   return parseApiDateTime(value)?.getTime() ?? Number.NaN;
+}
+
+// Format date as DD/MM/YYYY (no time). Accepts ISO string, YYYY-MM-DD, or Date.
+export function formatDate(value?: string | Date | null): string {
+  if (!value) return '—';
+  // Fast path: date-only string YYYY-MM-DD
+  if (typeof value === 'string') {
+    const m = DATE_ONLY_PATTERN.exec(value.trim());
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+  const date = parseApiDateTime(value);
+  if (!date) return '—';
+  const parts = toVietnamDateParts(date);
+  return `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`;
 }
 
 export function formatDateVN(value?: string | Date | null) {

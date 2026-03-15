@@ -41,8 +41,7 @@ import {
   formatDateVN,
   getDateTimeValue,
   getLeaveRequestReasonInput,
-  getTimeInputValue,
-  inferLeaveRequestModeFromRange,
+  inferLeaveRequestModeFromDbValue,
   numberValue,
   toDateInputValue,
 } from '@/lib/hr-utils';
@@ -72,9 +71,10 @@ interface LeaveRequestItem {
   status: string;
   fromDate: string;
   toDate: string;
+  durationMode?: string | null;
   totalDays: number | string;
   reason?: string | null;
-  handoverPerson?: string | null;
+  handoverPerson?: { id?: string; fullName?: string | null } | null;
   attachmentUrl?: string | null;
   createdAt: string;
   approvedAt?: string | null;
@@ -223,7 +223,7 @@ function mapToRecord(item: LeaveRequestItem): LeaveRecord {
     toDate: formatDateVN(item.toDate),
     days: numberValue(item.totalDays),
     reason: getPrimaryReason(item.reason),
-    handover: item.handoverPerson || '-',
+    handover: item.handoverPerson?.fullName || '-',
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
     submittedAtValue: getDateTimeValue(item.createdAt),
@@ -243,7 +243,7 @@ function toDetailData(item: LeaveRequestItem): LeaveDetailData {
     toDate: formatDateVN(item.toDate),
     days: numberValue(item.totalDays),
     reason: item.reason || '—',
-    handover: item.handoverPerson || '-',
+    handover: item.handoverPerson?.fullName || '-',
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
     approver: item.approver?.fullName || undefined,
@@ -260,11 +260,9 @@ function toEditData(item: LeaveRequestItem): LeaveRequestData {
     requestForUserId: item.user?.id || undefined,
     fromDate: toDateInputValue(item.fromDate),
     toDate: toDateInputValue(item.toDate),
-    durationMode: inferLeaveRequestModeFromRange(item.fromDate, item.toDate, item.reason),
-    fromTime: getTimeInputValue(item.fromDate),
-    toTime: getTimeInputValue(item.toDate),
+    durationMode: inferLeaveRequestModeFromDbValue(item.durationMode),
     reason: getLeaveRequestReasonInput(item.reason),
-    handoverPerson: item.handoverPerson || '',
+    handoverPersonId: item.handoverPerson?.id || '',
     approverId: item.approver?.id || '',
   };
 }

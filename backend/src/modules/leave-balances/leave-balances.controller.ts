@@ -3,6 +3,16 @@ import { z } from 'zod';
 import * as service from './leave-balances.service';
 import { sendSuccess } from '../../utils/response';
 
+export async function getAllBalances(req: Request, res: Response, next: NextFunction) {
+  try {
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const balances = await service.getAllBalances(year);
+    sendSuccess(res, balances);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getMyBalances(req: Request, res: Response, next: NextFunction) {
   try {
     const year = req.query.year ? Number(req.query.year) : undefined;
@@ -41,8 +51,16 @@ export async function initializeBalances(req: Request, res: Response, next: Next
 
 export async function adjustBalance(req: Request, res: Response, next: NextFunction) {
   try {
-    const { totalDays } = z.object({ totalDays: z.coerce.number().min(0) }).parse(req.body);
-    const balance = await service.adjustBalance(BigInt(String(req.params.id)), totalDays);
+    const data = z
+      .object({
+        annualDays: z.coerce.number().min(0).optional(),
+        carryOverDays: z.coerce.number().min(0).optional(),
+        seniorityDays: z.coerce.number().min(0).optional(),
+        compOffDays: z.coerce.number().min(0).optional(),
+        wfhDays: z.coerce.number().min(0).optional(),
+      })
+      .parse(req.body);
+    const balance = await service.adjustBalance(BigInt(String(req.params.id)), data);
     sendSuccess(res, balance);
   } catch (err) {
     next(err);

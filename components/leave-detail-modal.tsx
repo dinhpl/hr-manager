@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { X, Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Info, Pencil } from 'lucide-react';
 
 /** Normalized shape accepted by the modal — adapters in each page convert to this */
 export interface LeaveDetailData {
@@ -48,9 +48,10 @@ const TYPE_COLORS: Record<string, string> = {
 interface LeaveDetailModalProps {
   data: LeaveDetailData | null;
   onClose: () => void;
+  onEdit?: () => void;
 }
 
-export default function LeaveDetailModal({ data, onClose }: LeaveDetailModalProps) {
+export default function LeaveDetailModal({ data, onClose, onEdit }: LeaveDetailModalProps) {
   if (!data) return null;
 
   const statusInfo = STATUS_CONFIG[data.status] ?? {
@@ -276,7 +277,18 @@ export default function LeaveDetailModal({ data, onClose }: LeaveDetailModalProp
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-6 py-4 border-t" style={{ borderColor: '#e2ede9' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-t" style={{ borderColor: '#e2ede9' }}>
+          {onEdit ? (
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+            >
+              <Pencil size={14} /> Chỉnh sửa
+            </button>
+          ) : (
+            <div />
+          )}
           <button
             onClick={onClose}
             className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50 border"

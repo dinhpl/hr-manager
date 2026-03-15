@@ -48,7 +48,12 @@ async function getEmployeeSummary(userId: bigint) {
   return {
     type: 'employee',
     stats: {
-      remainingLeaveDays: balance ? Number(balance.totalDays) - Number(balance.usedDays) : 0,
+      remainingLeaveDays: balance
+        ? Number(balance.annualDays) +
+          Number(balance.carryOverDays) +
+          Number(balance.seniorityDays) -
+          Number(balance.usedDays)
+        : 0,
       usedLeaveDays: balance ? Number(balance.usedDays) : 0,
       pendingRequests: pendingCount,
       approvedRequests: approvedCount,
@@ -216,6 +221,8 @@ export async function getRecentRequests(
     include: {
       user: { select: { id: true, fullName: true, username: true, avatar: true } },
       leaveType: { select: { id: true, code: true, name: true, color: true } },
+      approver: { select: { id: true, fullName: true } },
+      handoverPerson: { select: { id: true, fullName: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: limit,

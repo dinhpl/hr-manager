@@ -869,42 +869,36 @@ export default function AttendancePage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xls,.xlsx"
-            hidden
-            onChange={handleImportFile}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setIsSettingsOpen(true)}
-            className="gap-2"
-          >
-            <Settings2 size={14} />
-            Setting
-          </Button>
-          {/* <Button
-            type="button"
-            variant="outline"
-            onClick={() => void fetchAttendances()}
-            disabled={isRefreshing || isLoading || isImporting}
-            className="gap-2"
-          >
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            Làm mới
-          </Button> */}
-          <Button
-            type="button"
-            onClick={handleImportClick}
-            disabled={isImporting}
-            className="gap-2 text-white"
-            style={{ background: '#1DB87A' }}
-          >
-            <Upload size={14} />
-            {isImporting ? 'Đang import...' : 'Import Excel'}
-          </Button>
+          {canEdit && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xls,.xlsx"
+                hidden
+                onChange={handleImportFile}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsSettingsOpen(true)}
+                className="gap-2"
+              >
+                <Settings2 size={14} />
+                Setting
+              </Button>
+              <Button
+                type="button"
+                onClick={handleImportClick}
+                disabled={isImporting}
+                className="gap-2 text-white"
+                style={{ background: '#1DB87A' }}
+              >
+                <Upload size={14} />
+                {isImporting ? 'Đang import...' : 'Import Excel'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1375,8 +1369,8 @@ export default function AttendancePage() {
                                 {record ? (
                                   <button
                                     type="button"
-                                    onClick={() => setSelectedRecord({ employee, record })}
-                                    className="w-full rounded-xl border px-2 py-2 text-left transition-transform hover:-translate-y-0.5"
+                                    onClick={() => canEdit && setSelectedRecord({ employee, record })}
+                                    className={cn("w-full rounded-xl border px-2 py-2 text-left", canEdit && "transition-transform hover:-translate-y-0.5", !canEdit && "cursor-default")}
                                     style={{
                                       borderColor: statusStyle?.border,
                                       background: statusStyle?.background,
@@ -1609,8 +1603,7 @@ export default function AttendancePage() {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedRecord ? (
-            canEdit ? (
+          {selectedRecord && canEdit && (
               <div className="space-y-4">
                 <div
                   className="rounded-xl border px-4 py-3"
@@ -1726,47 +1719,7 @@ export default function AttendancePage() {
                   </Button>
                 </DialogFooter>
               </div>
-            ) : (
-              <div className="space-y-3 text-sm">
-                {[
-                  [
-                    'Mã nhân viên',
-                    selectedRecord.employee.employeeCode || selectedRecord.employee.username || '-',
-                  ],
-                  ['Trạng thái', computeAttendanceView(selectedRecord.record, settings).label],
-                  [
-                    'Tổng giờ hiển thị',
-                    formatHours(
-                      computeAttendanceView(selectedRecord.record, settings).displayHours,
-                    ),
-                  ],
-                  [
-                    'Tổng giờ thực tế',
-                    formatHours(computeAttendanceView(selectedRecord.record, settings).actualHours),
-                  ],
-                  ['Giờ vào', formatTime(selectedRecord.record.checkIn)],
-                  ['Giờ ra', formatTime(selectedRecord.record.checkOut)],
-                  ['Ghi chú', selectedRecord.record.note || '-'],
-                ].map(([label, value]) => (
-                  <div
-                    key={label}
-                    className="flex items-start justify-between gap-4 rounded-lg border px-3 py-2"
-                    style={{ borderColor: '#e2ede9' }}
-                  >
-                    <span
-                      className="text-xs font-semibold uppercase tracking-wide"
-                      style={{ color: '#6b7f78' }}
-                    >
-                      {label}
-                    </span>
-                    <span className="text-right font-medium" style={{ color: '#203430' }}>
-                      {value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : null}
+          )}
         </DialogContent>
       </Dialog>
     </div>

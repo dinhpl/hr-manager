@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
+  ArrowRightLeft,
   CalendarCheck,
   CheckCircle2,
   ChevronLeft,
@@ -12,10 +13,10 @@ import {
   Clock,
   Eye,
   Hourglass,
+  Home,
   Plus,
   TrendingUp,
   Users,
-  XCircle,
 } from 'lucide-react';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
 import CalendarDayDetailModal, {
@@ -23,7 +24,7 @@ import CalendarDayDetailModal, {
   CalendarDayHoliday,
   CalendarDayUser,
 } from '@/components/calendar-day-detail-modal';
-import LeaveRequestModal from '@/components/leave-request-modal';
+import LeaveRequestModal, { LeaveRequestData } from '@/components/leave-request-modal';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import {
   formatDateTimeVN,
@@ -54,6 +55,27 @@ interface DashboardEmployeeSummary {
     approvedRequests: number;
     rejectedRequests: number;
   };
+}
+
+interface EmployeeLeaveBalance {
+  annualDays: number;
+  carryOverDays: number;
+  seniorityDays: number;
+  compOffDays: number;
+  wfhDays: number;
+  usedDays: number;
+  usedCompOffDays: number;
+}
+
+interface BalanceApiRecord {
+  annualDays: number | string;
+  carryOverDays: number | string;
+  seniorityDays: number | string;
+  compOffDays: number | string;
+  wfhDays: number | string;
+  usedDays: number | string;
+  usedCompOffDays: number | string;
+  leaveType: { code: string; name: string };
 }
 
 interface DashboardManagerSummary {
@@ -98,7 +120,12 @@ interface DashboardLeaveRequest {
     name?: string | null;
     color?: string | null;
   };
+  durationMode?: string | null;
   approver?: {
+    id?: string;
+    fullName?: string | null;
+  } | null;
+  handoverPerson?: {
     id?: string;
     fullName?: string | null;
   } | null;
@@ -238,6 +265,7 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
     reason: request.reason || undefined,
     status: normalizeStatus(request.status),
     submittedAt: formatDateTimeVN(request.createdAt),
+    handover: request.handoverPerson?.fullName || undefined,
     approver: request.approver?.fullName || undefined,
     approvedAt: request.approvedAt ? formatDateTimeVN(request.approvedAt) : undefined,
     employeeName: request.user?.fullName || undefined,
@@ -296,13 +324,22 @@ function CalendarGrid({
             const hasEvents = hasUsers || hasHolidays || hasBirthdays;
             const visibleHolidayCount = Math.min(holidays.length, 2);
             const visibleBirthdayCount = Math.min(birthdays.length, 1);
-            const visibleUserCount = Math.min(users.length, Math.max(0, 3 - visibleHolidayCount - visibleBirthdayCount));
-            const hiddenCount = holidays.length + birthdays.length + users.length - visibleHolidayCount - visibleBirthdayCount - visibleUserCount;
+            const visibleUserCount = Math.min(
+              users.length,
+              Math.max(0, 3 - visibleHolidayCount - visibleBirthdayCount),
+            );
+            const hiddenCount =
+              holidays.length +
+              birthdays.length +
+              users.length -
+              visibleHolidayCount -
+              visibleBirthdayCount -
+              visibleUserCount;
             return (
               <div
                 key={`${cell.dateStr}-${index}`}
                 className={`flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors ${
-                  hasEvents && isCurrentMonth
+                  isCurrentMonth
                     ? 'cursor-pointer hover:bg-orange-50/70'
                     : 'hover:bg-gray-50/50'
                 }`}
@@ -310,8 +347,13 @@ function CalendarGrid({
                   background: hasHolidays && isCurrentMonth ? '#fffaf5' : undefined,
                 }}
                 onClick={() => {
-                  if (hasEvents && isCurrentMonth && onDayClick) {
-                    onDayClick(cell.dateStr, users, holidays, birthdays.length > 0 ? birthdays : undefined);
+                  if (isCurrentMonth && onDayClick) {
+                    onDayClick(
+                      cell.dateStr,
+                      users,
+                      holidays,
+                      birthdays.length > 0 ? birthdays : undefined,
+                    );
                   }
                 }}
               >
@@ -369,7 +411,11 @@ function CalendarGrid({
                     <div
                       key={`b-${i}`}
                       className="truncate rounded-[4px] px-1.5 py-[3px] text-[9px] font-semibold leading-none"
-                      style={{ background: '#fce7f3', color: '#9d174d', borderLeft: '2px solid #ec4899' }}
+                      style={{
+                        background: '#fce7f3',
+                        color: '#9d174d',
+                        borderLeft: '2px solid #ec4899',
+                      }}
                       title={`🎂 ${b.name}`}
                     >
                       🎂 {b.name}
@@ -390,18 +436,168 @@ function CalendarGrid({
   );
 }
 
+function LeaveBalanceCards({ leaveBalance }: { leaveBalance?: EmployeeLeaveBalance | null }) {
+  const todayVN = new Date();
+  const todayMonth = todayVN.getMonth() + 1;
+  const thisYear = todayVN.getFullYear();
+  const prevYear = thisYear - 1;
+
+  const annualDays = leaveBalance ? Number(leaveBalance.annualDays) : 0;
+  const carryOverDays = leaveBalance ? Number(leaveBalance.carryOverDays) : 0;
+  const seniorityDays = leaveBalance ? Number(leaveBalance.seniorityDays) : 0;
+  const usedDays = leaveBalance ? Number(leaveBalance.usedDays) : 0;
+  const wfhDays = leaveBalance ? Number(leaveBalance.wfhDays) : 0;
+
+  const proratedAllocation = Math.min(annualDays, todayMonth);
+  const remainingToMonth = Math.max(
+    0,
+    proratedAllocation + carryOverDays + seniorityDays - usedDays,
+  );
+  const remainingFullYear = Math.max(0, annualDays + carryOverDays + seniorityDays - usedDays);
+
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #a78bfa' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Phép Chuyển {prevYear}</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#ede9fe' }}
+          >
+            <ArrowRightLeft size={15} style={{ color: '#7c3aed' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+          {fmt(carryOverDays)}
+        </p>
+        <p className="text-xs text-muted-foreground">ngày</p>
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #1DB87A' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Phép Năm {thisYear}</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#D3F2E7' }}
+          >
+            <CalendarCheck size={15} style={{ color: '#1DB87A' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+          {fmt(annualDays)}
+        </p>
+        {seniorityDays > 0 ? (
+          <p className="text-xs font-medium" style={{ color: '#1DB87A' }}>
+            + {fmt(seniorityDays)} thâm niên
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground">ngày</p>
+        )}
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #f59e0b' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Đã Nghỉ</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#fef3c7' }}
+          >
+            <Hourglass size={15} style={{ color: '#f59e0b' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+          {fmt(usedDays)}
+        </p>
+        <p className="text-xs text-muted-foreground">ngày đã dùng</p>
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #0ea5e9' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Số Ngày WFH</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#e0f2fe' }}
+          >
+            <Home size={15} style={{ color: '#0ea5e9' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+          {fmt(wfhDays)}
+        </p>
+        <p className="text-xs text-muted-foreground">ngày WFH</p>
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #3b82f6' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Còn lại đến T{todayMonth}</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#dbeafe' }}
+          >
+            <CheckCircle2 size={15} style={{ color: '#3b82f6' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
+          {fmt(remainingToMonth)}
+        </p>
+        <p className="text-xs text-muted-foreground">ngày còn lại</p>
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #059669' }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">Tạm tính cả năm</p>
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{ background: '#d1fae5' }}
+          >
+            <TrendingUp size={15} style={{ color: '#059669' }} />
+          </div>
+        </div>
+        <p className="text-2xl font-bold" style={{ color: '#059669' }}>
+          {fmt(remainingFullYear)}
+        </p>
+        <p className="text-xs text-muted-foreground">ngày còn lại</p>
+      </div>
+    </div>
+  );
+}
+
 function EmployeeDashboard({
   currentMonth,
   currentYear,
   calendarData,
   recentRequests,
   summary,
+  leaveBalance,
   onNextMonth,
   onOpenDetail,
   onOpenDayDetail,
   onOpenRequestModal,
   onPrevMonth,
-}: SharedDashboardProps & { summary: DashboardEmployeeSummary['stats'] }) {
+}: SharedDashboardProps & {
+  summary: DashboardEmployeeSummary['stats'];
+  leaveBalance?: EmployeeLeaveBalance | null;
+}) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
     [currentMonth, currentYear],
@@ -421,70 +617,9 @@ function EmployeeDashboard({
       .sort((left, right) => getDateTimeValue(left.fromDate) - getDateTimeValue(right.fromDate))[0];
   }, [recentRequests]);
 
-  const employeeStats = [
-    {
-      label: 'Phép còn lại (ngày)',
-      value: summary.remainingLeaveDays,
-      icon: CalendarCheck,
-      iconBg: '#D3F2E7',
-      iconColor: '#1DB87A',
-      borderColor: '#1DB87A',
-    },
-    {
-      label: 'Chờ duyệt',
-      value: summary.pendingRequests,
-      icon: Hourglass,
-      iconBg: '#fef3c7',
-      iconColor: '#f59e0b',
-      borderColor: '#f59e0b',
-    },
-    {
-      label: 'Đã duyệt',
-      value: summary.approvedRequests,
-      icon: CheckCircle2,
-      iconBg: '#dbeafe',
-      iconColor: '#3b82f6',
-      borderColor: '#3b82f6',
-    },
-    {
-      label: 'Từ chối',
-      value: summary.rejectedRequests,
-      icon: XCircle,
-      iconBg: '#fee2e2',
-      iconColor: '#ef4444',
-      borderColor: '#ef4444',
-    },
-  ];
-
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {employeeStats.map((stat) => (
-          <div
-            key={stat.label}
-            className="flex flex-col gap-3 rounded-xl bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-            style={{
-              border: '1px solid #e2ede9',
-              borderTop: `3px solid ${stat.borderColor}`,
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium leading-relaxed text-muted-foreground">
-                {stat.label}
-              </p>
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-xl"
-                style={{ background: stat.iconBg }}
-              >
-                <stat.icon size={18} style={{ color: stat.iconColor }} />
-              </div>
-            </div>
-            <p className="text-3xl font-bold" style={{ color: '#203430' }}>
-              {stat.value}
-            </p>
-          </div>
-        ))}
-      </div>
+      <LeaveBalanceCards leaveBalance={leaveBalance} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Calendar card */}
@@ -535,21 +670,11 @@ function EmployeeDashboard({
               />
               <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
-            {birthdayData && (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-3 w-2.5 rounded-sm"
-                  style={{ background: '#fce7f3', borderLeft: '2px solid #ec4899' }}
-                />
-                <span className="text-xs text-gray-500">Sinh nhật</span>
-              </div>
-            )}
           </div>
 
           <CalendarGrid
             calendarDays={calendarDays}
             calendarData={calendarData}
-            birthdayData={birthdayData}
             onDayClick={onOpenDayDetail}
           />
         </div>
@@ -575,30 +700,32 @@ function EmployeeDashboard({
             style={{ border: '1px solid #e2ede9' }}
           >
             <h3 className="mb-4 text-sm font-bold" style={{ color: '#203430' }}>
-              Thông tin chính
+              Nghỉ kế tiếp
             </h3>
-            <div className="space-y-3">
-              <div>
-                <p className="mb-1 text-xs text-muted-foreground">Phép còn lại</p>
-                <p className="text-2xl font-bold" style={{ color: '#1DB87A' }}>
-                  {summary.remainingLeaveDays} ngày
-                </p>
-              </div>
-              <div style={{ height: '1px', background: '#e2ede9' }} />
-              <div>
-                <p className="mb-1 text-xs text-muted-foreground">Đã sử dụng năm nay</p>
-                <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-                  {summary.usedLeaveDays} ngày
-                </p>
-              </div>
-              <div style={{ height: '1px', background: '#e2ede9' }} />
-              <div>
-                <p className="mb-1 text-xs text-muted-foreground">Kế tiếp</p>
+            {nextUpcoming ? (
+              <div className="space-y-2">
                 <p className="text-sm font-semibold" style={{ color: '#203430' }}>
-                  {nextUpcoming ? formatDateVN(nextUpcoming.fromDate) : 'Chưa có lịch sắp tới'}
+                  {nextUpcoming.leaveType?.name || nextUpcoming.leaveType?.code || 'Nghỉ phép'}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  Từ: {formatDateVN(nextUpcoming.fromDate)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Đến: {formatDateVN(nextUpcoming.toDate)}
+                </p>
+                <span
+                  className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  style={{
+                    background: STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].bg,
+                    color: STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].color,
+                  }}
+                >
+                  {STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].label}
+                </span>
               </div>
-            </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Chưa có lịch nghỉ sắp tới</p>
+            )}
           </div>
         </div>
       </div>
@@ -624,6 +751,7 @@ function EmployeeDashboard({
                   'Từ ngày',
                   'Đến ngày',
                   'Số ngày',
+                  'Người duyệt',
                   'Trạng thái',
                   'Thao tác',
                 ].map((header) => (
@@ -636,7 +764,7 @@ function EmployeeDashboard({
             <tbody>
               {recentRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Chưa có yêu cầu gần đây.
                   </td>
                 </tr>
@@ -698,6 +826,9 @@ function EmployeeDashboard({
                       >
                         {numberValue(request.totalDays)}
                       </td>
+                      <td className="px-3 py-3 text-sm" style={{ color: '#6b7f78' }}>
+                        {request.approver?.fullName || '-'}
+                      </td>
                       <td className="px-3 py-3">
                         <span
                           className="rounded-full px-2.5 py-1 text-xs font-semibold"
@@ -744,6 +875,7 @@ function AdminHRDashboard({
   summary,
   userRole,
   birthdayData,
+  leaveBalance,
   onNextMonth,
   onOpenDetail,
   onOpenDayDetail,
@@ -753,6 +885,7 @@ function AdminHRDashboard({
   summary: DashboardManagerSummary['stats'];
   userRole: Exclude<UserRole, 'employee'>;
   birthdayData?: BirthdayData;
+  leaveBalance?: EmployeeLeaveBalance | null;
 }) {
   const calendarDays = useMemo(
     () => getCalendarDays(currentYear, currentMonth),
@@ -811,7 +944,8 @@ function AdminHRDashboard({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <LeaveBalanceCards leaveBalance={leaveBalance} />
+      {/* <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {adminStats.map((stat) => (
           <div
             key={stat.label}
@@ -845,7 +979,7 @@ function AdminHRDashboard({
             </div>
           </div>
         ))}
-      </div>
+      </div> */}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Calendar card */}
@@ -958,16 +1092,25 @@ function AdminHRDashboard({
                       <div key={`${dateStr}-${p.id}`} className="flex items-center gap-2">
                         <div
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                          style={{ background: 'linear-gradient(135deg, #f472b6 0%, #db2777 100%)' }}
+                          style={{
+                            background: 'linear-gradient(135deg, #f472b6 0%, #db2777 100%)',
+                          }}
                         >
                           {p.name.slice(0, 1).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold truncate" style={{ color: '#203430' }}>{p.name}</p>
-                          <p className="text-[10px]" style={{ color: '#6b7f78' }}>{dateStr.slice(8, 10)}/{dateStr.slice(5, 7)}</p>
+                          <p
+                            className="text-xs font-semibold truncate"
+                            style={{ color: '#203430' }}
+                          >
+                            {p.name}
+                          </p>
+                          <p className="text-[10px]" style={{ color: '#6b7f78' }}>
+                            {dateStr.slice(8, 10)}/{dateStr.slice(5, 7)}
+                          </p>
                         </div>
                       </div>
-                    ))
+                    )),
                   )}
               </div>
             </div>
@@ -1023,6 +1166,7 @@ function AdminHRDashboard({
                   'Loại nghỉ',
                   'Từ ngày',
                   'Đến ngày',
+                  'Người duyệt',
                   'Trạng thái',
                   'Thao tác',
                 ].map((header) => (
@@ -1035,7 +1179,7 @@ function AdminHRDashboard({
             <tbody>
               {recentRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     Chưa có yêu cầu gần đây.
                   </td>
                 </tr>
@@ -1090,6 +1234,9 @@ function AdminHRDashboard({
                       </td>
                       <td className="px-3 py-3 text-center text-sm text-muted-foreground">
                         {formatDateVN(request.toDate)}
+                      </td>
+                      <td className="px-3 py-3 text-sm" style={{ color: '#6b7f78' }}>
+                        {request.approver?.fullName || '-'}
                       </td>
                       <td className="px-3 py-3">
                         <span
@@ -1146,7 +1293,11 @@ export default function DashboardPage() {
     holidays: CalendarData[string]['holidays'];
     birthdays?: CalendarDayBirthday[];
   } | null>(null);
+  const [leaveBalance, setLeaveBalance] = useState<EmployeeLeaveBalance | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
+  const [leaveDefaultDate, setLeaveDefaultDate] = useState<string | undefined>(undefined);
+  const [editLeaveData, setEditLeaveData] = useState<LeaveRequestData | null>(null);
+  const [selectedRawRequest, setSelectedRawRequest] = useState<DashboardLeaveRequest | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1164,6 +1315,29 @@ export default function DashboardPage() {
       setLoadingUser(false);
     }
   }, [router]);
+
+  const loadLeaveBalance = useCallback(async () => {
+    try {
+      const response = await apiClient.get<BalanceApiRecord[]>('/api/leave-balances');
+      const records = response.data || [];
+      const alRecord = records.find((r) => r.leaveType?.code === 'AL');
+      if (alRecord) {
+        setLeaveBalance({
+          annualDays: Number(alRecord.annualDays),
+          carryOverDays: Number(alRecord.carryOverDays),
+          seniorityDays: Number(alRecord.seniorityDays),
+          compOffDays: Number(alRecord.compOffDays),
+          wfhDays: Number(alRecord.wfhDays),
+          usedDays: Number(alRecord.usedDays),
+          usedCompOffDays: Number(alRecord.usedCompOffDays),
+        });
+      } else {
+        setLeaveBalance(null);
+      }
+    } catch {
+      setLeaveBalance(null);
+    }
+  }, []);
 
   const loadDashboardData = useCallback(async () => {
     setLoadingData(true);
@@ -1190,17 +1364,20 @@ export default function DashboardPage() {
     }
   }, [currentMonth, currentYear]);
 
-  const loadBirthdayData = useCallback(async (role: string) => {
-    if (role !== 'HR' && role !== 'ADMIN') return;
-    try {
-      const response = await apiClient.get<BirthdayData>(
-        `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
-      );
-      setBirthdayData(response.data || {});
-    } catch {
-      setBirthdayData({});
-    }
-  }, [currentMonth, currentYear]);
+  const loadBirthdayData = useCallback(
+    async (role: string) => {
+      if (role !== 'HR' && role !== 'ADMIN') return;
+      try {
+        const response = await apiClient.get<BirthdayData>(
+          `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
+        );
+        setBirthdayData(response.data || {});
+      } catch {
+        setBirthdayData({});
+      }
+    },
+    [currentMonth, currentYear],
+  );
 
   useEffect(() => {
     void loadCurrentUser();
@@ -1215,6 +1392,12 @@ export default function DashboardPage() {
       void loadBirthdayData(userInfo.role);
     }
   }, [loadBirthdayData, userInfo?.role]);
+
+  useEffect(() => {
+    if (userInfo) {
+      void loadLeaveBalance();
+    }
+  }, [loadLeaveBalance, userInfo]);
 
   const handlePrevMonth = () => {
     if (currentMonth === 1) {
@@ -1247,6 +1430,7 @@ export default function DashboardPage() {
         const response = await apiClient.get<DashboardLeaveRequest>(
           `/api/leave-requests/${user.requestId}`,
         );
+        setSelectedRawRequest(response.data);
         setSelectedDetail(toDetailData(response.data));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Không tải được chi tiết yêu cầu nghỉ phép.');
@@ -1256,6 +1440,40 @@ export default function DashboardPage() {
     },
     [],
   );
+
+  const handleEditRequest = useCallback(async () => {
+    if (!selectedRawRequest) return;
+    const id = selectedRawRequest.id;
+    setSelectedDetail(null);
+    setSelectedRawRequest(null);
+
+    try {
+      const response = await apiClient.get<{
+        id: string;
+        fromDate: string;
+        toDate: string;
+        durationMode?: string | null;
+        reason?: string | null;
+        handoverPerson?: { id?: string | null } | null;
+        leaveType?: { code?: string | null } | null;
+        approver?: { id?: string | null } | null;
+      }>(`/api/leave-requests/${id}`);
+      const data = response.data;
+      setEditLeaveData({
+        id: String(data.id),
+        typeCode: data.leaveType?.code || '',
+        fromDate: data.fromDate?.slice(0, 10) || '',
+        toDate: data.toDate?.slice(0, 10) || '',
+        durationMode: (data.durationMode as import('@/lib/hr-utils').LeaveRequestMode) || 'FULL_DAY',
+        reason: data.reason || '',
+        handoverPersonId: data.handoverPerson?.id ? String(data.handoverPerson.id) : '',
+        approverId: data.approver?.id ? String(data.approver.id) : '',
+      });
+      setIsLeaveRequestModalOpen(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Không tải được dữ liệu yêu cầu.');
+    }
+  }, [selectedRawRequest]);
 
   const currentRole = toFrontendRole(userInfo?.role);
   const isLoading = loadingUser || (loadingData && !summary);
@@ -1305,10 +1523,18 @@ export default function DashboardPage() {
           calendarData={calendarData}
           recentRequests={recentRequests}
           summary={summary.stats}
+          leaveBalance={leaveBalance}
           onNextMonth={handleNextMonth}
-          onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
-          onOpenDayDetail={(date, users, holidays, birthdays) => setSelectedDayDetail({ date, users, holidays, birthdays })}
-          onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
+          onOpenDetail={(request) => { setSelectedRawRequest(request); setSelectedDetail(toDetailData(request)); }}
+          onOpenDayDetail={(date, users, holidays, birthdays) => {
+            if (users.length === 0) {
+              setLeaveDefaultDate(date);
+              setIsLeaveRequestModalOpen(true);
+            } else {
+              setSelectedDayDetail({ date, users, holidays, birthdays });
+            }
+          }}
+          onOpenRequestModal={() => { setLeaveDefaultDate(undefined); setIsLeaveRequestModalOpen(true); }}
           onPrevMonth={handlePrevMonth}
         />
       ) : (
@@ -1317,6 +1543,7 @@ export default function DashboardPage() {
           currentYear={currentYear}
           calendarData={calendarData}
           birthdayData={birthdayData}
+          leaveBalance={leaveBalance}
           recentRequests={recentRequests}
           summary={
             summary.type === 'employee'
@@ -1331,14 +1558,30 @@ export default function DashboardPage() {
           }
           userRole={currentRole === 'employee' ? 'manager' : currentRole}
           onNextMonth={handleNextMonth}
-          onOpenDetail={(request) => setSelectedDetail(toDetailData(request))}
-          onOpenDayDetail={(date, users, holidays, birthdays) => setSelectedDayDetail({ date, users, holidays, birthdays })}
-          onOpenRequestModal={() => setIsLeaveRequestModalOpen(true)}
+          onOpenDetail={(request) => { setSelectedRawRequest(request); setSelectedDetail(toDetailData(request)); }}
+          onOpenDayDetail={(date, users, holidays, birthdays) => {
+            if (users.length === 0) {
+              setLeaveDefaultDate(date);
+              setIsLeaveRequestModalOpen(true);
+            } else {
+              setSelectedDayDetail({ date, users, holidays, birthdays });
+            }
+          }}
+          onOpenRequestModal={() => { setLeaveDefaultDate(undefined); setIsLeaveRequestModalOpen(true); }}
           onPrevMonth={handlePrevMonth}
         />
       )}
 
-      <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
+      <LeaveDetailModal
+        data={selectedDetail}
+        onClose={() => { setSelectedDetail(null); setSelectedRawRequest(null); }}
+        onEdit={
+          selectedRawRequest?.user?.id === userInfo?.id &&
+          normalizeStatus(selectedRawRequest?.status) === 'pending'
+            ? handleEditRequest
+            : undefined
+        }
+      />
       <CalendarDayDetailModal
         date={selectedDayDetail?.date}
         users={selectedDayDetail?.users}
@@ -1346,13 +1589,23 @@ export default function DashboardPage() {
         birthdays={selectedDayDetail?.birthdays}
         onClose={() => setSelectedDayDetail(null)}
         onViewDetail={(user) => void handleOpenCalendarRequestDetail(user)}
+        onAddLeave={() => {
+          const date = selectedDayDetail?.date;
+          setSelectedDayDetail(null);
+          setLeaveDefaultDate(date);
+          setIsLeaveRequestModalOpen(true);
+        }}
       />
 
       <LeaveRequestModal
         isOpen={isLeaveRequestModalOpen}
-        onClose={() => setIsLeaveRequestModalOpen(false)}
+        defaultDate={leaveDefaultDate}
+        editData={editLeaveData}
+        onClose={() => { setIsLeaveRequestModalOpen(false); setLeaveDefaultDate(undefined); setEditLeaveData(null); }}
         onSubmitSuccess={() => {
+          setEditLeaveData(null);
           void loadDashboardData();
+          void loadLeaveBalance();
         }}
       />
     </>

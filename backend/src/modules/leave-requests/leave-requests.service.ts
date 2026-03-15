@@ -60,6 +60,7 @@ const LEAVE_REQUEST_INCLUDE = {
     },
   },
   approver: { select: { id: true, fullName: true } },
+  handoverPerson: { select: { id: true, fullName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
 function calculateTotalDays(data: CreateLeaveRequestDto | UpdateLeaveRequestDto) {
@@ -73,26 +74,8 @@ function calculateTotalDays(data: CreateLeaveRequestDto | UpdateLeaveRequestDto)
   const inclusiveDays = countInclusiveVietnamDates(startDate, endDate);
   const durationMode = data.durationMode ?? 'FULL_DAY';
 
-  if (durationMode === 'HALF_DAY') {
+  if (durationMode === 'HALF_DAY_AM' || durationMode === 'HALF_DAY_PM') {
     return inclusiveDays * 0.5;
-  }
-
-  if (durationMode === 'HOURLY') {
-    if (!data.fromTime || !data.toTime) {
-      throw Object.assign(new Error('fromTime and toTime are required for hourly leave'), {
-        status: 400,
-      });
-    }
-
-    const startTime = new Date(`2000-01-01T${data.fromTime}:00`);
-    const endTime = new Date(`2000-01-01T${data.toTime}:00`);
-    const hours = (endTime.getTime() - startTime.getTime()) / (60 * 60 * 1000);
-
-    if (hours <= 0) {
-      throw Object.assign(new Error('toTime must be greater than fromTime'), { status: 400 });
-    }
-
-    return hours / 8;
   }
 
   return inclusiveDays;
@@ -228,7 +211,7 @@ async function resolveApproverId(
     throw Object.assign(new Error('Target user not found'), { status: 404 });
   }
 
-  if (requestedApproverId && ['ADMIN', 'HR'].includes(requestingUser.role)) {
+  if (requestedApproverId) {
     const approverId = await validateApprover(requestedApproverId);
     if (approverId === targetUserId) {
       throw Object.assign(new Error('Self-approval is not allowed'), { status: 400 });
@@ -294,10 +277,18 @@ async function validateBalanceAvailable(
   leaveTypeId: bigint,
   totalDays: number,
   year: number,
+  isCompOff?: boolean,
 ) {
   const balance = await prisma.leaveBalance.findUnique({
     where: { userId_leaveTypeId_year: { userId, leaveTypeId, year } },
-    select: { totalDays: true, usedDays: true },
+    select: {
+      annualDays: true,
+      carryOverDays: true,
+      seniorityDays: true,
+      usedDays: true,
+      compOffDays: true,
+      usedCompOffDays: true,
+    },
   });
 
   if (!balance) {
@@ -306,7 +297,13 @@ async function validateBalanceAvailable(
     });
   }
 
-  const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+  const remainingDays = isCompOff
+    ? Number(balance.compOffDays) - Number(balance.usedCompOffDays)
+    : Number(balance.annualDays) +
+      Number(balance.carryOverDays) +
+      Number(balance.seniorityDays) -
+      Number(balance.usedDays);
+
   if (remainingDays < totalDays) {
     throw Object.assign(
       new Error(
@@ -405,6 +402,7 @@ async function validateLeaveRequestRules(params: {
       params.leaveTypeId,
       params.totalDays,
       Number(getVietnamDatePart(params.fromDate).slice(0, 4)),
+      leaveType.code === 'CO',
     );
   }
 
@@ -498,9 +496,10 @@ export async function createLeaveRequest(
         approverId,
         fromDate,
         toDate,
+        durationMode: data.durationMode ?? 'FULL_DAY',
         totalDays,
         reason: data.reason,
-        handoverPerson: data.handoverPerson || null,
+        handoverPersonId: data.handoverPersonId || null,
         status: shouldAutoApprove ? 'APPROVED' : 'PENDING',
         approvedAt: shouldAutoApprove ? new Date() : null,
         approvedNote: shouldAutoApprove ? 'Auto-approved by approval flow setting.' : null,
@@ -528,6 +527,8 @@ export async function createLeaveRequest(
         data.leaveTypeId,
         totalDays,
         Number(getVietnamDatePart(fromDate).slice(0, 4)),
+        undefined,
+        ruleResult.leaveTypeCode === 'CO',
       );
     }
 
@@ -618,9 +619,10 @@ export async function updateLeaveRequest(
       approverId,
       fromDate,
       toDate,
+      durationMode: data.durationMode ?? 'FULL_DAY',
       totalDays,
       reason: data.reason,
-      handoverPerson: data.handoverPerson || null,
+      handoverPersonId: data.handoverPersonId || null,
       ...(attachmentUrl ? { attachmentUrl } : {}),
     },
     include: LEAVE_REQUEST_INCLUDE,
@@ -657,7 +659,12 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
               year,
             },
           },
-          select: { totalDays: true, usedDays: true },
+          select: {
+            annualDays: true,
+            carryOverDays: true,
+            seniorityDays: true,
+            usedDays: true,
+          },
         });
 
         if (!balance) {
@@ -666,7 +673,11 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
           });
         }
 
-        const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+        const remainingDays =
+          Number(balance.annualDays) +
+          Number(balance.carryOverDays) +
+          Number(balance.seniorityDays) -
+          Number(balance.usedDays);
         if (remainingDays < Number(request.totalDays)) {
           throw Object.assign(
             new Error(
@@ -685,7 +696,14 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
             year,
           },
         },
-        select: { totalDays: true, usedDays: true },
+        select: {
+          annualDays: true,
+          carryOverDays: true,
+          seniorityDays: true,
+          usedDays: true,
+          compOffDays: true,
+          usedCompOffDays: true,
+        },
       });
 
       if (!balance) {
@@ -694,7 +712,13 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
         });
       }
 
-      const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+      const isCompOff = request.leaveType.code === 'CO';
+      const remainingDays = isCompOff
+        ? Number(balance.compOffDays) - Number(balance.usedCompOffDays)
+        : Number(balance.annualDays) +
+          Number(balance.carryOverDays) +
+          Number(balance.seniorityDays) -
+          Number(balance.usedDays);
       if (remainingDays < Number(request.totalDays)) {
         throw Object.assign(
           new Error(
@@ -729,7 +753,15 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
         );
       }
     } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
-      await deductBalance(tx, request.userId, request.leaveTypeId, Number(request.totalDays), year);
+      await deductBalance(
+        tx,
+        request.userId,
+        request.leaveTypeId,
+        Number(request.totalDays),
+        year,
+        undefined,
+        request.leaveType.code === 'CO',
+      );
     }
 
     return serializeRequestById(tx, id);
@@ -850,6 +882,8 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
           request.leaveTypeId,
           Number(request.totalDays),
           year,
+          undefined,
+          request.leaveType.code === 'CO',
         );
       }
     }
@@ -930,7 +964,12 @@ export async function bulkApproveLeaveRequests(
                 year,
               },
             },
-            select: { totalDays: true, usedDays: true },
+            select: {
+              annualDays: true,
+              carryOverDays: true,
+              seniorityDays: true,
+              usedDays: true,
+            },
           });
 
           if (!balance) {
@@ -942,7 +981,11 @@ export async function bulkApproveLeaveRequests(
             );
           }
 
-          const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+          const remainingDays =
+            Number(balance.annualDays) +
+            Number(balance.carryOverDays) +
+            Number(balance.seniorityDays) -
+            Number(balance.usedDays);
           if (remainingDays < Number(request.totalDays)) {
             throw Object.assign(
               new Error(
@@ -961,7 +1004,14 @@ export async function bulkApproveLeaveRequests(
               year,
             },
           },
-          select: { totalDays: true, usedDays: true },
+          select: {
+            annualDays: true,
+            carryOverDays: true,
+            seniorityDays: true,
+            usedDays: true,
+            compOffDays: true,
+            usedCompOffDays: true,
+          },
         });
 
         if (!balance) {
@@ -973,7 +1023,13 @@ export async function bulkApproveLeaveRequests(
           );
         }
 
-        const remainingDays = Number(balance.totalDays) - Number(balance.usedDays);
+        const isCompOff = request.leaveType.code === 'CO';
+        const remainingDays = isCompOff
+          ? Number(balance.compOffDays) - Number(balance.usedCompOffDays)
+          : Number(balance.annualDays) +
+            Number(balance.carryOverDays) +
+            Number(balance.seniorityDays) -
+            Number(balance.usedDays);
         if (remainingDays < Number(request.totalDays)) {
           throw Object.assign(
             new Error(
@@ -1014,6 +1070,8 @@ export async function bulkApproveLeaveRequests(
           request.leaveTypeId,
           Number(request.totalDays),
           year,
+          undefined,
+          request.leaveType.code === 'CO',
         );
       }
     }

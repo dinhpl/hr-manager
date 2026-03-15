@@ -21,6 +21,12 @@ enum LeaveRequestStatus {
   CANCELLED
 }
 
+enum DurationMode {
+  FULL_DAY
+  HALF_DAY_AM
+  HALF_DAY_PM
+}
+
 enum OvertimeStatus {
   PENDING
   APPROVED
@@ -67,8 +73,9 @@ model User {
 
   manager          User?            @relation("UserManager", fields: [managerId], references: [id])
   subordinates     User[]           @relation("UserManager")
-  leaveRequests    LeaveRequest[]   @relation("UserLeaveRequests")
-  approvedRequests LeaveRequest[]   @relation("ApproverLeaveRequests")
+  leaveRequests     LeaveRequest[]   @relation("UserLeaveRequests")
+  approvedRequests  LeaveRequest[]   @relation("ApproverLeaveRequests")
+  handoverRequests  LeaveRequest[]   @relation("HandoverPersonRequests")
   overtimeRecords  OvertimeRecord[] @relation("UserOvertimeRecords")
   approvedOT       OvertimeRecord[] @relation("ApproverOvertimeRecords")
   compOffRecords   CompOffRecord[]  @relation("UserCompOffRecords")
@@ -101,25 +108,27 @@ model LeaveType {
 }
 
 model LeaveRequest {
-  id             BigInt             @id @default(autoincrement())
-  userId         BigInt             @map("user_id")
-  leaveTypeId    BigInt             @map("leave_type_id")
-  fromDate       DateTime           @map("from_date")
-  toDate         DateTime           @map("to_date")
-  totalDays      Decimal            @map("total_days") @db.Decimal(10, 2)
-  reason         String
-  handoverPerson String?            @map("handover_person")
-  status         LeaveRequestStatus @default(PENDING)
-  attachmentUrl  String?            @map("attachment_url")
-  approverId     BigInt?            @map("approver_id")
-  approvedAt     DateTime?          @map("approved_at")
-  approvedNote   String?            @map("approved_note")
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
+  id               BigInt             @id @default(autoincrement())
+  userId           BigInt             @map("user_id")
+  leaveTypeId      BigInt             @map("leave_type_id")
+  fromDate         DateTime           @map("from_date")
+  toDate           DateTime           @map("to_date")
+  durationMode     DurationMode       @default(FULL_DAY) @map("duration_mode")
+  totalDays        Decimal            @map("total_days") @db.Decimal(10, 2)
+  reason           String
+  handoverPersonId BigInt?            @map("handover_person_id")
+  status           LeaveRequestStatus @default(PENDING)
+  attachmentUrl    String?            @map("attachment_url")
+  approverId       BigInt?            @map("approver_id")
+  approvedAt       DateTime?          @map("approved_at")
+  approvedNote     String?            @map("approved_note")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
 
-  user      User      @relation("UserLeaveRequests", fields: [userId], references: [id])
-  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
-  approver  User?     @relation("ApproverLeaveRequests", fields: [approverId], references: [id])
+  user           User      @relation("UserLeaveRequests", fields: [userId], references: [id])
+  leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id])
+  approver       User?     @relation("ApproverLeaveRequests", fields: [approverId], references: [id])
+  handoverPerson User?     @relation("HandoverPersonRequests", fields: [handoverPersonId], references: [id])
 
   @@map("leave_requests")
 }
@@ -165,14 +174,19 @@ model CompOffRecord {
 }
 
 model LeaveBalance {
-  id          BigInt   @id @default(autoincrement())
-  userId      BigInt   @map("user_id")
-  leaveTypeId BigInt   @map("leave_type_id")
-  year        Int
-  totalDays   Decimal  @default(0) @map("total_days") @db.Decimal(10, 2)
-  usedDays    Decimal  @default(0) @map("used_days") @db.Decimal(10, 2)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id               BigInt   @id @default(autoincrement())
+  userId           BigInt   @map("user_id")
+  leaveTypeId      BigInt   @map("leave_type_id")
+  year             Int
+  annualDays       Decimal  @default(0) @map("annual_days") @db.Decimal(10, 2)
+  carryOverDays    Decimal  @default(0) @map("carry_over_days") @db.Decimal(10, 2)
+  seniorityDays    Decimal  @default(0) @map("seniority_days") @db.Decimal(10, 2)
+  compOffDays      Decimal  @default(0) @map("comp_off_days") @db.Decimal(10, 2)
+  wfhDays          Decimal  @default(0) @map("wfh_days") @db.Decimal(10, 2)
+  usedDays         Decimal  @default(0) @map("used_days") @db.Decimal(10, 2)
+  usedCompOffDays  Decimal  @default(0) @map("used_comp_off_days") @db.Decimal(10, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   user      User      @relation(fields: [userId], references: [id])
   leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])

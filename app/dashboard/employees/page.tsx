@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormE
 import {
   Building2,
   Cake,
+  CalendarDays,
   CalendarOff,
-  Clock,
   FileDown,
   Pencil,
   RefreshCw,
+  Save,
   Search,
   Shield,
   Table2,
@@ -39,7 +40,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
-import { buildQuery, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from '@/lib/hr-utils';
+import { buildQuery, formatDate, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from '@/lib/hr-utils';
 
 type UserRole = 'EMPLOYEE' | 'MANAGER' | 'HR' | 'ADMIN';
 type EmployeeStatus = 'active' | 'inactive';
@@ -112,6 +113,30 @@ interface EmployeeFormData {
   companyJoinDate: string;
   birthday: string;
   status: EmployeeStatus;
+}
+
+interface LeaveBalanceApiRow {
+  id: string;
+  userId: string;
+  year: number;
+  annualDays: number | string;
+  carryOverDays: number | string;
+  seniorityDays: number | string;
+  compOffDays: number | string;
+  wfhDays: number | string;
+  usedDays: number | string;
+  usedCompOffDays: number | string;
+  user: {
+    id: string;
+    fullName: string;
+    employeeCode?: string | null;
+    department?: string | null;
+  };
+  leaveType: {
+    code: string;
+    name: string;
+    color: string;
+  };
 }
 
 // Department item from /api/departments
@@ -263,6 +288,19 @@ export default function EmployeesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'employees' | 'leave-balances'>('employees');
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceApiRow[]>([]);
+  const [balanceYear, setBalanceYear] = useState(new Date().getFullYear());
+  const [isLoadingBalances, setIsLoadingBalances] = useState(false);
+  const [editingBalance, setEditingBalance] = useState<LeaveBalanceApiRow | null>(null);
+  const [balanceForm, setBalanceForm] = useState({
+    annualDays: '',
+    carryOverDays: '',
+    seniorityDays: '',
+    compOffDays: '',
+    wfhDays: '',
+  });
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -323,6 +361,20 @@ export default function EmployeesPage() {
     [scrollToTop, searchQuery, statusFilter, teamFilter],
   );
 
+  const fetchLeaveBalances = useCallback(async (year: number) => {
+    setIsLoadingBalances(true);
+    try {
+      const { data } = await apiClient.get<LeaveBalanceApiRow[]>(
+        `/api/leave-balances/all?year=${year}`,
+      );
+      setLeaveBalances(data ?? []);
+    } catch {
+      toast.error('Không thể tải dữ liệu phép năm.');
+    } finally {
+      setIsLoadingBalances(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchDepartments();
     void fetchManagers();
@@ -331,6 +383,12 @@ export default function EmployeesPage() {
   useEffect(() => {
     void fetchEmployees(true);
   }, [fetchEmployees]);
+
+  useEffect(() => {
+    if (activeTab === 'leave-balances') {
+      void fetchLeaveBalances(balanceYear);
+    }
+  }, [activeTab, balanceYear, fetchLeaveBalances]);
 
   const departmentDistribution = useMemo(() => {
     if (!employees.length) return [];
@@ -568,6 +626,38 @@ export default function EmployeesPage() {
     }
   };
 
+  const openEditBalance = (row: LeaveBalanceApiRow) => {
+    setEditingBalance(row);
+    setBalanceForm({
+      annualDays: String(row.annualDays),
+      carryOverDays: String(row.carryOverDays),
+      seniorityDays: String(row.seniorityDays),
+      compOffDays: String(row.compOffDays),
+      wfhDays: String(row.wfhDays),
+    });
+  };
+
+  const handleSaveBalance = async () => {
+    if (!editingBalance) return;
+    setIsSavingBalance(true);
+    try {
+      await apiClient.patch(`/api/leave-balances/${editingBalance.id}`, {
+        annualDays: parseFloat(balanceForm.annualDays) || 0,
+        carryOverDays: parseFloat(balanceForm.carryOverDays) || 0,
+        seniorityDays: parseFloat(balanceForm.seniorityDays) || 0,
+        compOffDays: parseFloat(balanceForm.compOffDays) || 0,
+        wfhDays: parseFloat(balanceForm.wfhDays) || 0,
+      });
+      setEditingBalance(null);
+      toast.success('Đã cập nhật số ngày phép.');
+      void fetchLeaveBalances(balanceYear);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể cập nhật phép năm.');
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
+
   const birthdayThisMonthCount = useMemo(() => {
     const thisMonth = new Date().getMonth() + 1;
     return employees.filter((emp) => {
@@ -631,592 +721,643 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: 'Tổng nhân viên',
-            value: employees.length.toString(),
-            icon: Users,
-            color: '#3b82f6',
-            bg: '#eff6ff',
-          },
-          {
-            label: 'Đang làm việc',
-            value: employees.filter((employee) => employee.status === 'active').length.toString(),
-            icon: UserCheck,
-            color: '#1DB87A',
-            bg: '#f0fdf9',
-          },
-          {
-            label: 'Nghỉ phép hôm nay',
-            value: '—',
-            icon: CalendarOff,
-            color: '#f59e0b',
-            bg: '#fffbeb',
-          },
-          {
-            label: 'Sinh nhật tháng này',
-            value: birthdayThisMonthCount.toString(),
-            icon: Cake,
-            color: '#06b6d4',
-            bg: '#ecfeff',
-          },
-        ].map((stat) => (
+      {/* Tab navigation */}
+      <div className="flex gap-1 border-b" style={{ borderColor: '#e2ede9' }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('employees')}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-t-lg border-b-2 transition-colors"
+          style={{
+            borderColor: activeTab === 'employees' ? '#1DB87A' : 'transparent',
+            color: activeTab === 'employees' ? '#1DB87A' : '#6b7f78',
+            background: activeTab === 'employees' ? '#f0fdf9' : 'transparent',
+          }}
+        >
+          <Users size={15} />
+          Danh sách nhân viên
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('leave-balances')}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-t-lg border-b-2 transition-colors"
+          style={{
+            borderColor: activeTab === 'leave-balances' ? '#1DB87A' : 'transparent',
+            color: activeTab === 'leave-balances' ? '#1DB87A' : '#6b7f78',
+            background: activeTab === 'leave-balances' ? '#f0fdf9' : 'transparent',
+          }}
+        >
+          <CalendarDays size={15} />
+          Quản lý phép năm
+        </button>
+      </div>
+
+      {activeTab === 'employees' && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                label: 'Tổng nhân viên',
+                value: employees.length.toString(),
+                icon: Users,
+                color: '#3b82f6',
+                bg: '#eff6ff',
+              },
+              {
+                label: 'Đang làm việc',
+                value: employees
+                  .filter((employee) => employee.status === 'active')
+                  .length.toString(),
+                icon: UserCheck,
+                color: '#1DB87A',
+                bg: '#f0fdf9',
+              },
+              {
+                label: 'Nghỉ phép hôm nay',
+                value: '—',
+                icon: CalendarOff,
+                color: '#f59e0b',
+                bg: '#fffbeb',
+              },
+              {
+                label: 'Sinh nhật tháng này',
+                value: birthdayThisMonthCount.toString(),
+                icon: Cake,
+                color: '#06b6d4',
+                bg: '#ecfeff',
+              },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="bg-white rounded-xl p-4 border flex items-center gap-4"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: stat.bg }}
+                >
+                  <stat.icon size={22} style={{ color: stat.color }} />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+                    {stat.value}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
+                    {stat.label}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-xl border p-4" style={{ borderColor: '#e2ede9' }}>
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                  Trạng thái
+                </label>
+                <Select
+                  value={statusFilter || 'all-status'}
+                  onValueChange={(value) => setStatusFilter(value === 'all-status' ? '' : value)}
+                >
+                  <SelectTrigger className="min-w-[150px]">
+                    <SelectValue placeholder="Trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="active">Đang làm việc</SelectItem>
+                    <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                  Phòng ban
+                </label>
+                <Select
+                  value={teamFilter || 'all-team'}
+                  onValueChange={(value) => setTeamFilter(value === 'all-team' ? '' : value)}
+                >
+                  <SelectTrigger className="min-w-[150px]">
+                    <SelectValue placeholder="Phòng ban" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.code} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 items-end flex-1 min-w-[220px]">
+                <div className="flex-1">
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
+                    Tìm kiếm
+                  </label>
+                  <Input
+                    type="text"
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleSearch();
+                      }
+                    }}
+                    placeholder="Tìm theo tên, email, mã nhân viên..."
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
+                  style={{ background: '#1DB87A' }}
+                >
+                  <Search size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div
-            key={stat.label}
-            className="bg-white rounded-xl p-4 border flex items-center gap-4"
+            className="bg-white rounded-xl border overflow-hidden"
             style={{ borderColor: '#e2ede9' }}
           >
             <div
-              className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: stat.bg }}
-            >
-              <stat.icon size={22} style={{ color: stat.color }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-                {stat.value}
-              </p>
-              <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
-                {stat.label}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-xl border p-4" style={{ borderColor: '#e2ede9' }}>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-              Trạng thái
-            </label>
-            <Select
-              value={statusFilter || 'all-status'}
-              onValueChange={(value) => setStatusFilter(value === 'all-status' ? '' : value)}
-            >
-              <SelectTrigger className="min-w-[150px]">
-                <SelectValue placeholder="Trạng thái" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
-                <SelectItem value="active">Đang làm việc</SelectItem>
-                <SelectItem value="inactive">Tạm nghỉ</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-              Phòng ban
-            </label>
-            <Select
-              value={teamFilter || 'all-team'}
-              onValueChange={(value) => setTeamFilter(value === 'all-team' ? '' : value)}
-            >
-              <SelectTrigger className="min-w-[150px]">
-                <SelectValue placeholder="Phòng ban" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
-                {departments.map((dept) => (
-                  <SelectItem key={dept.code} value={dept.name}>
-                    {dept.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex gap-2 items-end flex-1 min-w-[220px]">
-            <div className="flex-1">
-              <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
-                Tìm kiếm
-              </label>
-              <Input
-                type="text"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    handleSearch();
-                  }
-                }}
-                placeholder="Tìm theo tên, email, mã nhân viên..."
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleSearch}
-              className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
-              style={{ background: '#1DB87A' }}
-            >
-              <Search size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="bg-white rounded-xl border overflow-hidden"
-        style={{ borderColor: '#e2ede9' }}
-      >
-        <div
-          className="flex items-center justify-between px-5 py-3 border-b"
-          style={{ borderColor: '#e2ede9' }}
-        >
-          <div className="flex items-center gap-2">
-            <Table2 size={15} style={{ color: '#1DB87A' }} />
-            <h2 className="font-semibold text-sm" style={{ color: '#203430' }}>
-              Danh sách nhân viên ({employees.length})
-            </h2>
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={() => void fetchEmployees()}
-              className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-between px-5 py-3 border-b"
               style={{ borderColor: '#e2ede9' }}
-              disabled={isRefreshing || isMutating}
-              title="Tải lại danh sách"
             >
-              <RefreshCw
-                size={13}
-                style={{
-                  color: '#6b7f78',
-                  transform: isRefreshing ? 'rotate(180deg)' : 'none',
-                  transition: 'transform 0.3s ease',
-                }}
-              />
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ background: '#203430' }}>
-                <th className="px-3 py-3 w-10">
-                  <Checkbox
-                    checked={selectedIds.length === employees.length && employees.length > 0}
-                    onCheckedChange={toggleAll}
-                    aria-label="Chọn tất cả nhân viên"
+              <div className="flex items-center gap-2">
+                <Table2 size={15} style={{ color: '#1DB87A' }} />
+                <h2 className="font-semibold text-sm" style={{ color: '#203430' }}>
+                  Danh sách nhân viên ({employees.length})
+                </h2>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => void fetchEmployees()}
+                  className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ borderColor: '#e2ede9' }}
+                  disabled={isRefreshing || isMutating}
+                  title="Tải lại danh sách"
+                >
+                  <RefreshCw
+                    size={13}
+                    style={{
+                      color: '#6b7f78',
+                      transform: isRefreshing ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.3s ease',
+                    }}
                   />
-                </th>
-                {[
-                  'Avatar',
-                  'Họ tên',
-                  'Mã NV',
-                  'Email',
-                  'Phòng ban',
-                  'Vai trò',
-                  'Ngày tham gia',
-                  'Sinh nhật',
-                  'Trạng thái',
-                  'Thao tác',
-                ].map((heading) => (
-                  <th
-                    key={heading}
-                    className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap"
-                  >
-                    {heading}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="px-3 py-8 text-center text-sm"
-                    style={{ color: '#6b7f78' }}
-                  >
-                    Đang tải dữ liệu nhân viên...
-                  </td>
-                </tr>
-              ) : employees.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="px-3 py-8 text-center text-sm"
-                    style={{ color: '#6b7f78' }}
-                  >
-                    Không có nhân viên phù hợp với bộ lọc hiện tại.
-                  </td>
-                </tr>
-              ) : (
-                employees.map((employee) => {
-                  const isSelected = selectedIds.includes(employee.id);
-                  const initials =
-                    `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
-                      .trim()
-                      .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
-                  const deptIndex = departments.findIndex((d) => d.name === employee.department);
-                  const departmentColor = getDeptColor(
-                    employee.department,
-                    deptIndex >= 0 ? deptIndex : 0,
-                  );
+                </button>
+              </div>
+            </div>
 
-                  return (
-                    <tr
-                      key={employee.id}
-                      className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
-                      style={{
-                        background: isSelected ? '#f0fdf9' : undefined,
-                        opacity: employee.status === 'inactive' ? 0.75 : 1,
-                      }}
-                      onClick={() => toggleSelect(employee.id)}
-                    >
-                      <td className="px-3 py-3 w-10">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleSelect(employee.id)}
-                          onClick={(event) => event.stopPropagation()}
-                          aria-label={`Chọn nhân viên ${employee.fullName}`}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        {getAvatarUrl(employee.profileImageUrl) ? (
-                          <img
-                            src={getAvatarUrl(employee.profileImageUrl) || ''}
-                            alt={employee.fullName}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
-                            style={{
-                              background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
-                            }}
-                          >
-                            {initials}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="font-semibold whitespace-nowrap" style={{ color: '#203430' }}>
-                          {employee.fullName}
-                        </p>
-                        {employee.department && (
-                          <p
-                            className="truncate text-[11px] font-medium mt-0.5"
-                            style={{ color: '#6b7f78' }}
-                          >
-                            {employee.department}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 min-w-[120px]">
-                        {editingCellId === employee.id && editingField === 'employeeCode' ? (
-                          <div onClick={(event) => event.stopPropagation()}>
-                            <Input
-                              autoFocus
-                              value={editingValue}
-                              onChange={(event) => setEditingValue(event.target.value)}
-                              onBlur={() => {
-                                void handleCellEdit(employee.id, 'employeeCode', editingValue);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault();
-                                  void handleCellEdit(employee.id, 'employeeCode', editingValue);
-                                }
-                              }}
-                              placeholder="Nhập mã nhân viên"
-                              className="h-8"
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingCellId(employee.id);
-                              setEditingField('employeeCode');
-                              setEditingValue(employee.employeeCode);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
-                            style={{
-                              color: employee.employeeCode ? '#203430' : '#b45309',
-                              background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
-                            }}
-                          >
-                            {employee.employeeCode || 'Chưa có mã'}
-                            <Pencil size={10} style={{ color: '#f59e0b' }} />
-                          </button>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
-                        {employee.email}
-                      </td>
-                      <td className="px-3 py-3 min-w-[160px]">
-                        {editingCellId === employee.id && editingField === 'department' ? (
-                          <div onClick={(event) => event.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={editingValue}
-                              onChange={(event) => {
-                                void handleCellEdit(employee.id, 'department', event.target.value);
-                              }}
-                              onBlur={closeInlineEdit}
-                              className="px-2 py-1 rounded border text-xs w-full"
-                              style={{ borderColor: '#e2ede9', color: '#203430' }}
-                            >
-                              <option value="Chưa phân bổ">Chưa phân bổ</option>
-                              {departments.map((dept) => (
-                                <option key={dept.code} value={dept.name}>
-                                  {dept.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <div
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingCellId(employee.id);
-                              setEditingField('department');
-                              setEditingValue(employee.department);
-                            }}
-                            className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
-                            style={{ background: departmentColor.bg }}
-                          >
-                            <span
-                              className="text-xs font-semibold"
-                              style={{ color: departmentColor.color }}
-                            >
-                              {employee.department}
-                            </span>
-                            <Pencil size={10} style={{ color: departmentColor.color }} />
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 min-w-[140px]">
-                        {editingCellId === employee.id && editingField === 'role' ? (
-                          <div onClick={(event) => event.stopPropagation()}>
-                            <select
-                              autoFocus
-                              value={editingValue}
-                              onChange={(event) => {
-                                void handleCellEdit(employee.id, 'role', event.target.value);
-                              }}
-                              onBlur={closeInlineEdit}
-                              className="px-2 py-1 rounded border text-xs w-full"
-                              style={{ borderColor: '#e2ede9', color: '#203430' }}
-                            >
-                              <option value="">Chưa phân bổ</option>
-                              {ROLE_OPTIONS.map((role) => (
-                                <option key={role.value} value={role.value}>
-                                  {role.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <div
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingCellId(employee.id);
-                              setEditingField('role');
-                              setEditingValue(employee.role);
-                            }}
-                            className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
-                            style={{ color: '#203430' }}
-                          >
-                            {getRoleLabel(employee.role)}
-                            <Pencil size={10} style={{ color: '#3b82f6' }} />
-                          </div>
-                        )}
-                      </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: '#203430' }}>
+                    <th className="px-3 py-3 w-10">
+                      <Checkbox
+                        checked={selectedIds.length === employees.length && employees.length > 0}
+                        onCheckedChange={toggleAll}
+                        aria-label="Chọn tất cả nhân viên"
+                      />
+                    </th>
+                    {[
+                      'Avatar',
+                      'Họ tên',
+                      'Mã NV',
+                      'Email',
+                      'Phòng ban',
+                      'Vai trò',
+                      'Ngày tham gia',
+                      'Sinh nhật',
+                      'Trạng thái',
+                      'Thao tác',
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap"
+                      >
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr>
                       <td
-                        className="px-3 py-3 text-xs whitespace-nowrap"
+                        colSpan={11}
+                        className="px-3 py-8 text-center text-sm"
                         style={{ color: '#6b7f78' }}
                       >
-                        {formatDateVN(employee.companyJoinDate)}
-                      </td>
-                      <td
-                        className="px-3 py-3 text-xs whitespace-nowrap"
-                        style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
-                      >
-                        {employee.birthday
-                          ? `🎂 ${employee.birthday!.slice(0, 10).split('-').reverse().join('/')}`
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[employee.status].badge}`}
-                        >
-                          {STATUS_CONFIG[employee.status].label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div
-                          className="flex items-center gap-1"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => setEditingEmployee(employee)}
-                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
-                            title="Chỉnh sửa nhân viên"
-                          >
-                            <Pencil size={13} style={{ color: '#f59e0b' }} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void handleDeleteEmployee(employee.id, employee.fullName)
-                            }
-                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
-                            title="Xóa"
-                          >
-                            <Trash2 size={13} style={{ color: '#ef4444' }} />
-                          </button>
-                        </div>
+                        Đang tải dữ liệu nhân viên...
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-5">
-        <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 size={15} style={{ color: '#1DB87A' }} />
-            <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-              Phân bố theo phòng ban
-            </h3>
-          </div>
-          {departmentDistribution.length > 0 ? (
-            <div className="space-y-4 pt-2">
-              {departmentDistribution.map((department) => {
-                const words = department.label.trim().split(' ').filter(Boolean);
-                let initials = '';
-
-                if (words.length >= 2) {
-                  initials = (words[0][0] + words[1][0]).toUpperCase();
-                } else {
-                  const upperLetters = department.label.replace(/[^A-Z]/g, '');
-                  initials =
-                    upperLetters.length >= 2
-                      ? upperLetters.slice(0, 2)
-                      : department.label.slice(0, 2).toUpperCase();
-                }
-
-                return (
-                  <div key={department.label} className="flex flex-col gap-2.5">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs shrink-0"
-                          style={{ background: `${department.color}15`, color: department.color }}
-                        >
-                          {initials}
-                        </div>
-                        <span className="font-semibold text-sm" style={{ color: '#203430' }}>
-                          {department.label}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="font-bold text-sm" style={{ color: '#203430' }}>
-                          {department.count}
-                        </span>
-                        <span className="text-xs font-medium" style={{ color: '#6b7f78' }}>
-                          người
-                        </span>
-                        <div
-                          className="text-xs font-bold px-1.5 py-0.5 rounded-md ml-1 min-w-[44px] text-center"
-                          style={{ background: `${department.color}10`, color: department.color }}
-                        >
-                          {department.pct}%
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pl-11 pr-1">
-                      <div
-                        className="h-2 w-full rounded-full overflow-hidden"
-                        style={{ background: '#f0f4f2' }}
+                  ) : employees.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-3 py-8 text-center text-sm"
+                        style={{ color: '#6b7f78' }}
                       >
-                        <div
-                          className="h-full rounded-full transition-all duration-700 ease-out"
+                        Không có nhân viên phù hợp với bộ lọc hiện tại.
+                      </td>
+                    </tr>
+                  ) : (
+                    employees.map((employee) => {
+                      const isSelected = selectedIds.includes(employee.id);
+                      const initials =
+                        `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
+                          .trim()
+                          .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
+                      const deptIndex = departments.findIndex(
+                        (d) => d.name === employee.department,
+                      );
+                      const departmentColor = getDeptColor(
+                        employee.department,
+                        deptIndex >= 0 ? deptIndex : 0,
+                      );
+
+                      return (
+                        <tr
+                          key={employee.id}
+                          className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
                           style={{
-                            width: `${department.pct}%`,
-                            background: department.color,
+                            background: isSelected ? '#f0fdf9' : undefined,
+                            opacity: employee.status === 'inactive' ? 0.75 : 1,
                           }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                          onClick={() => toggleSelect(employee.id)}
+                        >
+                          <td className="px-3 py-3 w-10">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(employee.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label={`Chọn nhân viên ${employee.fullName}`}
+                            />
+                          </td>
+                          <td className="px-3 py-3">
+                            {getAvatarUrl(employee.profileImageUrl) ? (
+                              <img
+                                src={getAvatarUrl(employee.profileImageUrl) || ''}
+                                alt={employee.fullName}
+                                className="w-8 h-8 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
+                                style={{
+                                  background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                                }}
+                              >
+                                {initials}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <p
+                              className="font-semibold whitespace-nowrap"
+                              style={{ color: '#203430' }}
+                            >
+                              {employee.fullName}
+                            </p>
+                            {employee.department && (
+                              <p
+                                className="truncate text-[11px] font-medium mt-0.5"
+                                style={{ color: '#6b7f78' }}
+                              >
+                                {employee.department}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 min-w-[120px]">
+                            {editingCellId === employee.id && editingField === 'employeeCode' ? (
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <Input
+                                  autoFocus
+                                  value={editingValue}
+                                  onChange={(event) => setEditingValue(event.target.value)}
+                                  onBlur={() => {
+                                    void handleCellEdit(employee.id, 'employeeCode', editingValue);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      event.preventDefault();
+                                      void handleCellEdit(
+                                        employee.id,
+                                        'employeeCode',
+                                        editingValue,
+                                      );
+                                    }
+                                  }}
+                                  placeholder="Nhập mã nhân viên"
+                                  className="h-8"
+                                />
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingCellId(employee.id);
+                                  setEditingField('employeeCode');
+                                  setEditingValue(employee.employeeCode);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
+                                style={{
+                                  color: employee.employeeCode ? '#203430' : '#b45309',
+                                  background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
+                                }}
+                              >
+                                {employee.employeeCode || 'Chưa có mã'}
+                                <Pencil size={10} style={{ color: '#f59e0b' }} />
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
+                            {employee.email}
+                          </td>
+                          <td className="px-3 py-3 min-w-[160px]">
+                            {editingCellId === employee.id && editingField === 'department' ? (
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <select
+                                  autoFocus
+                                  value={editingValue}
+                                  onChange={(event) => {
+                                    void handleCellEdit(
+                                      employee.id,
+                                      'department',
+                                      event.target.value,
+                                    );
+                                  }}
+                                  onBlur={closeInlineEdit}
+                                  className="px-2 py-1 rounded border text-xs w-full"
+                                  style={{ borderColor: '#e2ede9', color: '#203430' }}
+                                >
+                                  <option value="Chưa phân bổ">Chưa phân bổ</option>
+                                  {departments.map((dept) => (
+                                    <option key={dept.code} value={dept.name}>
+                                      {dept.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingCellId(employee.id);
+                                  setEditingField('department');
+                                  setEditingValue(employee.department);
+                                }}
+                                className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
+                                style={{ background: departmentColor.bg }}
+                              >
+                                <span
+                                  className="text-xs font-semibold"
+                                  style={{ color: departmentColor.color }}
+                                >
+                                  {employee.department}
+                                </span>
+                                <Pencil size={10} style={{ color: departmentColor.color }} />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 min-w-[140px]">
+                            {editingCellId === employee.id && editingField === 'role' ? (
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <select
+                                  autoFocus
+                                  value={editingValue}
+                                  onChange={(event) => {
+                                    void handleCellEdit(employee.id, 'role', event.target.value);
+                                  }}
+                                  onBlur={closeInlineEdit}
+                                  className="px-2 py-1 rounded border text-xs w-full"
+                                  style={{ borderColor: '#e2ede9', color: '#203430' }}
+                                >
+                                  <option value="">Chưa phân bổ</option>
+                                  {ROLE_OPTIONS.map((role) => (
+                                    <option key={role.value} value={role.value}>
+                                      {role.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setEditingCellId(employee.id);
+                                  setEditingField('role');
+                                  setEditingValue(employee.role);
+                                }}
+                                className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
+                                style={{ color: '#203430' }}
+                              >
+                                {getRoleLabel(employee.role)}
+                                <Pencil size={10} style={{ color: '#3b82f6' }} />
+                              </div>
+                            )}
+                          </td>
+                          <td
+                            className="px-3 py-3 text-xs whitespace-nowrap"
+                            style={{ color: '#6b7f78' }}
+                          >
+                            {formatDate(employee.companyJoinDate)}
+                          </td>
+                          <td
+                            className="px-3 py-3 text-xs whitespace-nowrap"
+                            style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
+                          >
+                            {employee.birthday ? `🎂 ${formatDate(employee.birthday)}` : '—'}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[employee.status].badge}`}
+                            >
+                              {STATUS_CONFIG[employee.status].label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => setEditingEmployee(employee)}
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                                title="Chỉnh sửa nhân viên"
+                              >
+                                <Pencil size={13} style={{ color: '#f59e0b' }} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteEmployee(employee.id, employee.fullName)
+                                }
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                                title="Xóa"
+                              >
+                                <Trash2 size={13} style={{ color: '#ef4444' }} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            <p className="text-sm" style={{ color: '#6b7f78' }}>
-              Chưa có dữ liệu phòng ban để hiển thị.
-            </p>
-          )}
-        </div>
-
-        {/* ĐỀ XUẤT THAY THẾ: Cơ cấu vai trò nhân sự */}
-        <div
-          className="bg-white rounded-xl border p-5 flex flex-col"
-          style={{ borderColor: '#e2ede9' }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <Shield size={15} style={{ color: '#1DB87A' }} />
-            <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-              Cơ cấu vai trò nhân sự
-            </h3>
           </div>
 
-          <div className="flex-1 flex flex-col justify-center">
-            {roleDistribution.length > 0 ? (
-              <div className="grid grid-cols-2 gap-4">
-                {roleDistribution.map((role) => (
-                  <div
-                    key={role.role}
-                    className="border rounded-xl p-3 flex flex-col justify-between hover:-translate-y-0.5 transition-transform"
-                    style={{ borderColor: '#e2ede9', backgroundColor: '#fafdfa' }}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                        style={{ background: role.iconBg, color: role.color }}
-                      >
-                        <span className="font-bold text-xs" style={{ color: role.color }}>
-                          {role.label.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <span
-                        className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
-                        style={{ background: '#f0f4f2', color: '#6b7f78' }}
-                      >
-                        {role.pct}%
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold mb-0.5" style={{ color: '#203430' }}>
-                        {role.count}
-                      </h4>
-                      <p className="text-[11px] font-semibold" style={{ color: '#6b7f78' }}>
-                        {role.label}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+          <div className="grid lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
+              <div className="flex items-center gap-2 mb-4">
+                <Building2 size={15} style={{ color: '#1DB87A' }} />
+                <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
+                  Phân bố theo phòng ban
+                </h3>
               </div>
-            ) : (
-              <p className="text-sm" style={{ color: '#6b7f78' }}>
-                Chưa có dữ liệu vai trò.
-              </p>
-            )}
-          </div>
-        </div>
+              {departmentDistribution.length > 0 ? (
+                <div className="space-y-4 pt-2">
+                  {departmentDistribution.map((department) => {
+                    const words = department.label.trim().split(' ').filter(Boolean);
+                    let initials = '';
 
-        {/* 
+                    if (words.length >= 2) {
+                      initials = (words[0][0] + words[1][0]).toUpperCase();
+                    } else {
+                      const upperLetters = department.label.replace(/[^A-Z]/g, '');
+                      initials =
+                        upperLetters.length >= 2
+                          ? upperLetters.slice(0, 2)
+                          : department.label.slice(0, 2).toUpperCase();
+                    }
+
+                    return (
+                      <div key={department.label} className="flex flex-col gap-2.5">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs shrink-0"
+                              style={{
+                                background: `${department.color}15`,
+                                color: department.color,
+                              }}
+                            >
+                              {initials}
+                            </div>
+                            <span className="font-semibold text-sm" style={{ color: '#203430' }}>
+                              {department.label}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-bold text-sm" style={{ color: '#203430' }}>
+                              {department.count}
+                            </span>
+                            <span className="text-xs font-medium" style={{ color: '#6b7f78' }}>
+                              người
+                            </span>
+                            <div
+                              className="text-xs font-bold px-1.5 py-0.5 rounded-md ml-1 min-w-[44px] text-center"
+                              style={{
+                                background: `${department.color}10`,
+                                color: department.color,
+                              }}
+                            >
+                              {department.pct}%
+                            </div>
+                          </div>
+                        </div>
+                        <div className="pl-11 pr-1">
+                          <div
+                            className="h-2 w-full rounded-full overflow-hidden"
+                            style={{ background: '#f0f4f2' }}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{
+                                width: `${department.pct}%`,
+                                background: department.color,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: '#6b7f78' }}>
+                  Chưa có dữ liệu phòng ban để hiển thị.
+                </p>
+              )}
+            </div>
+
+            {/* ĐỀ XUẤT THAY THẾ: Cơ cấu vai trò nhân sự */}
+            <div
+              className="bg-white rounded-xl border p-5 flex flex-col"
+              style={{ borderColor: '#e2ede9' }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <Shield size={15} style={{ color: '#1DB87A' }} />
+                <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
+                  Cơ cấu vai trò nhân sự
+                </h3>
+              </div>
+
+              <div className="flex-1 flex flex-col justify-center">
+                {roleDistribution.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {roleDistribution.map((role) => (
+                      <div
+                        key={role.role}
+                        className="border rounded-xl p-3 flex flex-col justify-between hover:-translate-y-0.5 transition-transform"
+                        style={{ borderColor: '#e2ede9', backgroundColor: '#fafdfa' }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div
+                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                            style={{ background: role.iconBg, color: role.color }}
+                          >
+                            <span className="font-bold text-xs" style={{ color: role.color }}>
+                              {role.label.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <span
+                            className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
+                            style={{ background: '#f0f4f2', color: '#6b7f78' }}
+                          >
+                            {role.pct}%
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-bold mb-0.5" style={{ color: '#203430' }}>
+                            {role.count}
+                          </h4>
+                          <p className="text-[11px] font-semibold" style={{ color: '#6b7f78' }}>
+                            {role.label}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm" style={{ color: '#6b7f78' }}>
+                    Chưa có dữ liệu vai trò.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* 
           TẠM ẨN: Hoạt động gần đây 
           <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
             <div className="flex items-center gap-2 mb-4">
@@ -1234,7 +1375,271 @@ export default function EmployeesPage() {
             </div>
           </div>
         */}
-      </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'leave-balances' && (
+        <div className="space-y-4">
+          {/* Year selector + refresh */}
+          <div
+            className="bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Năm
+              </label>
+              <Select value={String(balanceYear)} onValueChange={(v) => setBalanceYear(Number(v))}>
+                <SelectTrigger className="min-w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(
+                    (y) => (
+                      <SelectItem key={y} value={String(y)}>
+                        {y}
+                      </SelectItem>
+                    ),
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs ml-auto" style={{ color: '#6b7f78' }}>
+              {leaveBalances.length} bản ghi · Click vào hàng để chỉnh sửa
+            </p>
+          </div>
+
+          {/* Balance table */}
+          <div
+            className="bg-white rounded-xl border overflow-hidden"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: '#203430' }}>
+                    {[
+                      'Nhân viên',
+                      'Mã NV',
+                      'Phòng ban',
+                      `Phép năm ${balanceYear}`,
+                      'Thâm niên',
+                      `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
+                      'Comp-Off',
+                      'WFH',
+                      'Đã dùng (AL)',
+                      'Đã dùng (CO)',
+                      'Còn lại (AL)',
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-3 font-semibold text-white whitespace-pre-line text-center"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoadingBalances ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-3 py-8 text-center text-sm"
+                        style={{ color: '#6b7f78' }}
+                      >
+                        Đang tải...
+                      </td>
+                    </tr>
+                  ) : leaveBalances.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-3 py-8 text-center text-sm"
+                        style={{ color: '#6b7f78' }}
+                      >
+                        Chưa có dữ liệu phép năm {balanceYear}. Hãy nhấn &quot;Tính toán lại phép
+                        năm&quot; để khởi tạo.
+                      </td>
+                    </tr>
+                  ) : (
+                    leaveBalances.map((row) => {
+                      const alRemaining =
+                        Number(row.annualDays) +
+                        Number(row.carryOverDays) +
+                        Number(row.seniorityDays) -
+                        Number(row.usedDays);
+                      const coRemaining = Number(row.compOffDays) - Number(row.usedCompOffDays);
+                      const isAL = row.leaveType.code === 'AL';
+                      const isCO = row.leaveType.code === 'CO';
+                      return (
+                        <tr
+                          key={row.id}
+                          className="border-b last:border-0 hover:bg-emerald-50 transition-colors cursor-pointer"
+                          style={{ borderColor: '#e2ede9' }}
+                          onClick={() => openEditBalance(row)}
+                        >
+                          <td
+                            className="px-3 py-2.5 font-semibold whitespace-nowrap"
+                            style={{ color: '#203430' }}
+                          >
+                            {row.user.fullName}
+                          </td>
+                          <td className="px-3 py-2.5 text-xs" style={{ color: '#6b7f78' }}>
+                            {row.user.employeeCode || '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-xs" style={{ color: '#6b7f78' }}>
+                            {row.user.department || '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-semibold"
+                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                          >
+                            {isAL ? Number(row.annualDays) : '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-semibold"
+                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                          >
+                            {isAL ? Number(row.seniorityDays) : '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-semibold"
+                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                          >
+                            {isAL ? Number(row.carryOverDays) : '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-semibold"
+                            style={{ color: isCO ? '#203430' : '#9ca3af' }}
+                          >
+                            {isCO ? Number(row.compOffDays) : '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-semibold"
+                            style={{ color: '#203430' }}
+                          >
+                            {Number(row.wfhDays)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
+                            {isAL ? Number(row.usedDays) : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
+                            {isCO ? Number(row.usedCompOffDays) : '—'}
+                          </td>
+                          <td
+                            className="px-3 py-2.5 text-center font-bold"
+                            style={{
+                              color: isAL ? (alRemaining < 0 ? '#ef4444' : '#1DB87A') : '#9ca3af',
+                            }}
+                          >
+                            {isAL ? alRemaining : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit balance modal */}
+      {editingBalance && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(14,71,78,0.45)' }}
+          onClick={() => setEditingBalance(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b"
+              style={{ borderColor: '#e2ede9' }}
+            >
+              <div>
+                <h2 className="font-bold text-base" style={{ color: '#203430' }}>
+                  Chỉnh sửa phép năm
+                </h2>
+                <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
+                  {editingBalance.user.fullName} · {editingBalance.leaveType.code} ·{' '}
+                  {editingBalance.year}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingBalance(null)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100"
+                style={{ color: '#6b7f78' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              {[
+                { key: 'annualDays', label: 'Phép năm (annualDays)', show: true },
+                {
+                  key: 'carryOverDays',
+                  label: 'Chuyển tiếp từ năm trước (carryOverDays)',
+                  show: true,
+                },
+                { key: 'seniorityDays', label: 'Thâm niên (seniorityDays)', show: true },
+                { key: 'compOffDays', label: 'Comp-Off tích lũy (compOffDays)', show: true },
+                { key: 'wfhDays', label: 'WFH (wfhDays)', show: true },
+              ].map(({ key, label }) => (
+                <div key={key}>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
+                    {label}
+                  </label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={balanceForm[key as keyof typeof balanceForm]}
+                    onChange={(e) => setBalanceForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+              <div
+                className="rounded-lg p-3 text-xs"
+                style={{ background: '#f0fdf9', color: '#6b7f78' }}
+              >
+                <p>
+                  <strong style={{ color: '#203430' }}>Số ngày đã dùng và thông tin còn lại</strong>{' '}
+                  được tính tự động và không chỉnh sửa trực tiếp ở đây.
+                </p>
+              </div>
+            </div>
+            <div
+              className="flex justify-end gap-2 px-6 py-4 border-t"
+              style={{ borderColor: '#e2ede9' }}
+            >
+              <button
+                type="button"
+                onClick={() => setEditingBalance(null)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:bg-gray-50"
+                style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveBalance()}
+                disabled={isSavingBalance}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                style={{ background: '#1DB87A' }}
+              >
+                <Save size={14} />
+                {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent

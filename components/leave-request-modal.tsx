@@ -41,12 +41,8 @@ import {
   buildLeavePolicyHints,
   countCalendarDays,
   getLeaveRequestPolicyValidation,
-  getDateTimeValue,
   getLeaveRequestApiPayload,
   getVietnamTodayDateInput,
-  HOURLY_LEAVE_TIME_MAX,
-  HOURLY_LEAVE_TIME_MIN,
-  HOURLY_LEAVE_TIME_STEP_SECONDS,
   LEAVE_REQUEST_MODE_CONFIG,
   numberValue,
   toFrontendRole,
@@ -65,8 +61,12 @@ interface LeaveTypeOption {
 
 interface LeaveBalanceRecord {
   id: string;
-  totalDays: number | string;
+  annualDays: number | string;
+  carryOverDays: number | string;
+  seniorityDays: number | string;
+  compOffDays: number | string;
   usedDays: number | string;
+  usedCompOffDays: number | string;
   leaveType: {
     code: string;
     name: string;
@@ -97,10 +97,8 @@ export interface LeaveRequestData {
   fromDate?: string;
   toDate?: string;
   durationMode?: LeaveRequestMode;
-  fromTime?: string;
-  toTime?: string;
   reason?: string;
-  handoverPerson?: string;
+  handoverPersonId?: string;
   approverId?: string;
 }
 
@@ -109,6 +107,7 @@ interface LeaveRequestModalProps {
   onClose: () => void;
   onSubmitSuccess?: () => void;
   editData?: LeaveRequestData | null;
+  defaultDate?: string;
 }
 
 function getInitialFormState(editData?: LeaveRequestData | null) {
@@ -117,48 +116,26 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
     fromDate: editData?.fromDate || '',
     toDate: editData?.toDate || '',
     durationMode: editData?.durationMode || 'FULL_DAY',
-    fromTime: editData?.fromTime || '08:00',
-    toTime: editData?.toTime || '17:15',
     reason: editData?.reason || '',
-    handoverPerson: editData?.handoverPerson || '',
+    handoverPerson: editData?.handoverPersonId || '',
     approverId: editData?.approverId || '',
     requestForUserId: editData?.requestForUserId || '',
   } as const;
 }
 
-function toTimeMinutes(value: string) {
-  const [hours, minutes] = value.split(':').map(Number);
-  return hours * 60 + minutes;
-}
-
-function buildTimeOptions(min: string, max: string, stepSeconds: number) {
-  const stepMinutes = Math.max(1, Math.floor(stepSeconds / 60));
-  const options: string[] = [];
-  const start = toTimeMinutes(min);
-  const end = toTimeMinutes(max);
-
-  for (let minutes = start; minutes <= end; minutes += stepMinutes) {
-    const hours = String(Math.floor(minutes / 60)).padStart(2, '0');
-    const mins = String(minutes % 60).padStart(2, '0');
-    options.push(`${hours}:${mins}`);
-  }
-
-  return options;
-}
 
 export default function LeaveRequestModal({
   isOpen,
   onClose,
   onSubmitSuccess,
   editData,
+  defaultDate,
 }: LeaveRequestModalProps) {
   type LeaveRequestField =
     | 'requestForUserId'
     | 'leaveType'
     | 'fromDate'
     | 'toDate'
-    | 'fromTime'
-    | 'toTime'
     | 'reason';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,8 +156,6 @@ export default function LeaveRequestModal({
   const [fromDate, setFromDate] = useState(initialFormState.fromDate);
   const [toDate, setToDate] = useState(initialFormState.toDate);
   const [durationMode, setDurationMode] = useState<LeaveRequestMode>(initialFormState.durationMode);
-  const [fromTime, setFromTime] = useState(initialFormState.fromTime);
-  const [toTime, setToTime] = useState(initialFormState.toTime);
   const [reason, setReason] = useState(initialFormState.reason);
   const [handoverPerson, setHandoverPerson] = useState(initialFormState.handoverPerson);
   const [approverId, setApproverId] = useState(initialFormState.approverId);
@@ -260,11 +235,9 @@ export default function LeaveRequestModal({
 
     const nextState = getInitialFormState(editData);
     setLeaveType(nextState.leaveType);
-    setFromDate(nextState.fromDate);
-    setToDate(nextState.toDate);
+    setFromDate(!editData && defaultDate ? defaultDate : nextState.fromDate);
+    setToDate(!editData && defaultDate ? defaultDate : nextState.toDate);
     setDurationMode(nextState.durationMode);
-    setFromTime(nextState.fromTime);
-    setToTime(nextState.toTime);
     setReason(nextState.reason);
     setHandoverPerson(nextState.handoverPerson);
     setApproverId(nextState.approverId);
@@ -273,35 +246,18 @@ export default function LeaveRequestModal({
     setDragging(false);
     setSubmitState('idle');
     setErrorFields({});
-  }, [isOpen, editData, userInfo?.id]);
+  }, [isOpen, editData, defaultDate, userInfo?.id]);
 
   useEffect(() => {
-    if (!isOpen || !editData?.handoverPerson || handoverPerson) return;
-
-    const matchedById = handoverPersons.find((item) => item.id === editData.handoverPerson);
-    if (matchedById) {
-      setHandoverPerson(matchedById.id);
-      return;
-    }
-
-    const matchedByName = handoverPersons.find((item) => item.fullName === editData.handoverPerson);
-    if (matchedByName) {
-      setHandoverPerson(matchedByName.id);
-    }
-  }, [editData?.handoverPerson, handoverPerson, handoverPersons, isOpen]);
+    if (!isOpen || !editData?.handoverPersonId || handoverPerson) return;
+    setHandoverPerson(editData.handoverPersonId);
+  }, [editData?.handoverPersonId, handoverPerson, isOpen]);
 
   const calcDays = (): number => {
     if (!fromDate || !toDate) return 0;
     const base = countCalendarDays(fromDate, toDate);
-    if (durationMode === 'MORNING_HALF_DAY' || durationMode === 'AFTERNOON_HALF_DAY') {
+    if (durationMode === 'HALF_DAY_AM' || durationMode === 'HALF_DAY_PM') {
       return base * 0.5;
-    }
-    if (durationMode === 'HOURLY') {
-      if (!fromTime || !toTime) return 0;
-      const hours =
-        (getDateTimeValue(`2000-01-01 ${toTime}`) - getDateTimeValue(`2000-01-01 ${fromTime}`)) /
-        3600000;
-      return Math.max(0, hours / 8);
     }
     return base;
   };
@@ -314,11 +270,18 @@ export default function LeaveRequestModal({
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
   const leaveBalanceSummary = {
-    granted: numberValue(annualBalance?.totalDays),
+    granted:
+      numberValue(annualBalance?.annualDays) +
+      numberValue(annualBalance?.carryOverDays) +
+      numberValue(annualBalance?.seniorityDays),
     used: numberValue(annualBalance?.usedDays),
-    remaining: numberValue(annualBalance?.totalDays) - numberValue(annualBalance?.usedDays),
+    remaining:
+      numberValue(annualBalance?.annualDays) +
+      numberValue(annualBalance?.carryOverDays) +
+      numberValue(annualBalance?.seniorityDays) -
+      numberValue(annualBalance?.usedDays),
     compOffHours:
-      (numberValue(compOffBalance?.totalDays) - numberValue(compOffBalance?.usedDays)) * 8,
+      (numberValue(compOffBalance?.compOffDays) - numberValue(compOffBalance?.usedCompOffDays)) * 8,
   };
 
   const checkBalance = () => {
@@ -336,11 +299,6 @@ export default function LeaveRequestModal({
 
   const balanceWarning = checkBalance();
   const policyHints = buildLeavePolicyHints(leavePolicy, approvalFlow);
-  const hourlyTimeOptions = buildTimeOptions(
-    HOURLY_LEAVE_TIME_MIN,
-    HOURLY_LEAVE_TIME_MAX,
-    HOURLY_LEAVE_TIME_STEP_SECONDS,
-  );
   const policyValidationMessage = getLeaveRequestPolicyValidation({
     fromDate,
     toDate,
@@ -350,17 +308,6 @@ export default function LeaveRequestModal({
     leavePolicy,
     approvalFlow,
   });
-
-  useEffect(() => {
-    if (durationMode === 'HOURLY') {
-      setFromTime((current) => current || HOURLY_LEAVE_TIME_MIN);
-      setToTime((current) => current || HOURLY_LEAVE_TIME_MAX);
-      return;
-    }
-
-    setFromTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultFromTime);
-    setToTime(LEAVE_REQUEST_MODE_CONFIG[durationMode].defaultToTime);
-  }, [durationMode]);
 
   const markFieldValid = useCallback((field: LeaveRequestField) => {
     setErrorFields((current) => {
@@ -428,15 +375,6 @@ export default function LeaveRequestModal({
       return;
     }
 
-    if (
-      durationMode === 'HOURLY' &&
-      getDateTimeValue(`2000-01-01 ${toTime}`) <= getDateTimeValue(`2000-01-01 ${fromTime}`)
-    ) {
-      setErrorFields({ fromTime: true, toTime: true });
-      toast.error('Giờ kết thúc phải lớn hơn giờ bắt đầu.');
-      return;
-    }
-
     if (days <= 0) {
       setErrorFields({ fromDate: true, toDate: true });
       toast.error('Số ngày nghỉ không hợp lệ. Vui lòng kiểm tra lại thời gian đăng ký.');
@@ -455,24 +393,12 @@ export default function LeaveRequestModal({
       return;
     }
 
-    const handoverName = handoverPersons.find((item) => item.id === handoverPerson)?.fullName ?? '';
-
-    const composedReason = [
-      reason.trim(),
-      durationMode !== 'FULL_DAY'
-        ? `Hình thức nghỉ: ${LEAVE_REQUEST_MODE_CONFIG[durationMode].label}`
-        : null,
-      durationMode === 'HOURLY' ? `Khung giờ: ${fromTime} - ${toTime}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const composedReason = reason.trim();
 
     const leaveRequestPayload = getLeaveRequestApiPayload({
       date: fromDate,
       endDate: toDate,
       mode: durationMode,
-      startTime: fromTime,
-      endTime: toTime,
     });
 
     const formData = new FormData();
@@ -486,12 +412,10 @@ export default function LeaveRequestModal({
     formData.append('fromDate', leaveRequestPayload.fromDate);
     formData.append('toDate', leaveRequestPayload.toDate);
     formData.append('durationMode', leaveRequestPayload.durationMode);
-    formData.append('fromTime', leaveRequestPayload.fromTime);
-    formData.append('toTime', leaveRequestPayload.toTime);
     formData.append('totalDays', String(days));
     formData.append('reason', composedReason);
     if (handoverPerson) {
-      formData.append('handoverPerson', handoverName);
+      formData.append('handoverPersonId', handoverPerson);
     }
     if (attachedFile) {
       formData.append('attachment', attachedFile);
@@ -533,8 +457,6 @@ export default function LeaveRequestModal({
     setFromDate('');
     setToDate('');
     setDurationMode('FULL_DAY');
-    setFromTime('08:00');
-    setToTime('17:15');
     setReason('');
     setHandoverPerson('');
     setApproverId('');
@@ -791,7 +713,7 @@ export default function LeaveRequestModal({
                 <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <div className="flex gap-3 flex-wrap">
-                {(['FULL_DAY', 'MORNING_HALF_DAY', 'AFTERNOON_HALF_DAY'] as LeaveRequestMode[]).map(
+                {(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM'] as LeaveRequestMode[]).map(
                   (mode) => {
                     const isSelected = durationMode === mode;
                     return (
@@ -839,70 +761,7 @@ export default function LeaveRequestModal({
               </div>
             </div>
 
-            {/* Time fields (hourly) */}
-            {durationMode === 'HOURLY' && (
-              <div
-                className="grid grid-cols-2 gap-4 p-4 rounded-lg"
-                style={{ background: '#f7f7f7', border: '1px dashed #D3F2E7' }}
-              >
-                <div>
-                  <label
-                    className="text-xs font-semibold mb-1.5 block"
-                    style={{ color: '#203430' }}
-                  >
-                    Từ giờ
-                  </label>
-                  <Select
-                    value={fromTime || 'placeholder'}
-                    onValueChange={(value) => {
-                      const nextValue = value === 'placeholder' ? '' : value;
-                      setFromTime(nextValue);
-                      if (nextValue) markFieldValid('fromTime');
-                    }}
-                  >
-                    <SelectTrigger className={getFieldErrorClass('fromTime')}>
-                      <SelectValue placeholder="-- Chọn giờ bắt đầu --" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="placeholder">-- Chọn giờ bắt đầu --</SelectItem>
-                      {hourlyTimeOptions.map((time) => (
-                        <SelectItem key={`from-${time}`} value={time}>
-                          {time}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label
-                    className="text-xs font-semibold mb-1.5 block"
-                    style={{ color: '#203430' }}
-                  >
-                    Đến giờ
-                  </label>
-                  <Select
-                    value={toTime || 'placeholder'}
-                    onValueChange={(value) => {
-                      const nextValue = value === 'placeholder' ? '' : value;
-                      setToTime(nextValue);
-                      if (nextValue) markFieldValid('toTime');
-                    }}
-                  >
-                    <SelectTrigger className={getFieldErrorClass('toTime')}>
-                      <SelectValue placeholder="-- Chọn giờ kết thúc --" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="placeholder">-- Chọn giờ kết thúc --</SelectItem>
-                      {hourlyTimeOptions.map((time) => (
-                        <SelectItem key={`to-${time}`} value={time}>
-                          {time}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
+
 
             {/* Calculation */}
             {days > 0 && (
@@ -913,7 +772,6 @@ export default function LeaveRequestModal({
                 <Calculator size={16} style={{ color: '#d97706' }} />
                 <span className="text-sm" style={{ color: '#92400e' }}>
                   Số ngày nghỉ tính toán: <strong>{days}</strong> ngày
-                  {durationMode === 'HOURLY' && ` (${days * 8} giờ)`}
                 </span>
               </div>
             )}

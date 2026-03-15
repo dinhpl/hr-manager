@@ -24,9 +24,8 @@ function requireAttendanceManagers(req: Request, res: Response, next: NextFuncti
 }
 
 attendancesRouter.use(authMiddleware);
-attendancesRouter.use(requireAttendanceManagers);
 
 attendancesRouter.get('/available-months', ctrl.getAvailableMonths);
 attendancesRouter.get('/monthly', ctrl.getMonthly);
-attendancesRouter.post('/import', uploadAttendanceExcel.single('file'), ctrl.importAttendanceExcel);
-attendancesRouter.patch('/:id', ctrl.updateAttendance);
+attendancesRouter.post('/import', requireAttendanceManagers, uploadAttendanceExcel.single('file'), ctrl.importAttendanceExcel);
+attendancesRouter.patch('/:id', requireAttendanceManagers, ctrl.updateAttendance);

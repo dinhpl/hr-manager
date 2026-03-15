@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LeaveRequestStatus } from '@prisma/client';
 
-const durationModeSchema = z.enum(['FULL_DAY', 'HALF_DAY', 'HOURLY']);
+const durationModeSchema = z.enum(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM']);
 const vietnamDateTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
 
 export const createLeaveRequestSchema = z.object({
@@ -11,17 +11,9 @@ export const createLeaveRequestSchema = z.object({
   fromDate: vietnamDateTimeSchema,
   toDate: vietnamDateTimeSchema,
   durationMode: durationModeSchema.optional(),
-  fromTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .optional(),
-  toTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/)
-    .optional(),
   totalDays: z.coerce.number().min(0.5),
   reason: z.string().min(1).max(1000),
-  handoverPerson: z.string().optional(),
+  handoverPersonId: z.coerce.bigint().optional(),
 });
 
 export const updateLeaveRequestSchema = createLeaveRequestSchema;
