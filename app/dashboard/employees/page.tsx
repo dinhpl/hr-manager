@@ -40,7 +40,14 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
-import { buildQuery, formatDate, formatDateVN, getFullName, getRoleLabel, toIsoDateTime } from '@/lib/hr-utils';
+import {
+  buildQuery,
+  formatDate,
+  formatDateVN,
+  getFullName,
+  getRoleLabel,
+  toIsoDateTime,
+} from '@/lib/hr-utils';
 
 type UserRole = 'EMPLOYEE' | 'MANAGER' | 'HR' | 'ADMIN';
 type EmployeeStatus = 'active' | 'inactive';
@@ -1479,10 +1486,17 @@ export default function EmployeesPage() {
                     leaveBalances.map((row) => {
                       const today = new Date();
                       const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
-                      const resetDate = new Date(today.getFullYear(), (resetMM || 3) - 1, resetDD || 31);
+                      const resetDate = new Date(
+                        today.getFullYear(),
+                        (resetMM || 3) - 1,
+                        resetDD || 31,
+                      );
                       const effectiveCarryOver =
                         today < resetDate
-                          ? Math.max(0, Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0))
+                          ? Math.max(
+                              0,
+                              Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0),
+                            )
                           : 0;
                       const alRemaining =
                         Number(row.annualDays) +
@@ -2203,6 +2217,9 @@ function EmployeeForm({
               <DatePicker
                 value={formData.companyJoinDate}
                 onChange={(value) => handleFieldChange('companyJoinDate', value)}
+                captionLayout="dropdown"
+                fromYear={1970}
+                toYear={new Date().getFullYear()}
               />
               <button
                 type="button"
@@ -2221,7 +2238,7 @@ function EmployeeForm({
                 value={formData.birthday}
                 onChange={(value) => handleFieldChange('birthday', value)}
                 captionLayout="dropdown"
-                fromYear={1950}
+                fromYear={1970}
                 toYear={new Date().getFullYear()}
               />
               {formData.birthday && (
