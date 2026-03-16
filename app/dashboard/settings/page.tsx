@@ -71,7 +71,7 @@ interface LeaveTypeData {
 
 const TAB_ITEMS = [
   { id: 'leave', label: 'Chính sách nghỉ phép', icon: Calendar },
-  { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
+  // { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
   { id: 'leave-types', label: 'Loại nghỉ phép', icon: Tag },
   { id: 'holidays', label: 'Ngày nghỉ lễ', icon: Calendar },
 ] as const;

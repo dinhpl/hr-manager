@@ -547,9 +547,20 @@ function LeaveBalanceCards({
           </div>
         </div>
         <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-          {fmt(usedDays)}
+          {fmt(usedDays + usedCarryOverDays)}
         </p>
-        <p className="text-xs text-muted-foreground">ngày đã dùng</p>
+        {usedCarryOverDays > 0 ? (
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="rounded-full px-1.5 py-0.5" style={{ background: '#fef3c7', color: '#b45309' }}>
+              {fmt(usedCarryOverDays)}d năm trước
+            </span>
+            <span className="rounded-full px-1.5 py-0.5" style={{ background: '#e0f2fe', color: '#0369a1' }}>
+              {fmt(usedDays)}d năm nay
+            </span>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">ngày đã dùng</p>
+        )}
       </div>
 
       <div

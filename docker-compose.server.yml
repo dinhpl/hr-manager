@@ -60,6 +60,7 @@ services:
       NODE_ENV: production
       PORT: 5500
       HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5501}
       BACKEND_URL: ${BACKEND_URL:-http://backend:5501}
     networks:

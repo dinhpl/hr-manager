@@ -91,6 +91,7 @@ interface UserInfo {
   department?: string | null;
   position?: string | null;
   avatar?: string | null;
+  companyJoinDate?: string | null;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -215,6 +216,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             })}
           </ul>
         </nav>
+
+        {/* User join date */}
+        {userInfo?.companyJoinDate && (
+          <div
+            className="px-4 py-3 mx-3 mb-1 rounded-lg"
+            style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wide mb-0.5" style={{ color: '#6b7f78' }}>
+              Ngày gia nhập (Chính thức)
+            </p>
+            <p className="text-sm font-semibold" style={{ color: '#0E474E' }}>
+              {new Date(userInfo.companyJoinDate).toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+        )}
+
+        {/* App version */}
+        {process.env.NEXT_PUBLIC_VERSION && (
+          <p className="text-center text-[10px] mb-3" style={{ color: '#b0bfba' }}>
+            {process.env.NEXT_PUBLIC_VERSION}
+          </p>
+        )}
       </aside>
 
       {/* Main area */}

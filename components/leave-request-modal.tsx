@@ -136,7 +136,9 @@ export default function LeaveRequestModal({
     | 'leaveType'
     | 'fromDate'
     | 'toDate'
-    | 'reason';
+    | 'reason'
+    | 'approverId'
+    | 'handoverPerson';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -168,7 +170,7 @@ export default function LeaveRequestModal({
   const effectiveUserId = requestForUserId || userInfo?.id || '';
   const requestForUser = handoverPersons.find((item) => item.id === effectiveUserId);
   const approverOptions = handoverPersons.filter((item) =>
-    ['MANAGER', 'HR', 'ADMIN'].includes((item.role ?? '').toUpperCase()),
+    ['MANAGER'].includes((item.role ?? '').toUpperCase()),
   );
 
   useEffect(() => {
@@ -362,6 +364,8 @@ export default function LeaveRequestModal({
     if (!fromDate) nextErrorFields.fromDate = true;
     if (!toDate) nextErrorFields.toDate = true;
     if (!reason.trim()) nextErrorFields.reason = true;
+    if (!approverId) nextErrorFields.approverId = true;
+    if (!handoverPerson) nextErrorFields.handoverPerson = true;
 
     if (Object.keys(nextErrorFields).length > 0) {
       setErrorFields(nextErrorFields);
@@ -833,14 +837,19 @@ export default function LeaveRequestModal({
                 className="flex items-center gap-2 text-sm font-semibold mb-2"
                 style={{ color: '#203430' }}
               >
-                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt
+                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt{' '}
+                <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <Select
                 value={approverId || 'placeholder'}
-                onValueChange={(value) => setApproverId(value === 'placeholder' ? '' : value)}
+                onValueChange={(value) => {
+                  const next = value === 'placeholder' ? '' : value;
+                  setApproverId(next);
+                  if (next) markFieldValid('approverId');
+                }}
                 disabled={loadingOptions}
               >
-                <SelectTrigger>
+                <SelectTrigger className={getFieldErrorClass('approverId')}>
                   <SelectValue placeholder="-- Chọn người duyệt --" />
                 </SelectTrigger>
                 <SelectContent>
@@ -860,14 +869,19 @@ export default function LeaveRequestModal({
                 className="flex items-center gap-2 text-sm font-semibold mb-2"
                 style={{ color: '#203430' }}
               >
-                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người bàn giao/hỗ trợ khi cần
+                <Users2 size={14} style={{ color: '#1DB87A' }} /> Người bàn giao/hỗ trợ khi cần{' '}
+                <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <Select
                 value={handoverPerson || 'placeholder'}
-                onValueChange={(value) => setHandoverPerson(value === 'placeholder' ? '' : value)}
+                onValueChange={(value) => {
+                  const next = value === 'placeholder' ? '' : value;
+                  setHandoverPerson(next);
+                  if (next) markFieldValid('handoverPerson');
+                }}
                 disabled={loadingOptions}
               >
-                <SelectTrigger>
+                <SelectTrigger className={getFieldErrorClass('handoverPerson')}>
                   <SelectValue placeholder="-- Chọn người bàn giao --" />
                 </SelectTrigger>
                 <SelectContent>

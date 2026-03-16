@@ -279,12 +279,15 @@ async function validateBalanceAvailable(
   totalDays: number,
   year: number,
   isCompOff?: boolean,
+  fromDate?: Date,
+  resetCarryOverDate?: string,
 ) {
   const balance = await prisma.leaveBalance.findUnique({
     where: { userId_leaveTypeId_year: { userId, leaveTypeId, year } },
     select: {
       annualDays: true,
       carryOverDays: true,
+      usedCarryOverDays: true,
       seniorityDays: true,
       usedDays: true,
       compOffDays: true,
@@ -298,10 +301,15 @@ async function validateBalanceAvailable(
     });
   }
 
+  const effectiveCarryOver =
+    isCompOff || !fromDate
+      ? 0
+      : computeEffectiveCarryOver(balance, fromDate, resetCarryOverDate, year);
+
   const remainingDays = isCompOff
     ? Number(balance.compOffDays) - Number(balance.usedCompOffDays)
     : Number(balance.annualDays) +
-      Number(balance.carryOverDays) +
+      effectiveCarryOver +
       Number(balance.seniorityDays) -
       Number(balance.usedDays);
 
@@ -394,6 +402,9 @@ async function validateLeaveRequestRules(params: {
         annualLeaveType.id,
         params.totalDays,
         Number(getVietnamDatePart(params.fromDate).slice(0, 4)),
+        false,
+        params.fromDate,
+        leavePolicy.resetCarryOverDate,
       );
     }
   } else if (requiresLeaveBalanceCheck(leaveType.code)) {
@@ -982,6 +993,10 @@ export async function bulkApproveLeaveRequests(
   requestingUser: AuthUser,
   note?: string,
 ) {
+  const leavePolicyRaw = await getLeavePolicy();
+  const leavePolicy = getLeavePolicySettings(leavePolicyRaw);
+  const resetCarryOverDate = leavePolicy.resetCarryOverDate;
+
   const approvedRequests = await prisma.$transaction(async (tx) => {
     const requests = await tx.leaveRequest.findMany({
       where: { id: { in: ids } },
@@ -1027,6 +1042,7 @@ export async function bulkApproveLeaveRequests(
             select: {
               annualDays: true,
               carryOverDays: true,
+              usedCarryOverDays: true,
               seniorityDays: true,
               usedDays: true,
             },
@@ -1041,9 +1057,15 @@ export async function bulkApproveLeaveRequests(
             );
           }
 
+          const effectiveCarryOver = computeEffectiveCarryOver(
+            balance,
+            request.fromDate,
+            resetCarryOverDate,
+            year,
+          );
           const remainingDays =
             Number(balance.annualDays) +
-            Number(balance.carryOverDays) +
+            effectiveCarryOver +
             Number(balance.seniorityDays) -
             Number(balance.usedDays);
           if (remainingDays < Number(request.totalDays)) {
@@ -1067,6 +1089,7 @@ export async function bulkApproveLeaveRequests(
           select: {
             annualDays: true,
             carryOverDays: true,
+            usedCarryOverDays: true,
             seniorityDays: true,
             usedDays: true,
             compOffDays: true,
@@ -1084,10 +1107,13 @@ export async function bulkApproveLeaveRequests(
         }
 
         const isCompOff = request.leaveType.code === 'CO';
+        const effectiveCarryOver = isCompOff
+          ? 0
+          : computeEffectiveCarryOver(balance, request.fromDate, resetCarryOverDate, year);
         const remainingDays = isCompOff
           ? Number(balance.compOffDays) - Number(balance.usedCompOffDays)
           : Number(balance.annualDays) +
-            Number(balance.carryOverDays) +
+            effectiveCarryOver +
             Number(balance.seniorityDays) -
             Number(balance.usedDays);
         if (remainingDays < Number(request.totalDays)) {
@@ -1121,6 +1147,9 @@ export async function bulkApproveLeaveRequests(
             Number(request.totalDays),
             year,
             annualLeaveType.id,
+            false,
+            request.fromDate,
+            resetCarryOverDate,
           );
         }
       } else if (requiresLeaveBalanceCheck(request.leaveType.code)) {
