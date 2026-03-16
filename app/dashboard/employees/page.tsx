@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { apiClient, getApiBaseUrl } from '@/lib/api-client';
+import { api, apiClient, getApiBaseUrl, getStoredToken } from '@/lib/api-client';
 import {
   buildQuery,
   formatDate,
@@ -70,10 +70,13 @@ interface EmployeeApiItem {
   manager?: {
     id: string | number;
     fullName: string;
+    username?: string | null;
   } | null;
   isActive: boolean;
   createdAt: string;
   birthday?: string | null;
+  gender?: string | null;
+  phone?: string | null;
 }
 
 interface UserDropdownItem {
@@ -103,6 +106,8 @@ interface EmployeeRow {
   status: EmployeeStatus;
   companyJoinDate: string | null;
   birthday: string | null;
+  gender: string;
+  phone: string;
 }
 
 interface EmployeeFormData {
@@ -120,6 +125,8 @@ interface EmployeeFormData {
   companyJoinDate: string;
   birthday: string;
   status: EmployeeStatus;
+  gender: string;
+  phone: string;
 }
 
 interface LeaveBalanceApiRow {
@@ -241,6 +248,8 @@ function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeForm
     companyJoinDate: '',
     birthday: '',
     status: 'active',
+    gender: '',
+    phone: '',
   };
 }
 
@@ -273,6 +282,8 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
     status: item.isActive ? 'active' : 'inactive',
     companyJoinDate: item.companyJoinDate ?? null,
     birthday: item.birthday ? item.birthday.slice(0, 10) : null,
+    gender: item.gender ?? '',
+    phone: item.phone ?? '',
   };
 }
 
@@ -311,6 +322,7 @@ export default function EmployeesPage() {
   });
   const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -542,6 +554,8 @@ export default function EmployeesPage() {
           ? toIsoDateTime(formData.companyJoinDate)
           : undefined,
         birthday: formData.birthday ? toIsoDateTime(formData.birthday) : undefined,
+        gender: formData.gender || undefined,
+        phone: formData.phone.trim() || undefined,
       });
 
       if (formData.status === 'inactive') {
@@ -580,6 +594,8 @@ export default function EmployeesPage() {
         companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : null,
         birthday: formData.birthday ? toIsoDateTime(formData.birthday) : null,
         isActive: formData.status === 'active',
+        gender: formData.gender || null,
+        phone: formData.phone.trim() || null,
       });
 
       setEditingEmployee(null);
@@ -611,6 +627,57 @@ export default function EmployeesPage() {
       toast.error(error instanceof Error ? error.message : 'Không thể xóa nhân viên.');
     } finally {
       setIsMutating(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const token = getStoredToken();
+      const response = await api.get('/api/users/export', {
+        responseType: 'arraybuffer',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const blob = new Blob([response.data as ArrayBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `employees_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Đã xuất danh sách nhân viên.');
+    } catch {
+      toast.error('Không thể xuất danh sách nhân viên.');
+    }
+  };
+
+  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+
+    setIsImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const result = await apiClient.post<{ created: number; updated: number; errors: { row: number; message: string }[] }>(
+        '/api/users/import',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      const { created, updated, errors } = result.data;
+      if (errors.length > 0) {
+        toast.warning(`Import xong: ${created} tạo mới, ${updated} cập nhật, ${errors.length} lỗi.`);
+        console.warn('Import errors:', errors);
+      } else {
+        toast.success(`Import thành công: ${created} tạo mới, ${updated} cập nhật.`);
+      }
+      await Promise.all([fetchEmployees(), fetchDepartments(), fetchManagers()]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể import file.');
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -718,21 +785,27 @@ export default function EmployeesPage() {
             <RefreshCw size={14} className={isRecalculating ? 'animate-spin' : ''} />
             {isRecalculating ? 'Đang tính...' : 'Tính toán lại phép năm'}
           </button>
-          <button
-            type="button"
-            disabled
-            title="Backend chưa hỗ trợ import Excel"
-            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold opacity-50"
+          <label
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
             style={{ borderColor: '#e2ede9', color: '#203430' }}
+            title="Import nhân viên từ file Excel"
           >
-            <Upload size={14} /> Import Excel
-          </button>
+            <Upload size={14} />
+            {isImporting ? 'Đang import...' : 'Import Excel'}
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              disabled={isImporting}
+              onChange={(e) => void handleImport(e)}
+            />
+          </label>
           <button
             type="button"
-            disabled
-            title="Backend chưa hỗ trợ export nhân viên"
-            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold opacity-50"
+            onClick={() => void handleExport()}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
             style={{ borderColor: '#e2ede9', color: '#203430' }}
+            title="Xuất danh sách nhân viên ra Excel"
           >
             <FileDown size={14} /> Export
           </button>
@@ -1825,6 +1898,8 @@ function EmployeeForm({
           companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
           birthday: initialData.birthday?.slice(0, 10) ?? '',
           status: initialData.status,
+          gender: initialData.gender ?? '',
+          phone: initialData.phone ?? '',
         }
       : getDefaultEmployeeFormData(departments),
   );
@@ -1849,6 +1924,8 @@ function EmployeeForm({
             companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
             birthday: initialData.birthday?.slice(0, 10) ?? '',
             status: initialData.status,
+            gender: initialData.gender ?? '',
+            phone: initialData.phone ?? '',
           }
         : getDefaultEmployeeFormData(departments),
     );
@@ -2268,6 +2345,39 @@ function EmployeeForm({
                   <SelectItem value="inactive">Tạm nghỉ</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Giới tính
+              </label>
+              <Select
+                value={formData.gender || 'no-gender'}
+                onValueChange={(value) =>
+                  handleFieldChange('gender', value === 'no-gender' ? '' : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn giới tính" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-gender">Không xác định</SelectItem>
+                  <SelectItem value="male">Nam</SelectItem>
+                  <SelectItem value="female">Nữ</SelectItem>
+                  <SelectItem value="other">Khác</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Số điện thoại
+              </label>
+              <Input
+                type="tel"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                placeholder="Ví dụ: 0912345678"
+              />
             </div>
             <div className="sm:col-span-2">
               <div

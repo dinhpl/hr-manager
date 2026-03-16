@@ -38,6 +38,8 @@ export const createUserSchema = z.object({
   isCountable: z.boolean().optional(),
   companyJoinDate: z.string().datetime().optional(),
   birthday: z.string().optional(),
+  gender: z.enum(['male', 'female', 'other']).optional(),
+  phone: z.string().trim().max(20).optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -64,6 +66,8 @@ export const updateUserSchema = z.object({
     .optional()
     .transform((value) => (value === '' ? null : value)),
   isActive: z.boolean().optional(),
+  gender: z.enum(['male', 'female', 'other']).nullable().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
 });
 
 export type CreateUserDto = z.infer<typeof createUserSchema>;

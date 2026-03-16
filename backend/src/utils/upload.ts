@@ -67,6 +67,19 @@ const EXCEL_ALLOWED = [
   'application/octet-stream',
 ];
 
+export const uploadUsersExcel = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (EXCEL_ALLOWED.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('File type not allowed. Use XLS or XLSX.'));
+  },
+});
+
 export const uploadAttendanceExcel = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },

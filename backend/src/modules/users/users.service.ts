@@ -3,6 +3,7 @@ import { UserRole } from '@prisma/client';
 import { hashPassword } from '../../utils/hash';
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
 import { GetUsersQuery, CreateUserDto, UpdateUserDto } from './users.validation';
+import * as XLSX from 'xlsx';
 
 type AuthUser = {
   id: bigint;
@@ -26,9 +27,11 @@ const USER_SELECT = {
   isCountable: true,
   companyJoinDate: true,
   birthday: true,
+  gender: true,
+  phone: true,
   isActive: true,
   createdAt: true,
-  manager: { select: { id: true, fullName: true } },
+  manager: { select: { id: true, fullName: true, username: true } },
 } as const;
 
 async function syncUsersIdSequence() {
@@ -122,6 +125,8 @@ export async function createUser(data: CreateUserDto) {
     department,
     position,
     isCountable,
+    gender,
+    phone,
   } = data;
 
   const existing = await prisma.user.findFirst({
@@ -154,6 +159,8 @@ export async function createUser(data: CreateUserDto) {
       ...(managerId && { manager: { connect: { id: managerId } } }),
       ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
       ...(birthday && { birthday: new Date(birthday) }),
+      ...(gender && { gender }),
+      ...(phone && { phone }),
     },
     select: USER_SELECT,
   });
@@ -289,4 +296,246 @@ export async function getUsersDropdown() {
     },
     orderBy: { fullName: 'asc' },
   });
+}
+
+// ─── Date helpers ────────────────────────────────────────────────────────────
+
+function formatDDMMYYYY(date: Date): string {
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const y = date.getUTCFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+function parseDDMMYYYY(value: string | Date): Date | null {
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value;
+  }
+  const s = String(value).trim();
+  // DD/MM/YYYY
+  const match = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const [, d, mo, y] = match;
+    const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+    return isNaN(date.getTime()) ? null : date;
+  }
+  // Fallback: ISO or other formats
+  const fallback = new Date(s);
+  return isNaN(fallback.getTime()) ? null : fallback;
+}
+
+// ─── Export ──────────────────────────────────────────────────────────────────
+
+const EXPORT_COLUMNS = [
+  'id', 'employee_code', 'email', 'username', 'full_name', 'first_name', 'last_name',
+  'gender', 'birthday', 'phone', 'department', 'position',
+  'company_join_date', 'manager_username', 'is_countable', 'is_active',
+];
+
+export async function exportUsersExcel(): Promise<Buffer> {
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      fullName: true,
+      firstName: true,
+      lastName: true,
+      department: true,
+      position: true,
+      isCountable: true,
+      companyJoinDate: true,
+      manager: { select: { username: true } },
+      isActive: true,
+      employeeCode: true,
+      birthday: true,
+      gender: true,
+      phone: true,
+    },
+    orderBy: { id: 'asc' },
+  });
+
+  const rows = users.map((u) => ({
+    id: String(u.id),
+    email: u.email,
+    username: u.username,
+    full_name: u.fullName,
+    first_name: u.firstName ?? '',
+    last_name: u.lastName ?? '',
+    department: u.department ?? '',
+    position: u.position ?? '',
+    is_countable: u.isCountable,
+    company_join_date: u.companyJoinDate ? formatDDMMYYYY(u.companyJoinDate) : '',
+    manager_username: u.manager?.username ?? '',
+    is_active: u.isActive,
+    employee_code: u.employeeCode ?? '',
+    birthday: u.birthday ? formatDDMMYYYY(u.birthday) : '',
+    gender: u.gender ?? '',
+    phone: u.phone ?? '',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_COLUMNS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Employees');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+// ─── Import ──────────────────────────────────────────────────────────────────
+
+interface ImportRow {
+  email?: string;
+  username?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  department?: string;
+  position?: string;
+  is_countable?: string | boolean;
+  company_join_date?: string | Date;
+  manager_username?: string;
+  is_active?: string | boolean;
+  employee_code?: string;
+  birthday?: string | Date;
+  gender?: string;
+  phone?: string;
+}
+
+export async function importUsersExcel(fileBuffer: Buffer): Promise<{
+  created: number;
+  updated: number;
+  errors: { row: number; message: string }[];
+}> {
+  const wb = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '', raw: false });
+
+  // Pre-load all users for manager username → id mapping
+  const allUsers = await prisma.user.findMany({
+    select: { id: true, username: true, email: true },
+  });
+  const usernameToId = new Map(allUsers.map((u) => [u.username, u.id]));
+  const emailToId = new Map(allUsers.map((u) => [u.email, u.id]));
+
+  let created = 0;
+  let updated = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const rowNum = i + 2; // 1-indexed + header
+
+    try {
+      if (!row.email) {
+        errors.push({ row: rowNum, message: 'email is required' });
+        continue;
+      }
+
+      // Resolve manager_id from username
+      let managerId: bigint | null = null;
+      if (row.manager_username) {
+        const mid = usernameToId.get(String(row.manager_username));
+        managerId = mid ?? null;
+      }
+
+      // Parse booleans
+      const isCountable =
+        row.is_countable === true || String(row.is_countable).toLowerCase() === 'true';
+      const isActive =
+        row.is_active === '' || row.is_active === undefined
+          ? true
+          : row.is_active === true || String(row.is_active).toLowerCase() === 'true';
+
+      // Parse dates
+      const companyJoinDate = row.company_join_date ? parseDDMMYYYY(String(row.company_join_date)) : null;
+      const birthday = row.birthday ? parseDDMMYYYY(String(row.birthday)) : null;
+
+      // Validate gender
+      const gender =
+        row.gender && ['male', 'female', 'other'].includes(String(row.gender).toLowerCase())
+          ? String(row.gender).toLowerCase()
+          : null;
+
+      const existingId = emailToId.get(String(row.email));
+
+      const payload = {
+        fullName: String(row.full_name || ''),
+        firstName: row.first_name ? String(row.first_name) : null,
+        lastName: row.last_name ? String(row.last_name) : null,
+        username: row.username ? String(row.username) : undefined,
+        employeeCode: row.employee_code ? String(row.employee_code) : null,
+        department: row.department ? String(row.department) : null,
+        position: row.position ? String(row.position) : null,
+        isCountable,
+        isActive,
+        companyJoinDate,
+        birthday,
+        gender,
+        phone: row.phone ? String(row.phone) : null,
+      };
+
+      if (existingId) {
+        // Update existing user
+        await prisma.user.update({
+          where: { id: existingId },
+          data: {
+            ...payload,
+            ...(managerId !== undefined && {
+              manager:
+                managerId === null
+                  ? { disconnect: true }
+                  : { connect: { id: managerId } },
+            }),
+          },
+        });
+        updated++;
+      } else {
+        // Create new user — password defaults to email, must be changed
+        const hashedPassword = await hashPassword(String(row.email));
+        const username =
+          payload.username ||
+          String(row.email)
+            .split('@')[0]
+            .replace(/[^a-z0-9._-]/gi, '.')
+            .toLowerCase();
+
+        await syncUsersIdSequence();
+        await prisma.user.create({
+          data: {
+            email: String(row.email),
+            username,
+            password: hashedPassword,
+            fullName: payload.fullName || username,
+            firstName: payload.firstName ?? undefined,
+            lastName: payload.lastName ?? undefined,
+            employeeCode: payload.employeeCode ?? undefined,
+            department: payload.department ?? undefined,
+            position: payload.position ?? undefined,
+            isCountable: payload.isCountable,
+            isActive: payload.isActive,
+            companyJoinDate: payload.companyJoinDate ?? undefined,
+            birthday: payload.birthday ?? undefined,
+            gender: payload.gender ?? undefined,
+            phone: payload.phone ?? undefined,
+            role: 'EMPLOYEE',
+            ...(managerId && { manager: { connect: { id: managerId } } }),
+          },
+        });
+        // Add to maps for subsequent rows
+        const newUser = await prisma.user.findUnique({
+          where: { email: String(row.email) },
+          select: { id: true, username: true },
+        });
+        if (newUser) {
+          usernameToId.set(newUser.username, newUser.id);
+          emailToId.set(String(row.email), newUser.id);
+        }
+        created++;
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      errors.push({ row: rowNum, message: msg });
+    }
+  }
+
+  return { created, updated, errors };
 }

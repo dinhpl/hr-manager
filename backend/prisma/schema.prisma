@@ -66,6 +66,8 @@ model User {
   isCountable     Boolean   @default(true) @map("is_countable")
   companyJoinDate DateTime? @map("company_join_date")
   birthday        DateTime? @map("birthday")
+  gender          String?   @db.VarChar(10)
+  phone           String?   @db.VarChar(20)
   managerId       BigInt?   @map("manager_id")
   isActive        Boolean   @default(true) @map("is_active")
   createdAt       DateTime  @default(now()) @map("created_at")

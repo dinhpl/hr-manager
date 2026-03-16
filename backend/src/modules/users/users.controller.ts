@@ -70,3 +70,28 @@ export async function deleteUser(req: Request, res: Response, next: NextFunction
     next(err);
   }
 }
+
+export async function exportUsers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const buffer = await usersService.exportUsersExcel();
+    const filename = `employees_${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function importUsers(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'No file uploaded' });
+      return;
+    }
+    const result = await usersService.importUsersExcel(req.file.buffer);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
