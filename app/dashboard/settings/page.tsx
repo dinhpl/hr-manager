@@ -42,6 +42,7 @@ interface LeavePolicy {
   resetCarryOverDate: string;
   advanceRequestDays: number;
   maxConsecutiveDays: number;
+  showBirthdaysOnDashboard: boolean;
 }
 
 interface ApprovalLevel {
@@ -70,7 +71,7 @@ interface LeaveTypeData {
 }
 
 const TAB_ITEMS = [
-  { id: 'leave', label: 'Chính sách nghỉ phép', icon: Calendar },
+  { id: 'leave', label: 'Thiết lập chung', icon: Calendar },
   // { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
   { id: 'leave-types', label: 'Loại nghỉ phép', icon: Tag },
   { id: 'holidays', label: 'Ngày nghỉ lễ', icon: Calendar },
@@ -93,6 +94,7 @@ const DEFAULT_LEAVE_POLICY: LeavePolicy = {
   resetCarryOverDate: '03-31',
   advanceRequestDays: 1,
   maxConsecutiveDays: 30,
+  showBirthdaysOnDashboard: true,
 };
 
 const DEFAULT_APPROVAL_FLOW: ApprovalFlow = {
@@ -141,6 +143,10 @@ function normalizeLeavePolicy(raw: Partial<LeavePolicy> | null | undefined): Lea
       raw?.maxConsecutiveDays,
       DEFAULT_LEAVE_POLICY.maxConsecutiveDays,
     ),
+    showBirthdaysOnDashboard:
+      typeof raw?.showBirthdaysOnDashboard === 'boolean'
+        ? raw.showBirthdaysOnDashboard
+        : DEFAULT_LEAVE_POLICY.showBirthdaysOnDashboard,
   };
 }
 
@@ -801,6 +807,36 @@ export default function SettingsPage() {
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="border-l-4 border-pink-500 pl-4">
+                    <h3 className="font-semibold text-sm mb-4" style={{ color: '#203430' }}>
+                      Thiết lập hiển thị dashboard
+                    </h3>
+                    <div
+                      className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
+                      style={{ borderColor: '#f5d0e6', background: '#fff7fb' }}
+                    >
+                      <div>
+                        <p className="text-sm font-medium" style={{ color: '#203430' }}>
+                          Hiển thị sinh nhật toàn nhân viên trên dashboard
+                        </p>
+                        <p className="text-xs" style={{ color: '#6b7f78' }}>
+                          Khi tắt, dashboard sẽ ẩn danh sách sinh nhật, marker sinh nhật trên lịch và
+                          không tải dữ liệu birthday.
+                        </p>
+                      </div>
+                      <Checkbox
+                        checked={leavePolicy.showBirthdaysOnDashboard}
+                        onCheckedChange={(checked) =>
+                          setLeavePolicy((prev) => ({
+                            ...prev,
+                            showBirthdaysOnDashboard: checked === true,
+                          }))
+                        }
+                        aria-label="Hiển thị sinh nhật trên dashboard"
+                      />
                     </div>
                   </div>
                 </div>

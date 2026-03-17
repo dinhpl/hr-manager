@@ -3,6 +3,36 @@ import { z } from 'zod';
 import * as service from './leave-balances.service';
 import { sendSuccess } from '../../utils/response';
 
+export async function exportLeaveBalances(req: Request, res: Response, next: NextFunction) {
+  try {
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const buffer = await service.exportLeaveBalancesExcel(year);
+    const y = year ?? new Date().getFullYear();
+    const filename = `leave_balances_${y}.xlsx`;
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function importLeaveBalances(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'No file uploaded' });
+      return;
+    }
+    const result = await service.importLeaveBalancesExcel(req.file.buffer);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getAllBalances(req: Request, res: Response, next: NextFunction) {
   try {
     const year = req.query.year ? Number(req.query.year) : undefined;
@@ -59,6 +89,8 @@ export async function adjustBalance(req: Request, res: Response, next: NextFunct
         compOffDays: z.coerce.number().min(0).optional(),
         wfhDays: z.coerce.number().min(0).optional(),
         usedCarryOverDays: z.coerce.number().min(0).optional(),
+        usedDays: z.coerce.number().min(0).optional(),
+        usedCompOffDays: z.coerce.number().min(0).optional(),
       })
       .parse(req.body);
     const balance = await service.adjustBalance(BigInt(String(req.params.id)), data);

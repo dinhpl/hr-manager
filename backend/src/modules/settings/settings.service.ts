@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, unknown> = {
     resetCarryOverDate: '03-31',
     advanceRequestDays: 1,
     maxConsecutiveDays: 30,
+    showBirthdaysOnDashboard: true,
   },
   approval_flow: {
     levels: [

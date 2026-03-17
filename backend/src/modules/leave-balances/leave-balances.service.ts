@@ -168,6 +168,8 @@ export async function adjustBalance(
     compOffDays?: number;
     wfhDays?: number;
     usedCarryOverDays?: number;
+    usedDays?: number;
+    usedCompOffDays?: number;
   },
 ) {
   return prisma.leaveBalance.update({ where: { id }, data });
@@ -295,4 +297,119 @@ export async function restoreBalance(
     where: { userId, leaveTypeId: actualLeaveTypeId, year },
     data: { usedDays: { decrement: days } },
   });
+}
+
+// ── Export / Import leave balances ───────────────────────────────────────
+import * as XLSX from 'xlsx';
+
+// One row per user — each leave_balances row is treated as the user's single balance record.
+const BALANCE_EXPORT_COLUMNS = [
+  'id',
+  'employee_code',
+  'full_name',
+  'department',
+  'year',
+  'annual_days',
+  'seniority_days',
+  'carry_over_days',
+  'used_carry_over_days',
+  'used_days',
+  'comp_off_days',
+  'used_comp_off_days',
+  'wfh_days',
+];
+
+export async function exportLeaveBalancesExcel(year?: number): Promise<Buffer> {
+  const targetYear = year ?? new Date().getFullYear();
+  const balances = await getAllBalances(targetYear);
+
+  const rows = balances.map((balance) => ({
+    id: String(balance.id),
+    employee_code: balance.user.employeeCode ?? '',
+    full_name: balance.user.fullName,
+    department: balance.user.department ?? '',
+    year: balance.year,
+    annual_days: Number(balance.annualDays),
+    seniority_days: Number(balance.seniorityDays),
+    carry_over_days: Number(balance.carryOverDays),
+    used_carry_over_days: Number(balance.usedCarryOverDays ?? 0),
+    used_days: Number(balance.usedDays),
+    comp_off_days: Number(balance.compOffDays),
+    used_comp_off_days: Number(balance.usedCompOffDays),
+    wfh_days: Number(balance.wfhDays),
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows, { header: BALANCE_EXPORT_COLUMNS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'LeaveBalances');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+type BalanceImportRow = {
+  id?: string | number;
+  annual_days?: string | number;
+  seniority_days?: string | number;
+  carry_over_days?: string | number;
+  used_carry_over_days?: string | number;
+  used_days?: string | number;
+  comp_off_days?: string | number;
+  used_comp_off_days?: string | number;
+  wfh_days?: string | number;
+};
+
+export async function importLeaveBalancesExcel(fileBuffer: Buffer): Promise<{
+  updated: number;
+  errors: { row: number; message: string }[];
+}> {
+  const wb = XLSX.read(fileBuffer, { type: 'buffer', cellDates: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json<BalanceImportRow>(ws, { defval: '' });
+
+  let updated = 0;
+  const errors: { row: number; message: string }[] = [];
+
+  const parseNum = (v: string | number | undefined) =>
+    v !== '' && v !== undefined ? parseFloat(String(v)) : undefined;
+
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const rowNum = i + 2;
+
+    try {
+      if (!row.id) {
+        errors.push({ row: rowNum, message: 'id is required' });
+        continue;
+      }
+
+      const targetId = BigInt(String(row.id));
+      const data: Record<string, number> = {};
+      const annualDays = parseNum(row.annual_days);
+      const seniorityDays = parseNum(row.seniority_days);
+      const carryOverDays = parseNum(row.carry_over_days);
+      const usedCarryOverDays = parseNum(row.used_carry_over_days);
+      const usedDays = parseNum(row.used_days);
+      const compOffDays = parseNum(row.comp_off_days);
+      const usedCompOffDays = parseNum(row.used_comp_off_days);
+      const wfhDays = parseNum(row.wfh_days);
+
+      if (annualDays !== undefined && !isNaN(annualDays)) data.annualDays = annualDays;
+      if (seniorityDays !== undefined && !isNaN(seniorityDays)) data.seniorityDays = seniorityDays;
+      if (carryOverDays !== undefined && !isNaN(carryOverDays)) data.carryOverDays = carryOverDays;
+      if (usedCarryOverDays !== undefined && !isNaN(usedCarryOverDays)) data.usedCarryOverDays = usedCarryOverDays;
+      if (usedDays !== undefined && !isNaN(usedDays)) data.usedDays = usedDays;
+      if (compOffDays !== undefined && !isNaN(compOffDays)) data.compOffDays = compOffDays;
+      if (usedCompOffDays !== undefined && !isNaN(usedCompOffDays)) data.usedCompOffDays = usedCompOffDays;
+      if (wfhDays !== undefined && !isNaN(wfhDays)) data.wfhDays = wfhDays;
+
+      if (Object.keys(data).length > 0) {
+        await prisma.leaveBalance.update({ where: { id: targetId }, data });
+        updated++;
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      errors.push({ row: rowNum, message: `id=${String(row.id ?? '?')}: ${msg}` });
+    }
+  }
+
+  return { updated, errors };
 }

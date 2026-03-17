@@ -80,6 +80,11 @@ interface BalanceApiRecord {
   leaveType: { code: string; name: string };
 }
 
+interface LeavePolicySettings {
+  resetCarryOverDate?: string;
+  showBirthdaysOnDashboard?: boolean;
+}
+
 interface DashboardManagerSummary {
   type: 'manager' | 'hr' | 'admin';
   stats: {
@@ -1341,6 +1346,7 @@ export default function DashboardPage() {
   } | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<EmployeeLeaveBalance | null>(null);
   const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
+  const [showBirthdaysOnDashboard, setShowBirthdaysOnDashboard] = useState<boolean | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
   const [leaveDefaultDate, setLeaveDefaultDate] = useState<string | undefined>(undefined);
   const [editLeaveData, setEditLeaveData] = useState<LeaveRequestData | null>(null);
@@ -1367,11 +1373,14 @@ export default function DashboardPage() {
     try {
       const [response, policyResponse] = await Promise.all([
         apiClient.get<BalanceApiRecord[]>('/api/leave-balances'),
-        apiClient.get<{ resetCarryOverDate?: string }>('/api/settings/leave-policy').catch(() => ({ data: { resetCarryOverDate: undefined } })),
+        apiClient.get<LeavePolicySettings>('/api/settings/leave-policy').catch(() => ({
+          data: { resetCarryOverDate: undefined, showBirthdaysOnDashboard: true },
+        })),
       ]);
       if (policyResponse.data?.resetCarryOverDate) {
         setResetCarryOverDate(policyResponse.data.resetCarryOverDate);
       }
+      setShowBirthdaysOnDashboard(policyResponse.data?.showBirthdaysOnDashboard !== false);
       const records = response.data || [];
       const alRecord = records.find((r) => r.leaveType?.code === 'AL');
       if (alRecord) {
@@ -1390,6 +1399,7 @@ export default function DashboardPage() {
       }
     } catch {
       setLeaveBalance(null);
+      setShowBirthdaysOnDashboard(true);
     }
   }, []);
 
@@ -1420,7 +1430,10 @@ export default function DashboardPage() {
 
   const loadBirthdayData = useCallback(
     async (role: string) => {
-      if (role !== 'HR' && role !== 'ADMIN') return;
+      if (showBirthdaysOnDashboard !== true || (role !== 'HR' && role !== 'ADMIN')) {
+        setBirthdayData({});
+        return;
+      }
       try {
         const response = await apiClient.get<BirthdayData>(
           `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
@@ -1430,7 +1443,7 @@ export default function DashboardPage() {
         setBirthdayData({});
       }
     },
-    [currentMonth, currentYear],
+    [currentMonth, currentYear, showBirthdaysOnDashboard],
   );
 
   useEffect(() => {
@@ -1597,7 +1610,7 @@ export default function DashboardPage() {
           currentMonth={currentMonth}
           currentYear={currentYear}
           calendarData={calendarData}
-          birthdayData={birthdayData}
+          birthdayData={showBirthdaysOnDashboard === true ? birthdayData : undefined}
           leaveBalance={leaveBalance}
           resetCarryOverDate={resetCarryOverDate}
           recentRequests={recentRequests}

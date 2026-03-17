@@ -319,10 +319,13 @@ export default function EmployeesPage() {
     compOffDays: '',
     wfhDays: '',
     usedCarryOverDays: '',
+    usedDays: '',
+    usedCompOffDays: '',
   });
   const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isImportingBalances, setIsImportingBalances] = useState(false);
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -681,8 +684,59 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleRecalculateLeave = async () => {
-    if (
+  const handleExportBalances = async () => {
+    try {
+      const token = getStoredToken();
+      const response = await api.get(`/api/leave-balances/export?year=${balanceYear}`, {
+        responseType: 'arraybuffer',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const blob = new Blob([response.data as ArrayBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `leave_balances_${balanceYear}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Đã xuất dữ liệu phép năm.');
+    } catch {
+      toast.error('Không thể xuất dữ liệu phép năm.');
+    }
+  };
+
+  const handleImportBalances = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    event.target.value = '';
+
+    setIsImportingBalances(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const result = await apiClient.post<{
+        updated: number;
+        errors: { row: number; message: string }[];
+      }>('/api/leave-balances/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const { updated, errors } = result.data;
+      if (errors.length > 0) {
+        toast.warning(`Import xong: ${updated} cập nhật, ${errors.length} lỗi.`);
+        console.warn('Import balance errors:', errors);
+      } else {
+        toast.success(`Import thành công: ${updated} bản ghi đã cập nhật.`);
+      }
+      void fetchLeaveBalances(balanceYear);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể import file.');
+    } finally {
+      setIsImportingBalances(false);
+    }
+  };
+
+  const handleRecalculateLeave = async () => {    if (
       !window.confirm(
         `Tính toán lại phép năm ${new Date().getFullYear()} cho tất cả nhân viên?\n` +
           'Số ngày đã dùng (used_days) sẽ được giữ nguyên.',
@@ -718,6 +772,8 @@ export default function EmployeesPage() {
       compOffDays: String(row.compOffDays),
       wfhDays: String(row.wfhDays),
       usedCarryOverDays: String(row.usedCarryOverDays ?? 0),
+      usedDays: String(row.usedDays ?? 0),
+      usedCompOffDays: String(row.usedCompOffDays ?? 0),
     });
   };
 
@@ -732,6 +788,8 @@ export default function EmployeesPage() {
         compOffDays: parseFloat(balanceForm.compOffDays) || 0,
         wfhDays: parseFloat(balanceForm.wfhDays) || 0,
         usedCarryOverDays: parseFloat(balanceForm.usedCarryOverDays) || 0,
+        usedDays: parseFloat(balanceForm.usedDays) || 0,
+        usedCompOffDays: parseFloat(balanceForm.usedCompOffDays) || 0,
       });
       setEditingBalance(null);
       toast.success('Đã cập nhật số ngày phép.');
@@ -751,6 +809,17 @@ export default function EmployeesPage() {
     }).length;
   }, [employees]);
 
+  const isSharedImporting = activeTab === 'employees' ? isImporting : isImportingBalances;
+  const sharedImportTitle =
+    activeTab === 'employees'
+      ? 'Import nhân viên từ file Excel'
+      : 'Import phép năm từ file Excel (chỉ cập nhật các trường số)';
+  const sharedExportTitle =
+    activeTab === 'employees'
+      ? 'Xuất danh sách nhân viên ra Excel'
+      : 'Xuất dữ liệu phép năm ra Excel';
+  const sharedImportLabel = isSharedImporting ? 'Đang import...' : 'Import Excel';
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -766,46 +835,53 @@ export default function EmployeesPage() {
           </h1>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-            style={{ background: '#1DB87A' }}
-            disabled={isMutating}
-          >
-            <UserPlus size={14} /> Thêm nhân viên
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleRecalculateLeave()}
-            disabled={isRecalculating || isMutating}
-            title="Tính toán lại tổng ngày phép năm cho tất cả nhân viên dựa theo ngày vào công ty"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
-            style={{ borderColor: '#1DB87A', color: '#1DB87A', background: '#f0fdf9' }}
-          >
-            <RefreshCw size={14} className={isRecalculating ? 'animate-spin' : ''} />
-            {isRecalculating ? 'Đang tính...' : 'Tính toán lại phép năm'}
-          </button>
+          {activeTab === 'employees' ? (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ background: '#1DB87A' }}
+              disabled={isMutating}
+            >
+              <UserPlus size={14} /> Thêm nhân viên
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleRecalculateLeave()}
+              disabled={isRecalculating || isMutating}
+              title="Tính toán lại tổng ngày phép năm cho tất cả nhân viên dựa theo ngày vào công ty"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ borderColor: '#1DB87A', color: '#1DB87A', background: '#f0fdf9' }}
+            >
+              <RefreshCw size={14} className={isRecalculating ? 'animate-spin' : ''} />
+              {isRecalculating ? 'Đang tính...' : 'Tính toán lại phép năm'}
+            </button>
+          )}
           <label
             className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
             style={{ borderColor: '#e2ede9', color: '#203430' }}
-            title="Import nhân viên từ file Excel"
+            title={sharedImportTitle}
           >
             <Upload size={14} />
-            {isImporting ? 'Đang import...' : 'Import Excel'}
+            {sharedImportLabel}
             <input
               type="file"
               accept=".xlsx,.xls"
               className="hidden"
-              disabled={isImporting}
-              onChange={(e) => void handleImport(e)}
+              disabled={isSharedImporting}
+              onChange={(e) =>
+                void (activeTab === 'employees' ? handleImport(e) : handleImportBalances(e))
+              }
             />
           </label>
           <button
             type="button"
-            onClick={() => void handleExport()}
+            onClick={() =>
+              void (activeTab === 'employees' ? handleExport() : handleExportBalances())
+            }
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
             style={{ borderColor: '#e2ede9', color: '#203430' }}
-            title="Xuất danh sách nhân viên ra Excel"
+            title={sharedExportTitle}
           >
             <FileDown size={14} /> Export
           </button>
@@ -1472,9 +1548,9 @@ export default function EmployeesPage() {
 
       {activeTab === 'leave-balances' && (
         <div className="space-y-4">
-          {/* Year selector + refresh */}
+          {/* Year selector + export/import */}
           <div
-            className="bg-white rounded-xl border p-4 flex flex-wrap items-center gap-4"
+            className="bg-white rounded-xl justify-between border p-4 flex flex-wrap items-center gap-4"
             style={{ borderColor: '#e2ede9' }}
           >
             <div className="flex flex-col gap-1">
@@ -1496,7 +1572,7 @@ export default function EmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs ml-auto" style={{ color: '#6b7f78' }}>
+            <p className="text-xs" style={{ color: '#6b7f78' }}>
               {leaveBalances.length} bản ghi · Click vào hàng để chỉnh sửa
             </p>
           </div>
@@ -1519,10 +1595,10 @@ export default function EmployeesPage() {
                       `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
                       'Comp-Off',
                       'WFH',
-                      'Đã dùng CO\n(carry-over)',
-                      'Đã dùng (AL)',
-                      'Đã dùng (CO)',
-                      'Còn lại (AL)',
+                      'Đã dùng carry-over',
+                      'Đã dùng phép',
+                      'Đã dùng Comp-Off',
+                      'Còn lại',
                     ].map((h) => (
                       <th
                         key={h}
@@ -1577,8 +1653,7 @@ export default function EmployeesPage() {
                         effectiveCarryOver -
                         Number(row.usedDays);
                       const coRemaining = Number(row.compOffDays) - Number(row.usedCompOffDays);
-                      const isAL = row.leaveType.code === 'AL';
-                      const isCO = row.leaveType.code === 'CO';
+
                       return (
                         <tr
                           key={row.id}
@@ -1600,27 +1675,27 @@ export default function EmployeesPage() {
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-semibold"
-                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                            style={{ color: '#203430' }}
                           >
-                            {isAL ? Number(row.annualDays) : '—'}
+                            {Number(row.annualDays)}
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-semibold"
-                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                            style={{ color: '#203430' }}
                           >
-                            {isAL ? Number(row.seniorityDays) : '—'}
+                            {Number(row.seniorityDays)}
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-semibold"
-                            style={{ color: isAL ? '#203430' : '#9ca3af' }}
+                            style={{ color: '#203430' }}
                           >
-                            {isAL ? Number(row.carryOverDays) : '—'}
+                            {Number(row.carryOverDays)}
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-semibold"
-                            style={{ color: isCO ? '#203430' : '#9ca3af' }}
+                            style={{ color: '#203430' }}
                           >
-                            {isCO ? Number(row.compOffDays) : '—'}
+                            {Number(row.compOffDays)}
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-semibold"
@@ -1629,21 +1704,22 @@ export default function EmployeesPage() {
                             {Number(row.wfhDays)}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
-                            {isAL ? Number(row.usedCarryOverDays ?? 0) : '—'}
+                            {Number(row.usedCarryOverDays ?? 0)}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
-                            {isAL ? Number(row.usedDays) : '—'}
+                            {Number(row.usedDays)}
                           </td>
                           <td className="px-3 py-2.5 text-center" style={{ color: '#f59e0b' }}>
-                            {isCO ? Number(row.usedCompOffDays) : '—'}
+                            {Number(row.usedCompOffDays)}
                           </td>
                           <td
                             className="px-3 py-2.5 text-center font-bold"
                             style={{
-                              color: isAL ? (alRemaining < 0 ? '#ef4444' : '#1DB87A') : '#9ca3af',
+                              color:
+                                alRemaining < 0 || coRemaining < 0 ? '#ef4444' : '#1DB87A',
                             }}
                           >
-                            {isAL ? alRemaining : '—'}
+                            {alRemaining}
                           </td>
                         </tr>
                       );
@@ -1676,8 +1752,7 @@ export default function EmployeesPage() {
                   Chỉnh sửa phép năm
                 </h2>
                 <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
-                  {editingBalance.user.fullName} · {editingBalance.leaveType.code} ·{' '}
-                  {editingBalance.year}
+                  {editingBalance.user.fullName} · {editingBalance.year}
                 </p>
               </div>
               <button
@@ -1692,10 +1767,12 @@ export default function EmployeesPage() {
               {[
                 { key: 'annualDays', label: 'Phép năm (annualDays)' },
                 { key: 'carryOverDays', label: 'Chuyển tiếp từ năm trước (carryOverDays)' },
-                { key: 'usedCarryOverDays', label: 'Đã dùng carry-over (usedCarryOverDays)' },
                 { key: 'seniorityDays', label: 'Thâm niên (seniorityDays)' },
                 { key: 'compOffDays', label: 'Comp-Off tích lũy (compOffDays)' },
                 { key: 'wfhDays', label: 'WFH (wfhDays)' },
+                { key: 'usedCarryOverDays', label: 'Đã dùng carry-over (usedCarryOverDays)' },
+                { key: 'usedDays', label: 'Đã dùng phép (usedDays)' },
+                { key: 'usedCompOffDays', label: 'Đã dùng Comp-Off (usedCompOffDays)' },
               ].map(({ key, label }) => (
                 <div key={key}>
                   <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
@@ -1710,13 +1787,10 @@ export default function EmployeesPage() {
                   />
                 </div>
               ))}
-              <div
-                className="rounded-lg p-3 text-xs"
-                style={{ background: '#f0fdf9', color: '#6b7f78' }}
-              >
+              <div className="rounded-lg p-3 text-xs" style={{ background: '#f0fdf9', color: '#6b7f78' }}>
                 <p>
-                  <strong style={{ color: '#203430' }}>Số ngày đã dùng và thông tin còn lại</strong>{' '}
-                  được tính tự động và không chỉnh sửa trực tiếp ở đây.
+                  <strong style={{ color: '#203430' }}>Giá trị còn lại</strong> trên bảng sẽ được
+                  tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
                 </p>
               </div>
             </div>
