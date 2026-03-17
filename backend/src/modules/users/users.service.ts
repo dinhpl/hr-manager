@@ -324,13 +324,103 @@ function parseDDMMYYYY(value: string | Date): Date | null {
   return isNaN(fallback.getTime()) ? null : fallback;
 }
 
-// ─── Export ──────────────────────────────────────────────────────────────────
+// ─── Export / Import column mapping ─────────────────────────────────────────
 
-const EXPORT_COLUMNS = [
-  'id', 'employee_code', 'email', 'username', 'full_name', 'first_name', 'last_name',
-  'gender', 'birthday', 'phone', 'department', 'position',
-  'company_join_date', 'manager_username', 'is_countable', 'is_active',
+type UserImportRow = {
+  id?: string;
+  employee_code?: string;
+  email?: string;
+  username?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  gender?: string;
+  birthday?: string | Date;
+  phone?: string;
+  department?: string;
+  position?: string;
+  company_join_date?: string | Date;
+  manager_username?: string;
+  is_countable?: string | boolean;
+  is_active?: string | boolean;
+};
+
+type UserColumnDefinition = {
+  key: keyof UserImportRow;
+  label: string;
+  aliases: string[];
+};
+
+const USER_COLUMNS: UserColumnDefinition[] = [
+  { key: 'id', label: 'ID', aliases: ['id', 'mã bản ghi', 'record id'] },
+  { key: 'employee_code', label: 'Mã nhân viên', aliases: ['employee_code', 'employee code'] },
+  { key: 'email', label: 'Email', aliases: ['email'] },
+  { key: 'username', label: 'Tên đăng nhập', aliases: ['username', 'user name'] },
+  { key: 'full_name', label: 'Họ và tên', aliases: ['full_name', 'full name', 'họ tên'] },
+  { key: 'first_name', label: 'Tên', aliases: ['first_name', 'first name'] },
+  { key: 'last_name', label: 'Họ', aliases: ['last_name', 'last name'] },
+  { key: 'gender', label: 'Giới tính', aliases: ['gender'] },
+  { key: 'birthday', label: 'Ngày sinh', aliases: ['birthday', 'date of birth'] },
+  { key: 'phone', label: 'Số điện thoại', aliases: ['phone', 'phone number'] },
+  { key: 'department', label: 'Phòng ban', aliases: ['department'] },
+  { key: 'position', label: 'Chức vụ', aliases: ['position'] },
+  {
+    key: 'company_join_date',
+    label: 'Ngày vào công ty',
+    aliases: ['company_join_date', 'company join date', 'join date'],
+  },
+  {
+    key: 'manager_username',
+    label: 'Tên đăng nhập quản lý',
+    aliases: ['manager_username', 'manager username', 'quản lý trực tiếp'],
+  },
+  {
+    key: 'is_countable',
+    label: 'Tính công',
+    aliases: ['is_countable', 'countable', 'cham cong', 'tính công'],
+  },
+  {
+    key: 'is_active',
+    label: 'Đang hoạt động',
+    aliases: ['is_active', 'active', 'trạng thái hoạt động'],
+  },
 ];
+
+const USER_EXPORT_HEADERS = USER_COLUMNS.map((column) => column.label);
+
+function normalizeImportHeader(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function remapSheetRows<T extends Record<string, unknown>>(
+  rows: Record<string, unknown>[],
+  columns: Array<{ key: keyof T; label: string; aliases: string[] }>,
+) {
+  const aliasMap = new Map<string, keyof T>();
+
+  columns.forEach((column) => {
+    [column.label, ...column.aliases].forEach((alias) => {
+      aliasMap.set(normalizeImportHeader(alias), column.key);
+    });
+  });
+
+  return rows.map((row) => {
+    const mapped = {} as T;
+
+    Object.entries(row).forEach(([rawKey, value]) => {
+      const targetKey = aliasMap.get(normalizeImportHeader(rawKey));
+      if (targetKey) {
+        mapped[targetKey] = value as T[keyof T];
+      }
+    });
+
+    return mapped;
+  });
+}
 
 export async function exportUsersExcel(): Promise<Buffer> {
   const users = await prisma.user.findMany({
@@ -356,49 +446,31 @@ export async function exportUsersExcel(): Promise<Buffer> {
   });
 
   const rows = users.map((u) => ({
-    id: String(u.id),
-    email: u.email,
-    username: u.username,
-    full_name: u.fullName,
-    first_name: u.firstName ?? '',
-    last_name: u.lastName ?? '',
-    department: u.department ?? '',
-    position: u.position ?? '',
-    is_countable: u.isCountable,
-    company_join_date: u.companyJoinDate ? formatDDMMYYYY(u.companyJoinDate) : '',
-    manager_username: u.manager?.username ?? '',
-    is_active: u.isActive,
-    employee_code: u.employeeCode ?? '',
-    birthday: u.birthday ? formatDDMMYYYY(u.birthday) : '',
-    gender: u.gender ?? '',
-    phone: u.phone ?? '',
+    ID: String(u.id),
+    'Mã nhân viên': u.employeeCode ?? '',
+    Email: u.email,
+    'Tên đăng nhập': u.username,
+    'Họ và tên': u.fullName,
+    Tên: u.firstName ?? '',
+    Họ: u.lastName ?? '',
+    'Giới tính': u.gender ?? '',
+    'Ngày sinh': u.birthday ? formatDDMMYYYY(u.birthday) : '',
+    'Số điện thoại': u.phone ?? '',
+    'Phòng ban': u.department ?? '',
+    'Chức vụ': u.position ?? '',
+    'Ngày vào công ty': u.companyJoinDate ? formatDDMMYYYY(u.companyJoinDate) : '',
+    'Tên đăng nhập quản lý': u.manager?.username ?? '',
+    'Tính công': u.isCountable,
+    'Đang hoạt động': u.isActive,
   }));
 
-  const ws = XLSX.utils.json_to_sheet(rows, { header: EXPORT_COLUMNS });
+  const ws = XLSX.utils.json_to_sheet(rows, { header: USER_EXPORT_HEADERS });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Employees');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }
 
 // ─── Import ──────────────────────────────────────────────────────────────────
-
-interface ImportRow {
-  email?: string;
-  username?: string;
-  full_name?: string;
-  first_name?: string;
-  last_name?: string;
-  department?: string;
-  position?: string;
-  is_countable?: string | boolean;
-  company_join_date?: string | Date;
-  manager_username?: string;
-  is_active?: string | boolean;
-  employee_code?: string;
-  birthday?: string | Date;
-  gender?: string;
-  phone?: string;
-}
 
 export async function importUsersExcel(fileBuffer: Buffer): Promise<{
   created: number;
@@ -407,7 +479,8 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
 }> {
   const wb = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rawRows = XLSX.utils.sheet_to_json<ImportRow>(ws, { defval: '', raw: false });
+  const sourceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+  const rawRows = remapSheetRows<UserImportRow>(sourceRows, USER_COLUMNS);
 
   // Pre-load all users for manager username → id mapping
   const allUsers = await prisma.user.findMany({
@@ -426,7 +499,7 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
 
     try {
       if (!row.email) {
-        errors.push({ row: rowNum, message: 'email is required' });
+        errors.push({ row: rowNum, message: 'Email là bắt buộc' });
         continue;
       }
 
@@ -439,11 +512,11 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
 
       // Parse booleans
       const isCountable =
-        row.is_countable === true || String(row.is_countable).toLowerCase() === 'true';
+        row.is_countable === true || String(row.is_countable).trim().toLowerCase() === 'true';
       const isActive =
         row.is_active === '' || row.is_active === undefined
           ? true
-          : row.is_active === true || String(row.is_active).toLowerCase() === 'true';
+          : row.is_active === true || String(row.is_active).trim().toLowerCase() === 'true';
 
       // Parse dates
       const companyJoinDate = row.company_join_date ? parseDDMMYYYY(String(row.company_join_date)) : null;

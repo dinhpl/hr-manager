@@ -302,51 +302,12 @@ export async function restoreBalance(
 // ── Export / Import leave balances ───────────────────────────────────────
 import * as XLSX from 'xlsx';
 
-// One row per user — each leave_balances row is treated as the user's single balance record.
-const BALANCE_EXPORT_COLUMNS = [
-  'id',
-  'employee_code',
-  'full_name',
-  'department',
-  'year',
-  'annual_days',
-  'seniority_days',
-  'carry_over_days',
-  'used_carry_over_days',
-  'used_days',
-  'comp_off_days',
-  'used_comp_off_days',
-  'wfh_days',
-];
-
-export async function exportLeaveBalancesExcel(year?: number): Promise<Buffer> {
-  const targetYear = year ?? new Date().getFullYear();
-  const balances = await getAllBalances(targetYear);
-
-  const rows = balances.map((balance) => ({
-    id: String(balance.id),
-    employee_code: balance.user.employeeCode ?? '',
-    full_name: balance.user.fullName,
-    department: balance.user.department ?? '',
-    year: balance.year,
-    annual_days: Number(balance.annualDays),
-    seniority_days: Number(balance.seniorityDays),
-    carry_over_days: Number(balance.carryOverDays),
-    used_carry_over_days: Number(balance.usedCarryOverDays ?? 0),
-    used_days: Number(balance.usedDays),
-    comp_off_days: Number(balance.compOffDays),
-    used_comp_off_days: Number(balance.usedCompOffDays),
-    wfh_days: Number(balance.wfhDays),
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(rows, { header: BALANCE_EXPORT_COLUMNS });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'LeaveBalances');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
-}
-
 type BalanceImportRow = {
   id?: string | number;
+  employee_code?: string;
+  full_name?: string;
+  department?: string;
+  year?: string | number;
   annual_days?: string | number;
   seniority_days?: string | number;
   carry_over_days?: string | number;
@@ -357,13 +318,110 @@ type BalanceImportRow = {
   wfh_days?: string | number;
 };
 
+type BalanceColumnDefinition = {
+  key: keyof BalanceImportRow;
+  label: string;
+  aliases: string[];
+};
+
+const BALANCE_COLUMNS: BalanceColumnDefinition[] = [
+  { key: 'id', label: 'ID bản ghi', aliases: ['id', 'record id'] },
+  { key: 'employee_code', label: 'Mã nhân viên', aliases: ['employee_code', 'employee code'] },
+  { key: 'full_name', label: 'Họ và tên', aliases: ['full_name', 'full name', 'họ tên'] },
+  { key: 'department', label: 'Phòng ban', aliases: ['department'] },
+  { key: 'year', label: 'Năm', aliases: ['year'] },
+  { key: 'annual_days', label: 'Phép năm', aliases: ['annual_days', 'annual days'] },
+  { key: 'seniority_days', label: 'Thâm niên', aliases: ['seniority_days', 'seniority days'] },
+  {
+    key: 'carry_over_days',
+    label: 'Phép chuyển năm trước',
+    aliases: ['carry_over_days', 'carry over days'],
+  },
+  {
+    key: 'used_carry_over_days',
+    label: 'Đã dùng phép chuyển',
+    aliases: ['used_carry_over_days', 'used carry over days'],
+  },
+  { key: 'used_days', label: 'Đã dùng phép năm', aliases: ['used_days', 'used days'] },
+  { key: 'comp_off_days', label: 'Bù công', aliases: ['comp_off_days', 'comp off days'] },
+  {
+    key: 'used_comp_off_days',
+    label: 'Đã dùng bù công',
+    aliases: ['used_comp_off_days', 'used comp off days'],
+  },
+  { key: 'wfh_days', label: 'WFH', aliases: ['wfh_days', 'wfh days'] },
+];
+
+const BALANCE_EXPORT_HEADERS = BALANCE_COLUMNS.map((column) => column.label);
+
+function normalizeImportHeader(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function remapSheetRows<T extends Record<string, unknown>>(
+  rows: Record<string, unknown>[],
+  columns: Array<{ key: keyof T; label: string; aliases: string[] }>,
+) {
+  const aliasMap = new Map<string, keyof T>();
+
+  columns.forEach((column) => {
+    [column.label, ...column.aliases].forEach((alias) => {
+      aliasMap.set(normalizeImportHeader(alias), column.key);
+    });
+  });
+
+  return rows.map((row) => {
+    const mapped = {} as T;
+
+    Object.entries(row).forEach(([rawKey, value]) => {
+      const targetKey = aliasMap.get(normalizeImportHeader(rawKey));
+      if (targetKey) {
+        mapped[targetKey] = value as T[keyof T];
+      }
+    });
+
+    return mapped;
+  });
+}
+
+export async function exportLeaveBalancesExcel(year?: number): Promise<Buffer> {
+  const targetYear = year ?? new Date().getFullYear();
+  const balances = await getAllBalances(targetYear);
+
+  const rows = balances.map((balance) => ({
+    'ID bản ghi': String(balance.id),
+    'Mã nhân viên': balance.user.employeeCode ?? '',
+    'Họ và tên': balance.user.fullName,
+    'Phòng ban': balance.user.department ?? '',
+    Năm: balance.year,
+    'Phép năm': Number(balance.annualDays),
+    'Thâm niên': Number(balance.seniorityDays),
+    'Phép chuyển năm trước': Number(balance.carryOverDays),
+    'Đã dùng phép chuyển': Number(balance.usedCarryOverDays ?? 0),
+    'Đã dùng phép năm': Number(balance.usedDays),
+    'Bù công': Number(balance.compOffDays),
+    'Đã dùng bù công': Number(balance.usedCompOffDays),
+    WFH: Number(balance.wfhDays),
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows, { header: BALANCE_EXPORT_HEADERS });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'LeaveBalances');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
 export async function importLeaveBalancesExcel(fileBuffer: Buffer): Promise<{
   updated: number;
   errors: { row: number; message: string }[];
 }> {
   const wb = XLSX.read(fileBuffer, { type: 'buffer', cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rawRows = XLSX.utils.sheet_to_json<BalanceImportRow>(ws, { defval: '' });
+  const sourceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+  const rawRows = remapSheetRows<BalanceImportRow>(sourceRows, BALANCE_COLUMNS);
 
   let updated = 0;
   const errors: { row: number; message: string }[] = [];
@@ -377,7 +435,7 @@ export async function importLeaveBalancesExcel(fileBuffer: Buffer): Promise<{
 
     try {
       if (!row.id) {
-        errors.push({ row: rowNum, message: 'id is required' });
+        errors.push({ row: rowNum, message: 'ID bản ghi là bắt buộc' });
         continue;
       }
 
