@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { Public_Sans } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
-const publicSans = Public_Sans({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-public-sans',
+  variable: '--font-inter',
   weight: ['400', '500', '600', '700'],
 });
 
@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className={`${publicSans.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased`}>
         {children}
         <Toaster richColors position="top-center" />
         <Analytics />

@@ -205,6 +205,40 @@ const STATUS_CONFIG: Record<EmployeeStatus, { label: string; badge: string }> = 
   },
 };
 
+const BALANCE_FORM_SECTIONS = [
+  {
+    title: 'Quỹ phép',
+    description: 'Các ngày được cấp hoặc cộng dồn.',
+    fields: [
+      { key: 'annualDays', label: 'Phép năm', hint: 'annualDays' },
+      { key: 'carryOverDays', label: 'Chuyển tiếp', hint: 'carryOverDays' },
+      { key: 'seniorityDays', label: 'Thâm niên', hint: 'seniorityDays' },
+      { key: 'compOffDays', label: 'Comp-Off tích lũy', hint: 'compOffDays' },
+      { key: 'wfhDays', label: 'WFH', hint: 'wfhDays' },
+    ],
+  },
+  {
+    title: 'Đã sử dụng',
+    description: 'Theo dõi phần đã trừ khỏi quỹ phép.',
+    fields: [
+      { key: 'usedCarryOverDays', label: 'Đã dùng carry-over', hint: 'usedCarryOverDays' },
+      { key: 'usedDays', label: 'Đã dùng phép', hint: 'usedDays' },
+      { key: 'usedCompOffDays', label: 'Đã dùng Comp-Off', hint: 'usedCompOffDays' },
+    ],
+  },
+] as const;
+
+function sanitizeBalanceInput(value: string) {
+  const normalized = value.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const [integerPart = '', ...decimalParts] = normalized.split('.');
+
+  if (decimalParts.length === 0) {
+    return integerPart;
+  }
+
+  return `${integerPart}.${decimalParts.join('')}`;
+}
+
 function buildUsernameFromEmail(email: string) {
   return (
     email
@@ -664,14 +698,16 @@ export default function EmployeesPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const result = await apiClient.post<{ created: number; updated: number; errors: { row: number; message: string }[] }>(
-        '/api/users/import',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      );
+      const result = await apiClient.post<{
+        created: number;
+        updated: number;
+        errors: { row: number; message: string }[];
+      }>('/api/users/import', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       const { created, updated, errors } = result.data;
       if (errors.length > 0) {
-        toast.warning(`Import xong: ${created} tạo mới, ${updated} cập nhật, ${errors.length} lỗi.`);
+        toast.warning(
+          `Import xong: ${created} tạo mới, ${updated} cập nhật, ${errors.length} lỗi.`,
+        );
         console.warn('Import errors:', errors);
       } else {
         toast.success(`Import thành công: ${created} tạo mới, ${updated} cập nhật.`);
@@ -736,7 +772,8 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleRecalculateLeave = async () => {    if (
+  const handleRecalculateLeave = async () => {
+    if (
       !window.confirm(
         `Tính toán lại phép năm ${new Date().getFullYear()} cho tất cả nhân viên?\n` +
           'Số ngày đã dùng (used_days) sẽ được giữ nguyên.',
@@ -1715,8 +1752,7 @@ export default function EmployeesPage() {
                           <td
                             className="px-3 py-2.5 text-center font-bold"
                             style={{
-                              color:
-                                alRemaining < 0 || coRemaining < 0 ? '#ef4444' : '#1DB87A',
+                              color: alRemaining < 0 || coRemaining < 0 ? '#ef4444' : '#1DB87A',
                             }}
                           >
                             {alRemaining}
@@ -1733,93 +1769,185 @@ export default function EmployeesPage() {
       )}
 
       {/* Edit balance modal */}
-      {editingBalance && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(14,71,78,0.45)' }}
-          onClick={() => setEditingBalance(null)}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
-            onClick={(e) => e.stopPropagation()}
+      <Dialog
+        open={Boolean(editingBalance)}
+        onOpenChange={(open) => !open && setEditingBalance(null)}
+      >
+        {editingBalance && (
+          <DialogContent
+            showCloseButton={false}
+            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-3xl"
           >
-            <div
-              className="flex items-center justify-between px-6 py-4 border-b"
-              style={{ borderColor: '#e2ede9' }}
-            >
-              <div>
-                <h2 className="font-bold text-base" style={{ color: '#203430' }}>
-                  Chỉnh sửa phép năm
-                </h2>
-                <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
-                  {editingBalance.user.fullName} · {editingBalance.year}
-                </p>
-              </div>
-              <button
-                onClick={() => setEditingBalance(null)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100"
-                style={{ color: '#6b7f78' }}
+            <DialogHeader className="sr-only">
+              <DialogTitle>Chỉnh sửa phép năm</DialogTitle>
+              <DialogDescription>
+                Cập nhật quỹ phép năm và phần đã sử dụng của nhân viên.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex max-h-[min(88vh,760px)] flex-col overflow-hidden rounded-3xl bg-white">
+              <div
+                className="flex items-start justify-between gap-4 border-b px-6 py-5"
+                style={{ borderColor: '#e2ede9' }}
               >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              {[
-                { key: 'annualDays', label: 'Phép năm (annualDays)' },
-                { key: 'carryOverDays', label: 'Chuyển tiếp từ năm trước (carryOverDays)' },
-                { key: 'seniorityDays', label: 'Thâm niên (seniorityDays)' },
-                { key: 'compOffDays', label: 'Comp-Off tích lũy (compOffDays)' },
-                { key: 'wfhDays', label: 'WFH (wfhDays)' },
-                { key: 'usedCarryOverDays', label: 'Đã dùng carry-over (usedCarryOverDays)' },
-                { key: 'usedDays', label: 'Đã dùng phép (usedDays)' },
-                { key: 'usedCompOffDays', label: 'Đã dùng Comp-Off (usedCompOffDays)' },
-              ].map(({ key, label }) => (
-                <div key={key}>
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
-                    {label}
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={balanceForm[key as keyof typeof balanceForm]}
-                    onChange={(e) => setBalanceForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <h2 className="text-lg font-bold" style={{ color: '#203430' }}>
+                      Chỉnh sửa phép năm
+                    </h2>
+                    <p className="mt-1 text-sm" style={{ color: '#6b7f78' }}>
+                      {editingBalance.user.fullName} · {editingBalance.year}
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-2xl px-4 py-3" style={{ background: '#f0fdf9' }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-[0.12em]"
+                        style={{ color: '#6b7f78' }}
+                      >
+                        Tổng quỹ
+                      </p>
+                      <p className="mt-1 text-lg font-bold" style={{ color: '#0E474E' }}>
+                        {(
+                          (parseFloat(balanceForm.annualDays) || 0) +
+                          (parseFloat(balanceForm.carryOverDays) || 0) +
+                          (parseFloat(balanceForm.seniorityDays) || 0) +
+                          (parseFloat(balanceForm.compOffDays) || 0) +
+                          (parseFloat(balanceForm.wfhDays) || 0)
+                        ).toFixed(1)}
+                        <span className="ml-1 text-sm font-medium">ngày</span>
+                      </p>
+                    </div>
+                    <div className="rounded-2xl px-4 py-3" style={{ background: '#fff7ed' }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-[0.12em]"
+                        style={{ color: '#b45309' }}
+                      >
+                        Đã dùng
+                      </p>
+                      <p className="mt-1 text-lg font-bold" style={{ color: '#92400e' }}>
+                        {(
+                          (parseFloat(balanceForm.usedCarryOverDays) || 0) +
+                          (parseFloat(balanceForm.usedDays) || 0) +
+                          (parseFloat(balanceForm.usedCompOffDays) || 0)
+                        ).toFixed(1)}
+                        <span className="ml-1 text-sm font-medium">ngày</span>
+                      </p>
+                    </div>
+                    <div className="rounded-2xl px-4 py-3" style={{ background: '#eff6ff' }}>
+                      <p
+                        className="text-xs font-semibold uppercase tracking-[0.12em]"
+                        style={{ color: '#1d4ed8' }}
+                      >
+                        Còn lại
+                      </p>
+                      <p className="mt-1 text-lg font-bold" style={{ color: '#1e3a8a' }}>
+                        {(
+                          (parseFloat(balanceForm.annualDays) || 0) +
+                          (parseFloat(balanceForm.carryOverDays) || 0) +
+                          (parseFloat(balanceForm.seniorityDays) || 0) +
+                          (parseFloat(balanceForm.compOffDays) || 0) +
+                          (parseFloat(balanceForm.wfhDays) || 0) -
+                          (parseFloat(balanceForm.usedCarryOverDays) || 0) -
+                          (parseFloat(balanceForm.usedDays) || 0) -
+                          (parseFloat(balanceForm.usedCompOffDays) || 0)
+                        ).toFixed(1)}
+                        <span className="ml-1 text-sm font-medium">ngày</span>
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ))}
-              <div className="rounded-lg p-3 text-xs" style={{ background: '#f0fdf9', color: '#6b7f78' }}>
-                <p>
-                  <strong style={{ color: '#203430' }}>Giá trị còn lại</strong> trên bảng sẽ được
-                  tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
-                </p>
+                <button
+                  onClick={() => setEditingBalance(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl hover:bg-gray-100"
+                  style={{ color: '#6b7f78' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-5">
+                <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                  {BALANCE_FORM_SECTIONS.map((section) => (
+                    <div
+                      key={section.title}
+                      className="rounded-2xl border p-4"
+                      style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
+                    >
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                          {section.title}
+                        </h3>
+                        <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
+                          {section.description}
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {section.fields.map(({ key, label, hint }) => (
+                          <div key={key} className="space-y-1.5">
+                            <label
+                              className="block text-xs font-semibold"
+                              style={{ color: '#6b7f78' }}
+                            >
+                              {label}
+                            </label>
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              pattern="[0-9]*[.,]?[0-9]*"
+                              value={balanceForm[key as keyof typeof balanceForm]}
+                              onChange={(e) =>
+                                setBalanceForm((prev) => ({
+                                  ...prev,
+                                  [key]: sanitizeBalanceInput(e.target.value),
+                                }))
+                              }
+                            />
+                            <p className="text-[11px]" style={{ color: '#94a3b8' }}>
+                              {hint}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div
+                  className="mt-4 rounded-2xl px-4 py-3 text-xs"
+                  style={{ background: '#f0fdf9', color: '#6b7f78' }}
+                >
+                  <p>
+                    <strong style={{ color: '#203430' }}>Giá trị còn lại</strong> trên bảng sẽ được
+                    tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
+                  </p>
+                </div>
+              </div>
+              <div
+                className="flex justify-end gap-2 border-t px-6 py-4"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setEditingBalance(null)}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+                  style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveBalance()}
+                  disabled={isSavingBalance}
+                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: '#1DB87A' }}
+                >
+                  <Save size={14} />
+                  {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
               </div>
             </div>
-            <div
-              className="flex justify-end gap-2 px-6 py-4 border-t"
-              style={{ borderColor: '#e2ede9' }}
-            >
-              <button
-                type="button"
-                onClick={() => setEditingBalance(null)}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:bg-gray-50"
-                style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSaveBalance()}
-                disabled={isSavingBalance}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: '#1DB87A' }}
-              >
-                <Save size={14} />
-                {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </DialogContent>
+        )}
+      </Dialog>
 
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent

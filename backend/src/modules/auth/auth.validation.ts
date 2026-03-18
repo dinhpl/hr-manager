@@ -11,6 +11,7 @@ export const updateProfileSchema = z.object({
   lastName: z.string().optional(),
   position: z.string().optional(),
   avatar: z.string().optional().nullable(),
+  hideBirthday: z.boolean().optional(),
 });
 
 export const changePasswordSchema = z.object({

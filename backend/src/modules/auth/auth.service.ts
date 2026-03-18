@@ -74,6 +74,8 @@ export async function getMe(userId: bigint) {
       position: true,
       avatar: true,
       companyJoinDate: true,
+      birthday: true,
+      hideBirthday: true,
       manager: { select: { id: true, fullName: true } },
     },
   });
@@ -108,6 +110,8 @@ export async function updateProfile(userId: bigint, data: UpdateProfileDto) {
       position: true,
       avatar: true,
       companyJoinDate: true,
+      birthday: true,
+      hideBirthday: true,
       manager: { select: { id: true, fullName: true } },
     },
   });
@@ -158,6 +162,8 @@ export async function uploadAvatar(userId: bigint, filename: string) {
       position: true,
       avatar: true,
       companyJoinDate: true,
+      birthday: true,
+      hideBirthday: true,
       manager: { select: { id: true, fullName: true } },
     },
   });

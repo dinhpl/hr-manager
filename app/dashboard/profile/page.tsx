@@ -19,6 +19,8 @@ interface UserProfile {
   position?: string;
   avatar?: string;
   companyJoinDate?: string;
+  birthday?: string;
+  hideBirthday?: boolean;
   manager?: { id: string; fullName: string } | null;
 }
 
@@ -37,7 +39,6 @@ const PRESET_AVATARS = [
   '/assets/avatars/toon_3.png',
   '/assets/avatars/toon_4.png',
   '/assets/avatars/toon_8.png',
-  '/assets/avatars/toon_9.png',
   '/assets/avatars/toon_10.png',
 ];
 
@@ -56,6 +57,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState('');
   const [position, setPosition] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState('');
+  const [hideBirthday, setHideBirthday] = useState(false);
 
   // Password form
   const [currentPassword, setCurrentPassword] = useState('');
@@ -74,6 +76,7 @@ export default function ProfilePage() {
       setFullName(data.fullName || '');
       setPosition(data.position || '');
       setSelectedAvatar(data.avatar || '');
+      setHideBirthday(data.hideBirthday ?? false);
     } catch {
       clearAuthSession();
       router.replace('/');
@@ -96,6 +99,7 @@ export default function ProfilePage() {
         fullName,
         position,
         avatar: selectedAvatar,
+        hideBirthday,
       });
       setUser(data);
       toast.success('Cập nhật thông tin thành công!');
@@ -343,6 +347,14 @@ export default function ProfilePage() {
                 </p>
               </div>
               <div>
+                <label className="text-xs text-muted-foreground">Ngày sinh</label>
+                <p className="font-medium" style={{ color: '#203430' }}>
+                  {user?.birthday
+                    ? new Date(user.birthday).toLocaleDateString('vi-VN')
+                    : '-'}
+                </p>
+              </div>
+              <div>
                 <label className="text-xs text-muted-foreground">Quản lý</label>
                 <p className="font-medium" style={{ color: '#203430' }}>
                   {user?.manager?.fullName || '-'}
@@ -378,6 +390,18 @@ export default function ProfilePage() {
                 style={{ borderColor: '#e2ede9' }}
                 placeholder="Nhập chức vụ"
               />
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="hideBirthday"
+                checked={!hideBirthday}
+                onChange={(e) => setHideBirthday(!e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 accent-[#1DB87A]"
+              />
+              <label htmlFor="hideBirthday" className="text-sm" style={{ color: '#203430' }}>
+                Hiển thị ngày sinh trên lịch dashboard
+              </label>
             </div>
           </div>
 

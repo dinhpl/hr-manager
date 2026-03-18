@@ -20,6 +20,72 @@ function getSeniorityDays(
   return Math.max(0, totalEntitlement - BASE_DAYS);
 }
 
+function getAnnualLeaveRules(leavePolicyRaw: unknown): AnnualLeaveRule[] {
+  return Array.isArray((leavePolicyRaw as Record<string, unknown>)?.annualLeaveRules)
+    ? ((leavePolicyRaw as Record<string, unknown>).annualLeaveRules as AnnualLeaveRule[])
+    : [];
+}
+
+function calculateAnnualLeaveBalance(
+  companyJoinDate: Date | null,
+  year: number,
+  annualLeaveRules: AnnualLeaveRule[],
+) {
+  if (!companyJoinDate) {
+    return { annualDays: 12, seniorityDays: 0 };
+  }
+
+  const joinYear = companyJoinDate.getFullYear();
+
+  if (joinYear > year) {
+    return { annualDays: 0, seniorityDays: 0 };
+  }
+
+  if (joinYear < year) {
+    return {
+      annualDays: 12,
+      seniorityDays: getSeniorityDays(companyJoinDate, year, annualLeaveRules),
+    };
+  }
+
+  const joinMonth = companyJoinDate.getMonth(); // 0=Jan
+  const monthsWorked = 12 - joinMonth;
+  return {
+    annualDays: Math.round((monthsWorked / 12) * 12 * 10) / 10,
+    seniorityDays: 0,
+  };
+}
+
+async function upsertAnnualLeaveBalanceForUser(
+  userId: bigint,
+  year: number,
+  companyJoinDate: Date | null,
+  options?: { overwriteExisting?: boolean },
+) {
+  const [leaveTypes, leavePolicyRaw] = await Promise.all([
+    prisma.leaveType.findMany({ where: { isActive: true } }),
+    getLeavePolicy(),
+  ]);
+
+  const alType = leaveTypes.find((lt) => lt.code === 'AL');
+  if (!alType) {
+    return null;
+  }
+
+  const annualLeaveRules = getAnnualLeaveRules(leavePolicyRaw);
+  const { annualDays, seniorityDays } = calculateAnnualLeaveBalance(
+    companyJoinDate,
+    year,
+    annualLeaveRules,
+  );
+
+  return prisma.leaveBalance.upsert({
+    where: { userId_leaveTypeId_year: { userId, leaveTypeId: alType.id, year } },
+    create: { userId, leaveTypeId: alType.id, year, annualDays, seniorityDays, usedDays: 0 },
+    update: options?.overwriteExisting ? { annualDays, seniorityDays } : {},
+  });
+}
+
 // ── Recalculate annual leave (AL) balances for ALL active users ──────────
 // Rules:
 //  • Only AL gets pro-rata calculation based on company_join_date
@@ -36,54 +102,38 @@ export async function recalculateAllBalances(year: number) {
     getLeavePolicy(),
   ]);
 
-  const annualLeaveRules: AnnualLeaveRule[] =
-    Array.isArray((leavePolicyRaw as Record<string, unknown>)?.annualLeaveRules)
-      ? ((leavePolicyRaw as Record<string, unknown>).annualLeaveRules as AnnualLeaveRule[])
-      : [];
+  const annualLeaveRules = getAnnualLeaveRules(leavePolicyRaw);
 
   const alType = leaveTypes.find((lt) => lt.code === 'AL');
 
   // Only process AL (exclude CO — managed via overtime comp-off flow)
   const targetLeaveTypes = leaveTypes.filter((lt) => lt.code === 'AL');
 
-  const results: Array<{ userId: string; fullName: string; annualDays: number; seniorityDays: number }> = [];
+  const results: Array<{
+    userId: string;
+    fullName: string;
+    annualDays: number;
+    seniorityDays: number;
+  }> = [];
 
   for (const user of users) {
     for (const lt of targetLeaveTypes) {
-      let annualDays: number;
-      let seniorityDays: number;
-
-      if (lt.code === 'AL') {
-        const joinDate = user.companyJoinDate ? new Date(user.companyJoinDate) : null;
-        const joinYear = joinDate?.getFullYear();
-
-        // Pro-rata calculation for annual leave
-        if (!joinDate) {
-          annualDays = 12;
-          seniorityDays = 0;
-        } else if (joinYear! > year) {
-          // Not yet joined in target year → 0 days
-          annualDays = 0;
-          seniorityDays = 0;
-        } else if (joinYear! < year) {
-          // Joined before target year → full 12 days + seniority bonus
-          annualDays = 12;
-          seniorityDays = getSeniorityDays(joinDate, year, annualLeaveRules);
-        } else {
-          // Joined during target year → pro-rata by month, no seniority bonus (< 1 year)
-          const joinMonth = joinDate.getMonth(); // 0=Jan
-          const monthsWorked = 12 - joinMonth;
-          annualDays = Math.round((monthsWorked / 12) * 12 * 10) / 10;
-          seniorityDays = 0;
-        }
-      } else {
-        annualDays = 0;
-        seniorityDays = 0;
-      }
+      const joinDate = user.companyJoinDate ? new Date(user.companyJoinDate) : null;
+      const { annualDays, seniorityDays } =
+        lt.code === 'AL'
+          ? calculateAnnualLeaveBalance(joinDate, year, annualLeaveRules)
+          : { annualDays: 0, seniorityDays: 0 };
 
       await prisma.leaveBalance.upsert({
         where: { userId_leaveTypeId_year: { userId: user.id, leaveTypeId: lt.id, year } },
-        create: { userId: user.id, leaveTypeId: lt.id, year, annualDays, seniorityDays, usedDays: 0 },
+        create: {
+          userId: user.id,
+          leaveTypeId: lt.id,
+          year,
+          annualDays,
+          seniorityDays,
+          usedDays: 0,
+        },
         update: { annualDays, seniorityDays },
       });
     }
@@ -137,24 +187,38 @@ export async function getAllBalances(year?: number) {
 // Initialize balances for a user (upsert — safe to re-run)
 // Only creates AL balance (CO is excluded — managed via overtime comp-off flow)
 export async function initializeBalancesForUser(userId: bigint, year: number) {
-  const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyJoinDate: true },
+  });
 
-  const targetLeaveTypes = leaveTypes.filter((lt) => lt.code === 'AL');
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { status: 404 });
+  }
 
-  await Promise.all(
-    targetLeaveTypes.map((lt) =>
-      prisma.leaveBalance.upsert({
-        where: { userId_leaveTypeId_year: { userId, leaveTypeId: lt.id, year } },
-        create: {
-          userId,
-          leaveTypeId: lt.id,
-          year,
-          annualDays: 12,
-          usedDays: 0,
-        },
-        update: {}, // don't overwrite existing balance
-      }),
-    ),
+  await upsertAnnualLeaveBalanceForUser(
+    userId,
+    year,
+    user.companyJoinDate ? new Date(user.companyJoinDate) : null,
+  );
+}
+
+export async function syncCurrentYearAnnualLeaveBalanceForUser(userId: bigint) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyJoinDate: true },
+  });
+
+  if (!user) {
+    throw Object.assign(new Error('User not found'), { status: 404 });
+  }
+
+  const year = new Date().getFullYear();
+  await upsertAnnualLeaveBalanceForUser(
+    userId,
+    year,
+    user.companyJoinDate ? new Date(user.companyJoinDate) : null,
+    { overwriteExisting: true },
   );
 }
 
@@ -453,10 +517,12 @@ export async function importLeaveBalancesExcel(fileBuffer: Buffer): Promise<{
       if (annualDays !== undefined && !isNaN(annualDays)) data.annualDays = annualDays;
       if (seniorityDays !== undefined && !isNaN(seniorityDays)) data.seniorityDays = seniorityDays;
       if (carryOverDays !== undefined && !isNaN(carryOverDays)) data.carryOverDays = carryOverDays;
-      if (usedCarryOverDays !== undefined && !isNaN(usedCarryOverDays)) data.usedCarryOverDays = usedCarryOverDays;
+      if (usedCarryOverDays !== undefined && !isNaN(usedCarryOverDays))
+        data.usedCarryOverDays = usedCarryOverDays;
       if (usedDays !== undefined && !isNaN(usedDays)) data.usedDays = usedDays;
       if (compOffDays !== undefined && !isNaN(compOffDays)) data.compOffDays = compOffDays;
-      if (usedCompOffDays !== undefined && !isNaN(usedCompOffDays)) data.usedCompOffDays = usedCompOffDays;
+      if (usedCompOffDays !== undefined && !isNaN(usedCompOffDays))
+        data.usedCompOffDays = usedCompOffDays;
       if (wfhDays !== undefined && !isNaN(wfhDays)) data.wfhDays = wfhDays;
 
       if (Object.keys(data).length > 0) {

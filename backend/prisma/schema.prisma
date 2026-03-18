@@ -66,6 +66,7 @@ model User {
   isCountable     Boolean   @default(true) @map("is_countable")
   companyJoinDate DateTime? @map("company_join_date")
   birthday        DateTime? @map("birthday")
+  hideBirthday    Boolean   @default(false) @map("hide_birthday")
   gender          String?   @db.VarChar(10)
   phone           String?   @db.VarChar(20)
   managerId       BigInt?   @map("manager_id")

@@ -4,6 +4,7 @@ import { hashPassword } from '../../utils/hash';
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
 import { GetUsersQuery, CreateUserDto, UpdateUserDto } from './users.validation';
 import * as XLSX from 'xlsx';
+import { syncCurrentYearAnnualLeaveBalanceForUser } from '../leave-balances/leave-balances.service';
 
 type AuthUser = {
   id: bigint;
@@ -164,6 +165,8 @@ export async function createUser(data: CreateUserDto) {
     },
     select: USER_SELECT,
   });
+
+  await syncCurrentYearAnnualLeaveBalanceForUser(user.id);
   return user;
 }
 
@@ -239,6 +242,11 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
     },
     select: USER_SELECT,
   });
+
+  if (companyJoinDate !== undefined) {
+    await syncCurrentYearAnnualLeaveBalanceForUser(user.id);
+  }
+
   return user;
 }
 
@@ -250,9 +258,16 @@ export async function deleteUser(id: bigint) {
 }
 
 // Birthday map for a given month: "YYYY-MM-DD" → list of employees with birthday that day
-export async function getUsersBirthdaysByMonth(year: number, month: number) {
+export async function getUsersBirthdaysByMonth(year: number, month: number, callerRole: string = '') {
+  const isHrOrAdmin = callerRole === 'HR';
+
+  const whereClause: Record<string, unknown> = { birthday: { not: null }, isActive: true };
+  if (!isHrOrAdmin) {
+    whereClause.hideBirthday = false;
+  }
+
   const users = await prisma.user.findMany({
-    where: { birthday: { not: null }, isActive: true },
+    where: whereClause,
     select: {
       id: true,
       fullName: true,
@@ -262,7 +277,10 @@ export async function getUsersBirthdaysByMonth(year: number, month: number) {
     },
   });
 
-  const result: Record<string, { id: string; name: string; department: string | null; position: string | null }[]> = {};
+  const result: Record<
+    string,
+    { id: string; name: string; department: string | null; position: string | null }[]
+  > = {};
 
   for (const user of users) {
     const bday = user.birthday!;
@@ -479,7 +497,10 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
 }> {
   const wb = XLSX.read(fileBuffer, { type: 'buffer', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const sourceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '', raw: false });
+  const sourceRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, {
+    defval: '',
+    raw: false,
+  });
   const rawRows = remapSheetRows<UserImportRow>(sourceRows, USER_COLUMNS);
 
   // Pre-load all users for manager username → id mapping
@@ -519,7 +540,9 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
           : row.is_active === true || String(row.is_active).trim().toLowerCase() === 'true';
 
       // Parse dates
-      const companyJoinDate = row.company_join_date ? parseDDMMYYYY(String(row.company_join_date)) : null;
+      const companyJoinDate = row.company_join_date
+        ? parseDDMMYYYY(String(row.company_join_date))
+        : null;
       const birthday = row.birthday ? parseDDMMYYYY(String(row.birthday)) : null;
 
       // Validate gender
@@ -553,10 +576,7 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
           data: {
             ...payload,
             ...(managerId !== undefined && {
-              manager:
-                managerId === null
-                  ? { disconnect: true }
-                  : { connect: { id: managerId } },
+              manager: managerId === null ? { disconnect: true } : { connect: { id: managerId } },
             }),
           },
         });
