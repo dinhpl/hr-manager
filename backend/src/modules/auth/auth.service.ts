@@ -4,7 +4,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../uti
 import type { UpdateProfileDto, ChangePasswordDto } from './auth.validation';
 
 // Login: find user by username or email, verify password, return tokens + user info
-export async function login(username: string, password: string) {
+export async function login(username: string, password: string, rememberMe = false) {
   const user = await prisma.user.findFirst({
     where: {
       OR: [{ username }, { email: username }],
@@ -24,11 +24,14 @@ export async function login(username: string, password: string) {
     username: user.username,
   };
   const accessToken = signAccessToken(payload);
-  const refreshToken = signRefreshToken(payload);
+  // Default 30 days, remember me = 150 days (5 months)
+  const refreshExpiresIn = rememberMe ? '150d' : '30d';
+  const refreshToken = signRefreshToken(payload, refreshExpiresIn);
 
   return {
     accessToken,
     refreshToken,
+    rememberMe,
     user: {
       id: user.id.toString(),
       username: user.username,

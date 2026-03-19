@@ -69,17 +69,16 @@ export function getStoredUser<T>(): T | null {
   }
 }
 
-export function setAuthSession<T>(payload: { accessToken: string; user: T }, rememberMe: boolean) {
+export function setAuthSession<T>(payload: { accessToken: string; user: T }, _rememberMe: boolean) {
   if (!isBrowser()) return;
 
-  const activeStorage = rememberMe ? localStorage : sessionStorage;
-  const inactiveStorage = rememberMe ? sessionStorage : localStorage;
+  // Always persist in localStorage so closing the tab doesn't lose the session.
+  // Session lifetime is controlled by the refresh token cookie (30d default, 150d with remember me).
+  sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+  sessionStorage.removeItem(USER_INFO_KEY);
 
-  inactiveStorage.removeItem(ACCESS_TOKEN_KEY);
-  inactiveStorage.removeItem(USER_INFO_KEY);
-
-  activeStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken);
-  activeStorage.setItem(USER_INFO_KEY, JSON.stringify(payload.user));
+  localStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken);
+  localStorage.setItem(USER_INFO_KEY, JSON.stringify(payload.user));
 }
 
 export function updateStoredToken(token: string) {

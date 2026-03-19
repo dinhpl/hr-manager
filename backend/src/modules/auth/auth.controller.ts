@@ -3,20 +3,25 @@ import * as authService from './auth.service';
 import { loginSchema, updateProfileSchema, changePasswordSchema } from './auth.validation';
 import { sendSuccess } from '../../utils/response';
 
-const REFRESH_TOKEN_COOKIE_OPTIONS = {
+const REFRESH_COOKIE_BASE = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+const FIVE_MONTHS_MS = 150 * 24 * 60 * 60 * 1000;
 
 export async function loginController(req: Request, res: Response, next: NextFunction) {
   try {
-    const { username, password } = loginSchema.parse(req.body);
-    const result = await authService.login(username, password);
+    const { username, password, rememberMe } = loginSchema.parse(req.body);
+    const result = await authService.login(username, password, rememberMe);
 
-    // Store refresh token in httpOnly cookie — not accessible from JS
-    res.cookie('refreshToken', result.refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
+    const cookieMaxAge = rememberMe ? FIVE_MONTHS_MS : THIRTY_DAYS_MS;
+    res.cookie('refreshToken', result.refreshToken, {
+      ...REFRESH_COOKIE_BASE,
+      maxAge: cookieMaxAge,
+    });
 
     sendSuccess(res, { accessToken: result.accessToken, user: result.user });
   } catch (err) {
