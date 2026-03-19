@@ -9,7 +9,7 @@ export const leaveBalancesRouter: IRouter = Router();
 leaveBalancesRouter.use(authMiddleware);
 
 leaveBalancesRouter.get('/', ctrl.getMyBalances); // own balance
-leaveBalancesRouter.get('/all', requireRoles('HR', 'ADMIN'), ctrl.getAllBalances); // all users' balances
+leaveBalancesRouter.get('/all', ctrl.getAllBalances); // all users' balances
 leaveBalancesRouter.get('/export', requireRoles('HR', 'ADMIN'), ctrl.exportLeaveBalances);
 leaveBalancesRouter.post(
   '/import',

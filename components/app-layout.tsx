@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell,
   Check,
+  CalendarDays,
   LayoutDashboard,
   History,
   CheckCircle2,
@@ -64,6 +65,12 @@ const NAV_ITEMS = [
     label: 'Quản lý nhân viên',
     icon: Users,
     key: 'employees',
+  },
+  {
+    href: '/dashboard/leave-balances',
+    label: 'Quản lý phép năm',
+    icon: CalendarDays,
+    key: 'leave-balances',
   },
   {
     href: '/dashboard/attendance',
