@@ -29,9 +29,7 @@ import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import {
   formatDateTimeVN,
   formatDateVN,
-  getDateTimeValue,
   numberValue,
-  parseApiDateTime,
   toFrontendRole,
 } from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
@@ -275,6 +273,7 @@ function toDetailData(request: DashboardLeaveRequest): LeaveDetailData {
     handover: request.handoverPerson?.fullName || undefined,
     approver: request.approver?.fullName || undefined,
     approvedAt: request.approvedAt ? formatDateTimeVN(request.approvedAt) : undefined,
+    approvedNote: request.approvedNote || undefined,
     employeeName: request.user?.fullName || undefined,
   };
 }
@@ -652,20 +651,6 @@ function EmployeeDashboard({
     [currentMonth, currentYear],
   );
 
-  const nextUpcoming = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return [...recentRequests]
-      .filter((request) => {
-        const status = normalizeStatus(request.status);
-        const fromDate = parseApiDateTime(request.fromDate);
-        if (!fromDate) return false;
-        return fromDate >= today && status !== 'rejected' && status !== 'cancelled';
-      })
-      .sort((left, right) => getDateTimeValue(left.fromDate) - getDateTimeValue(right.fromDate))[0];
-  }, [recentRequests]);
-
   return (
     <div className="space-y-5">
       <LeaveBalanceCards leaveBalance={leaveBalance} resetCarryOverDate={resetCarryOverDate} />
@@ -748,159 +733,85 @@ function EmployeeDashboard({
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
             style={{ border: '1px solid #e2ede9' }}
           >
-            <h3 className="mb-4 text-sm font-bold" style={{ color: '#203430' }}>
-              Nghỉ kế tiếp
-            </h3>
-            {nextUpcoming ? (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold" style={{ color: '#203430' }}>
-                  {nextUpcoming.leaveType?.name || nextUpcoming.leaveType?.code || 'Nghỉ phép'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Từ: {formatDateVN(nextUpcoming.fromDate)}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Đến: {formatDateVN(nextUpcoming.toDate)}
-                </p>
-                <span
-                  className="inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                  style={{
-                    background: STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].bg,
-                    color: STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].color,
-                  }}
-                >
-                  {STATUS_CONFIG[normalizeStatus(nextUpcoming.status)].label}
-                </span>
-              </div>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold" style={{ color: '#203430' }}>
+                Hoạt động gần đây
+              </h3>
+              <Link
+                href="/dashboard/leave-history"
+                className="text-xs font-semibold hover:underline"
+                style={{ color: '#1DB87A' }}
+              >
+                Xem tất cả
+              </Link>
+            </div>
+            {recentRequests.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Chưa có hoạt động nào.</p>
             ) : (
-              <p className="text-sm text-muted-foreground">Chưa có lịch nghỉ sắp tới</p>
+              <div className="relative space-y-0">
+                {recentRequests.slice(0, 6).map((request, idx) => {
+                  const statusKey = normalizeStatus(request.status);
+                  const status = STATUS_CONFIG[statusKey];
+                  const isLast = idx === Math.min(recentRequests.length, 6) - 1;
+                  const userName = request.user?.fullName?.trim() || request.user?.username?.trim() || '';
+                  const avatarSrc = getAvatarUrl(request.user?.avatar);
+                  return (
+                    <div
+                      key={request.id}
+                      className="relative flex gap-3 cursor-pointer group"
+                      onClick={() => onOpenDetail(request)}
+                    >
+                      {/* Timeline line + dot */}
+                      <div className="flex flex-col items-center">
+                        <div
+                          className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white"
+                          style={{ background: status.color }}
+                        />
+                        {!isLast && (
+                          <div className="w-px flex-1 min-h-[32px]" style={{ background: '#e2ede9' }} />
+                        )}
+                      </div>
+                      {/* Content */}
+                      <div className={`pb-4 min-w-0 flex-1 ${isLast ? 'pb-0' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          {avatarSrc ? (
+                            <img src={avatarSrc} alt={userName} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                          ) : userName ? (
+                            <div
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+                              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                            >
+                              {getInitials(userName)}
+                            </div>
+                          ) : null}
+                          <span className="text-xs font-semibold truncate" style={{ color: '#203430' }}>
+                            {userName || 'Nhân viên'}
+                          </span>
+                          <span
+                            className="ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                            style={{ background: status.bg, color: status.color }}
+                          >
+                            {status.label}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-medium truncate" style={{ color: '#203430' }}>
+                            {request.leaveType?.name || request.leaveType?.code || 'Nghỉ phép'}
+                          </span>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {numberValue(request.totalDays)} ngày
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {formatDateVN(request.fromDate)} — {formatDateVN(request.toDate)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
-        </div>
-      </div>
-
-      <div
-        className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
-        style={{ border: '1px solid #e2ede9' }}
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-bold" style={{ color: '#203430' }}>
-            Yêu cầu gần đây
-          </h2>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px]">
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2ede9' }}>
-                {[
-                  'ID',
-                  'Nhân viên',
-                  'Loại nghỉ',
-                  'Từ ngày',
-                  'Đến ngày',
-                  'Số ngày',
-                  'Người duyệt',
-                  'Trạng thái',
-                  'Thao tác',
-                ].map((header) => (
-                  <th key={header} className={getRecentRequestHeaderClass(header)}>
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentRequests.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    Chưa có yêu cầu gần đây.
-                  </td>
-                </tr>
-              ) : (
-                recentRequests.map((request) => {
-                  const status = STATUS_CONFIG[normalizeStatus(request.status)];
-                  const employeeName = getDisplayName(request.user);
-                  const avatarUrl = getAvatarUrl(request.user?.avatar);
-                  return (
-                    <tr
-                      key={request.id}
-                      className="transition-colors hover:bg-[#f7f7f7]"
-                      style={{ borderBottom: '1px solid #f0f4f2' }}
-                    >
-                      <td className="px-3 py-3 text-sm font-semibold" style={{ color: '#203430' }}>
-                        #{request.id}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={employeeName}
-                              className="h-9 w-9 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div
-                              className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white"
-                              style={{
-                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
-                              }}
-                            >
-                              {getInitials(employeeName)}
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <p
-                              className="truncate text-sm font-semibold"
-                              style={{ color: '#203430' }}
-                            >
-                              {employeeName}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: '#203430' }}>
-                        {request.leaveType?.code || '-'}
-                        {request.leaveType?.name ? ` - ${request.leaveType.name}` : ''}
-                      </td>
-                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
-                        {formatDateVN(request.fromDate)}
-                      </td>
-                      <td className="px-3 py-3 text-center text-sm text-muted-foreground">
-                        {formatDateVN(request.toDate)}
-                      </td>
-                      <td
-                        className="px-3 py-3 text-center text-sm font-medium"
-                        style={{ color: '#203430' }}
-                      >
-                        {numberValue(request.totalDays)}
-                      </td>
-                      <td className="px-3 py-3 text-sm" style={{ color: '#6b7f78' }}>
-                        {request.approver?.fullName || '-'}
-                      </td>
-                      <td className="px-3 py-3">
-                        <span
-                          className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                          style={{ background: status.bg, color: status.color }}
-                        >
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3">
-                        <button
-                          onClick={() => onOpenDetail(request)}
-                          className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90"
-                          style={{ background: '#1DB87A' }}
-                        >
-                          <Eye size={13} /> Xem
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
 

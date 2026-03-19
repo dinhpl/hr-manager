@@ -15,9 +15,9 @@ import {
   Table2,
   Menu,
   X,
-  CalendarDays,
   ChevronDown,
 } from 'lucide-react';
+import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
 import { useNotifications } from '@/hooks/use-notifications';
 import { getRoleLabel, toFrontendRole } from '@/lib/hr-utils';
@@ -166,20 +166,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           className="flex items-center gap-3 px-5 py-5"
           style={{ borderBottom: '1px solid #e2ede9' }}
         >
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: '#1DB87A' }}
-          >
-            <CalendarDays size={16} className="text-white" />
-          </div>
-          <div>
-            <span className="font-bold text-sm leading-none" style={{ color: '#203430' }}>
-              HR
-            </span>
-            <span className="block text-xs font-normal" style={{ color: '#6b7f78' }}>
-              Leave Management
-            </span>
-          </div>
+          <BrandLogo
+            size={42}
+            title="Leave Management"
+            subtitle="HR workspace"
+            imageClassName="p-1.5"
+            titleClassName="text-sm leading-none text-[#203430]"
+            subtitleClassName="mt-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7f78]"
+            wrapperClassName="min-w-0 flex-1"
+          />
           <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X size={18} className="text-muted-foreground" />
           </button>

@@ -17,6 +17,7 @@ export interface LeaveDetailData {
   approver?: string;
   approverRole?: string;
   approvedAt?: string;
+  approvedNote?: string;
   /** Shown when viewing from the approval context */
   employeeName?: string;
   employeeCode?: string;
@@ -272,23 +273,42 @@ export default function LeaveDetailModal({ data, onClose, onEdit }: LeaveDetailM
                   Thời gian: {data.approvedAt}
                 </p>
               )}
+              {data.approvedNote && (
+                <p className="text-xs mt-1 italic" style={{ color: '#6b7f78' }}>
+                  Ghi chú: {data.approvedNote}
+                </p>
+              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t" style={{ borderColor: '#e2ede9' }}>
-          {onEdit ? (
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
-              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
-            >
-              <Pencil size={14} /> Chỉnh sửa
-            </button>
-          ) : (
-            <div />
-          )}
+          <div className="flex items-center gap-2">
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+              >
+                <Pencil size={14} /> Chỉnh sửa
+              </button>
+            )}
+            {data.id && (
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/dashboard/leave-detail/${data.id}`;
+                  navigator.clipboard.writeText(url);
+                  const btn = document.activeElement as HTMLButtonElement;
+                  if (btn) { btn.textContent = '✓ Đã sao chép'; setTimeout(() => { btn.textContent = '🔗 Copy link'; }, 1500); }
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border transition-colors hover:bg-gray-50"
+                style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+              >
+                🔗 Copy link
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="px-5 py-2 rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50 border"

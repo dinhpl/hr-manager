@@ -105,7 +105,9 @@ function requiresLeaveBalanceCheck(leaveTypeCode?: string | null) {
 function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery) {
   const and: Prisma.LeaveRequestWhereInput[] = [];
 
-  if (requestingUser.role === 'EMPLOYEE') {
+  if (query.scope === 'global') {
+    // Intentionally skip role-based scoping so the leave history screen can show the same dataset to all members.
+  } else if (requestingUser.role === 'EMPLOYEE') {
     and.push({ userId: requestingUser.id });
   } else if (requestingUser.role === 'MANAGER') {
     and.push({
@@ -135,13 +137,7 @@ function canViewRequest(
   },
   requestingUser: AuthUser,
 ) {
-  if (requestingUser.role === 'ADMIN' || requestingUser.role === 'HR') return true;
-  if (requestingUser.role === 'EMPLOYEE') return true;
-  return (
-    request.userId === requestingUser.id ||
-    request.approverId === requestingUser.id ||
-    request.user.managerId === requestingUser.id
-  );
+  return Boolean(requestingUser?.id);
 }
 
 function sanitizeLeaveRequestForViewer<
@@ -151,8 +147,6 @@ function sanitizeLeaveRequestForViewer<
     reason?: string | null;
   },
 >(request: T, requestingUser: AuthUser) {
-  if (requestingUser.role !== 'EMPLOYEE') return request;
-
   const ownerId = request.userId ?? request.user?.id;
   if (ownerId === requestingUser.id) return request;
 
@@ -380,16 +374,8 @@ async function validateLeaveRequestRules(params: {
     );
   }
 
-  const requiredDocumentTypes = approvalFlow.requireDocumentTypes ?? [];
-  if (
-    requiredDocumentTypes.includes(leaveType.code) &&
-    !params.attachmentUrl &&
-    !params.existingAttachmentUrl
-  ) {
-    throw Object.assign(new Error(`Attachment is required for leave type ${leaveType.code}.`), {
-      status: 400,
-    });
-  }
+  // Attachment requirement removed — file upload is always optional
+  // const requiredDocumentTypes = approvalFlow.requireDocumentTypes ?? [];
 
   await assertNoOverlap(params.userId, params.fromDate, params.toDate, params.excludeRequestId);
 

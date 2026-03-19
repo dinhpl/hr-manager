@@ -19,6 +19,7 @@ export const createLeaveRequestSchema = z.object({
 export const updateLeaveRequestSchema = createLeaveRequestSchema;
 
 export const getLeaveRequestsQuerySchema = z.object({
+  scope: z.enum(['global']).optional(),
   status: z.nativeEnum(LeaveRequestStatus).optional(),
   userId: z.coerce.bigint().optional(),
   leaveTypeId: z.coerce.bigint().optional(),

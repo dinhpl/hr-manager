@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
 import LeaveRequestModal, { type LeaveRequestData } from '@/components/leave-request-modal';
-import ConfirmDialog from '@/components/confirm-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
@@ -33,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
 import {
   buildApiDateTime,
@@ -55,17 +55,6 @@ interface LeaveTypeOption {
   color?: string | null;
 }
 
-interface LeaveBalanceRecord {
-  id: string;
-  totalDays: number | string;
-  usedDays: number | string;
-  leaveType: {
-    code: string;
-    name: string;
-    color?: string | null;
-  };
-}
-
 interface LeaveRequestItem {
   id: string;
   status: string;
@@ -78,6 +67,7 @@ interface LeaveRequestItem {
   attachmentUrl?: string | null;
   createdAt: string;
   approvedAt?: string | null;
+  approvedNote?: string | null;
   user?: {
     id?: string;
     fullName?: string | null;
@@ -249,6 +239,7 @@ function toDetailData(item: LeaveRequestItem): LeaveDetailData {
     approver: item.approver?.fullName || undefined,
     approverRole: item.approver?.fullName ? 'Người duyệt' : undefined,
     approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : undefined,
+    approvedNote: item.approvedNote || undefined,
     fileAttachment: item.attachmentUrl || undefined,
   };
 }
@@ -280,7 +271,6 @@ export default function LeaveHistoryPage() {
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
   const [editingRequest, setEditingRequest] = useState<ReturnType<typeof toEditData> | null>(null);
   const [isLeaveRequestModalOpen, setIsLeaveRequestModalOpen] = useState(false);
-  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -295,7 +285,6 @@ export default function LeaveHistoryPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
-  const [balances, setBalances] = useState<LeaveBalanceRecord[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({
     total: 0,
     page: 1,
@@ -312,6 +301,7 @@ export default function LeaveHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const { openConfirm, confirmDialog } = useConfirmDialog();
 
   const pageSizeNum = Number(pageSize);
   const typeIdByCode = useMemo(
@@ -337,14 +327,11 @@ export default function LeaveHistoryPage() {
   useEffect(() => {
     let mounted = true;
 
-    Promise.all([
-      apiClient.get<LeaveTypeOption[]>('/api/leave-types'),
-      apiClient.get<LeaveBalanceRecord[]>('/api/leave-balances'),
-    ])
-      .then(([leaveTypeResponse, balanceResponse]) => {
+    apiClient
+      .get<LeaveTypeOption[]>('/api/leave-types')
+      .then((leaveTypeResponse) => {
         if (!mounted) return;
         setLeaveTypes(leaveTypeResponse.data || []);
-        setBalances(balanceResponse.data || []);
       })
       .catch((err) => {
         if (!mounted) return;
@@ -360,6 +347,7 @@ export default function LeaveHistoryPage() {
     (overrides?: Record<string, string | number | undefined>) => {
       const leaveTypeId = typeFilter ? typeIdByCode[typeFilter] : undefined;
       return buildQuery({
+        scope: 'global',
         page: currentPage,
         limit: pageSizeNum,
         status: statusFilter || undefined,
@@ -471,45 +459,6 @@ export default function LeaveHistoryPage() {
     [filteredRows, selectedIds],
   );
 
-  const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
-  const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
-  const grantedDays = numberValue(annualBalance?.totalDays);
-  const usedDays = numberValue(annualBalance?.usedDays);
-  const remainingDays = Math.max(grantedDays - usedDays, 0);
-  const compOffHours =
-    Math.max(numberValue(compOffBalance?.totalDays) - numberValue(compOffBalance?.usedDays), 0) * 8;
-
-  const typeBreakdown = useMemo(() => {
-    const totalDays = filteredRows.reduce((sum, row) => sum + row.days, 0);
-    const grouped = filteredRows.reduce<
-      Record<string, { days: number; label: string; color: string }>
-    >((accumulator, row) => {
-      if (!accumulator[row.type.code]) {
-        accumulator[row.type.code] = {
-          days: 0,
-          label: row.type.label,
-          color: row.type.color,
-        };
-      }
-
-      accumulator[row.type.code].days += row.days;
-      return accumulator;
-    }, {});
-
-    return {
-      totalDays,
-      items: Object.entries(grouped)
-        .map(([code, item]) => ({
-          code,
-          label: item.label,
-          days: item.days,
-          color: item.color,
-          pct: totalDays > 0 ? Math.round((item.days / totalDays) * 100) : 0,
-        }))
-        .sort((left, right) => right.days - left.days),
-    };
-  }, [filteredRows]);
-
   const handleView = async (id: string) => {
     setDetailLoadingId(id);
 
@@ -537,15 +486,12 @@ export default function LeaveHistoryPage() {
     }
   };
 
-  const executeCancel = async () => {
-    if (!confirmCancelId) return;
-
-    setActionLoadingId(confirmCancelId);
+  const executeCancel = async (requestId: string) => {
+    setActionLoadingId(requestId);
 
     try {
-      await apiClient.patch(`/api/leave-requests/${confirmCancelId}/cancel`, {});
-      setSelectedIds((previous) => previous.filter((id) => id !== confirmCancelId));
-      setConfirmCancelId(null);
+      await apiClient.patch(`/api/leave-requests/${requestId}/cancel`, {});
+      setSelectedIds((previous) => previous.filter((id) => id !== requestId));
       await loadRecords();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể hủy yêu cầu nghỉ phép.');
@@ -1138,7 +1084,16 @@ export default function LeaveHistoryPage() {
                         ) : null}
                         {row.status === 'pending' ? (
                           <button
-                            onClick={() => setConfirmCancelId(row.id)}
+                            onClick={() =>
+                              openConfirm({
+                                title: 'Xác nhận hủy yêu cầu',
+                                message:
+                                  'Bạn có chắc muốn hủy yêu cầu nghỉ phép này? Chỉ yêu cầu đang chờ duyệt mới có thể hủy.',
+                                danger: true,
+                                confirmLabel: 'Hủy yêu cầu',
+                                onConfirm: () => executeCancel(row.id),
+                              })
+                            }
                             disabled={actionLoadingId === row.id}
                             className="flex h-6 w-6 items-center justify-center rounded hover:bg-red-50 disabled:opacity-50"
                             title="Hủy"
@@ -1215,111 +1170,6 @@ export default function LeaveHistoryPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-          <h3 className="mb-4 text-sm font-semibold" style={{ color: '#203430' }}>
-            Tổng quan sử dụng phép năm {new Date().getFullYear()}
-          </h3>
-          <div className="mb-4 grid grid-cols-3 gap-4">
-            {[
-              { label: 'Được cấp', val: grantedDays, color: '#3b82f6' },
-              { label: 'Đã sử dụng', val: usedDays, color: '#ef4444' },
-              { label: 'Còn lại', val: remainingDays, color: '#1DB87A' },
-            ].map((item) => (
-              <div key={item.label} className="text-center">
-                <p className="text-2xl font-bold" style={{ color: item.color }}>
-                  {item.val}
-                </p>
-                <p className="mt-0.5 text-xs" style={{ color: '#6b7f78' }}>
-                  {item.label}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div
-            className="mb-2 flex h-3 overflow-hidden rounded-full"
-            style={{ background: '#f0f4f2' }}
-          >
-            <div
-              className="h-full"
-              style={{
-                width: grantedDays > 0 ? `${Math.min((usedDays / grantedDays) * 100, 100)}%` : '0%',
-                background: '#ef4444',
-              }}
-            />
-            <div
-              className="h-full"
-              style={{
-                width:
-                  grantedDays > 0
-                    ? `${Math.max(100 - Math.min((usedDays / grantedDays) * 100, 100), 0)}%`
-                    : '0%',
-                background: '#1DB87A',
-              }}
-            />
-          </div>
-          <div className="space-y-1 text-xs" style={{ color: '#6b7f78' }}>
-            <div className="flex justify-between">
-              <span>Phép chuyển từ năm trước:</span>
-              <span className="font-medium" style={{ color: '#203430' }}>
-                Chưa có API riêng
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Comp-off khả dụng:</span>
-              <span className="font-medium" style={{ color: '#1DB87A' }}>
-                {compOffHours} giờ
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-5" style={{ borderColor: '#e2ede9' }}>
-          <h3 className="mb-4 text-sm font-semibold" style={{ color: '#203430' }}>
-            Thống kê theo loại nghỉ của dữ liệu đang hiển thị
-          </h3>
-          <div className="space-y-3">
-            {typeBreakdown.items.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Chưa có dữ liệu để tổng hợp theo loại nghỉ.
-              </p>
-            ) : (
-              typeBreakdown.items.map((item) => (
-                <div key={item.code} className="flex items-center gap-3">
-                  <span
-                    className="w-10 shrink-0 rounded px-1 py-0.5 text-center text-xs font-bold text-white"
-                    style={{ background: item.color }}
-                  >
-                    {item.code}
-                  </span>
-                  <div className="flex-1">
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span style={{ color: '#203430' }}>{item.label}</span>
-                      <span className="font-semibold" style={{ color: '#203430' }}>
-                        {item.days} ngày
-                      </span>
-                    </div>
-                    <div
-                      className="h-1.5 overflow-hidden rounded-full"
-                      style={{ background: '#f0f4f2' }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${item.pct}%`, background: item.color }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <p className="mt-4 text-right text-xs font-medium" style={{ color: '#6b7f78' }}>
-            Tổng cộng: <strong style={{ color: '#203430' }}>{typeBreakdown.totalDays} ngày</strong>{' '}
-            trong dữ liệu đang hiển thị
-          </p>
-        </div>
-      </div>
-
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
 
       <LeaveRequestModal
@@ -1336,15 +1186,7 @@ export default function LeaveHistoryPage() {
         editData={editingRequest}
       />
 
-      <ConfirmDialog
-        open={!!confirmCancelId}
-        title="Xác nhận hủy yêu cầu"
-        message="Bạn có chắc muốn hủy yêu cầu nghỉ phép này? Chỉ yêu cầu đang chờ duyệt mới có thể hủy."
-        danger
-        confirmLabel="Hủy yêu cầu"
-        onConfirm={executeCancel}
-        onCancel={() => setConfirmCancelId(null)}
-      />
+      {confirmDialog}
     </div>
   );
 }

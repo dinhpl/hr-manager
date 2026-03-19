@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import LeaveDetailModal, { LeaveDetailData } from '@/components/leave-detail-modal';
-import ConfirmDialog from '@/components/confirm-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { apiClient, getApiBaseUrl } from '@/lib/api-client';
 import {
   buildQuery,
@@ -187,7 +187,6 @@ export default function ApprovalPage() {
   const [searchInput, setSearchInput] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDetail, setSelectedDetail] = useState<LeaveDetailData | null>(null);
-  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [requests, setRequests] = useState<LeaveRequestItem[]>([]);
   const [meta, setMeta] = useState<PaginationMeta>({
     total: 0,
@@ -201,6 +200,7 @@ export default function ApprovalPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const { openConfirm, closeConfirm, confirmDialog } = useConfirmDialog();
 
   const typeIdByCode = useMemo(
     () => Object.fromEntries(leaveTypes.map((type) => [type.code, type.id])),
@@ -385,7 +385,6 @@ export default function ApprovalPage() {
     try {
       await apiClient.post('/api/leave-requests/bulk-approve', { ids: selectedIds });
       setSelectedIds([]);
-      setBulkConfirmOpen(false);
       toast.success(`Đã duyệt ${selectedIds.length} yêu cầu`);
       await loadPendingRequests();
     } catch (err) {
@@ -407,7 +406,7 @@ export default function ApprovalPage() {
     setSearchInput('');
     setCurrentPage(1);
     setSelectedDetail(null);
-    setBulkConfirmOpen(false);
+    closeConfirm();
     void loadPendingRequests();
   };
 
@@ -442,7 +441,15 @@ export default function ApprovalPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => selectedIds.length > 0 && setBulkConfirmOpen(true)}
+            onClick={() =>
+              selectedIds.length > 0 &&
+              openConfirm({
+                title: 'Duyệt hàng loạt',
+                message: `Bạn có chắc muốn duyệt ${selectedIds.length} yêu cầu đã chọn?`,
+                confirmLabel: 'Duyệt tất cả',
+                onConfirm: executeBulkApprove,
+              })
+            }
             disabled={selectedIds.length === 0 || actionLoadingId === 'bulk'}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
             style={{ borderColor: '#1DB87A', color: '#1DB87A' }}
@@ -828,14 +835,7 @@ export default function ApprovalPage() {
 
       <LeaveDetailModal data={selectedDetail} onClose={() => setSelectedDetail(null)} />
 
-      <ConfirmDialog
-        open={bulkConfirmOpen}
-        title="Duyệt hàng loạt"
-        message={`Bạn có chắc muốn duyệt ${selectedIds.length} yêu cầu đã chọn?`}
-        confirmLabel="Duyệt tất cả"
-        onConfirm={executeBulkApprove}
-        onCancel={() => setBulkConfirmOpen(false)}
-      />
+      {confirmDialog}
 
       <div className="flex items-center justify-center gap-1">
         <button

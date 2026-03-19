@@ -1,11 +1,12 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   /** Red confirm button for destructive actions */

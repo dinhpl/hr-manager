@@ -17,7 +17,7 @@ leaveBalancesRouter.post(
   uploadUsersExcel.single('file'),
   ctrl.importLeaveBalances,
 );
-leaveBalancesRouter.get('/:userId', requireRoles('MANAGER', 'HR', 'ADMIN'), ctrl.getUserBalances);
+leaveBalancesRouter.get('/:userId', ctrl.getUserBalances);
 leaveBalancesRouter.post('/initialize', requireRoles('HR', 'ADMIN'), ctrl.initializeBalances);
 leaveBalancesRouter.post('/recalculate', requireRoles('HR', 'ADMIN'), ctrl.recalculateAnnualLeave);
 leaveBalancesRouter.patch('/:id', requireRoles('HR', 'ADMIN'), ctrl.adjustBalance);

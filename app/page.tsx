@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, CalendarDays } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
+import BrandLogo from '@/components/brand-logo';
 import { apiClient, ApiError, getStoredToken, setAuthSession } from '@/lib/api-client';
 
 export default function LoginPage() {
@@ -39,7 +40,7 @@ export default function LoginPage() {
           position?: string | null;
           avatar?: string | null;
         };
-      }>('/api/auth/login', { username, password });
+      }>('/api/auth/login', { username, password, rememberMe });
 
       setAuthSession({ accessToken: data.accessToken, user: data.user }, rememberMe);
       router.push('/dashboard');
@@ -79,10 +80,16 @@ export default function LoginPage() {
 
           {/* Content */}
           <div className="relative z-10">
-            <div className="flex items-center gap-2.5 mb-16">
-              <CalendarDays size={28} className="text-white" />
-              <span className="text-white font-bold text-lg tracking-tight">Leave Management</span>
-            </div>
+            <BrandLogo
+              size={50}
+              priority
+              title="Leave Management"
+              subtitle="HR operations workspace"
+              imageClassName="p-1.5"
+              titleClassName="text-lg text-white"
+              subtitleClassName="mt-1 uppercase tracking-[0.22em] text-white/65"
+              wrapperClassName="mb-16"
+            />
             <h1 className="text-[2.5rem] leading-tight font-bold text-white mb-3">
               Welcome to<br />Leave Management
             </h1>
@@ -99,12 +106,16 @@ export default function LoginPage() {
         {/* Right panel - Login form */}
         <div className="flex-1 bg-white flex flex-col justify-center px-10 py-12 lg:px-16">
           <div className="max-w-[380px] mx-auto w-full">
-            {/* Logo icon */}
-            <div className="flex justify-center mb-5">
-              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: 'rgba(29,184,122,0.12)' }}>
-                <CalendarDays size={22} className="text-[#1DB87A]" />
-              </div>
-            </div>
+            <BrandLogo
+              align="center"
+              size={74}
+              title="Leave Management"
+              subtitle="Smart HR portal"
+              imageClassName="p-2"
+              titleClassName="text-base text-[#203430]"
+              subtitleClassName="mt-1 tracking-[0.18em] uppercase text-[#6b7f78]"
+              wrapperClassName="mb-6 flex-col gap-3"
+            />
 
             <div className="text-center mb-8">
               <h2 className="text-xl font-bold text-[#203430] mb-1.5">Chào mừng trở lại</h2>
