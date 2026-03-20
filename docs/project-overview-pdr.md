@@ -30,6 +30,9 @@ This system manages employee leave requests end to end:
 - `/dashboard/settings` - leave policy and approval flow editor.
 - `/dashboard/profile` - self profile, avatar, password.
 - `/dashboard/reports` - analytics and CSV export.
+- `/dashboard/attendance` - attendance check-in/check-out screen.
+- `/dashboard/leave-balances` - leave balance overview (dedicated page).
+- `/dashboard/leave-detail/[id]` - leave request detail view.
 - `/dashboard/leave-request` - older standalone leave request page.
 - `/dashboard/overtime` - overtime screen.
 - `/dashboard/compoff` - comp-off screen.
@@ -43,6 +46,7 @@ This system manages employee leave requests end to end:
 - `leave-requests`
 - `overtime`
 - `comp-off`
+- `attendances`
 - `dashboard`
 - `reports`
 - `settings`

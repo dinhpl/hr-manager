@@ -37,6 +37,9 @@
 | `/dashboard/settings`      | Leave policy and approval flow settings | hr/admin         |
 | `/dashboard/profile`       | Personal profile/password/avatar        | all              |
 | `/dashboard/reports`       | Reports and export CSV                  | manager/hr/admin |
+| `/dashboard/attendance`    | Attendance check-in/check-out tracking  | all              |
+| `/dashboard/leave-balances`| Leave balance overview per user/year    | all              |
+| `/dashboard/leave-detail/[id]` | Leave request detail view           | all              |
 | `/dashboard/leave-request` | Legacy standalone leave form            | all              |
 | `/dashboard/overtime`      | Overtime request and review             | mixed            |
 | `/dashboard/compoff`       | Comp-off records                        | mixed            |
@@ -122,6 +125,7 @@
 - `LeaveRequest` - leave workflow records.
 - `OvertimeRecord` - overtime workflow records.
 - `CompOffRecord` - compensatory leave records.
+- `Attendance` - daily check-in/check-out records, unique per (userId, date).
 - `Setting` - JSON storage for leave policy and approval flow.
 - `Department` - simple master table for active departments.
 - `Notification` - per-user inbox items.

@@ -14,6 +14,8 @@ The project is beyond mockup stage. Core frontend screens and matching backend A
 - employee listing and admin management actions
 - reports for leave, overtime, department, top users, and CSV export
 - overtime and comp-off read flows
+- attendance check-in/check-out tracking with work hours calculation
+- leave balances dedicated page with carry-over expiry warnings
 - realtime notifications with unread count and read actions
 
 ## 3. Highest-priority product debt

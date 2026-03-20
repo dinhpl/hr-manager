@@ -45,7 +45,7 @@ pnpm test:watch   # vitest (interactive)
 ## Architecture
 
 ### Frontend (`/app`, `/components`, `/hooks`, `/lib`)
-Next.js 15 App Router with TypeScript. All dashboard pages live under `app/dashboard/`. API calls use an Axios instance from `lib/`. Real-time updates use `@microsoft/fetch-event-source` for SSE.
+Next.js 16 App Router with TypeScript. All dashboard pages live under `app/dashboard/`. API calls use an Axios instance from `lib/`. Real-time updates use `@microsoft/fetch-event-source` for SSE.
 
 ### Backend (`/backend/src`)
 Express.js with modular architecture. Each feature is a self-contained module under `backend/src/modules/` with its own router, service, and types.
@@ -92,6 +92,44 @@ JWT_ACCESS_SECRET=...
 JWT_REFRESH_SECRET=...
 PORT=5501
 UPLOAD_DIR=uploads/leave-attachments
+```
+
+## Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/office-hours` | YC-style brainstorming — startup mode or builder mode |
+| `/plan-ceo-review` | CEO/founder review of a plan — scope, strategy, 10-star product |
+| `/plan-eng-review` | Eng manager review — architecture, data flow, edge cases |
+| `/plan-design-review` | Designer's eye review of a plan — ratings + fixes |
+| `/design-consultation` | Full design system consultation, generates DESIGN.md |
+| `/review` | Pre-landing PR code review |
+| `/ship` | Ship workflow: merge, test, bump version, create PR |
+| `/browse` | Headless browser (gstack) — navigate, screenshot, QA, scrape |
+| `/qa` | Full QA test + iterative bug fixes |
+| `/qa-only` | QA report only — no code changes |
+| `/design-review` | Visual QA with before/after screenshots + fixes |
+| `/setup-browser-cookies` | Import real browser cookies into headless session |
+| `/retro` | Weekly engineering retrospective |
+| `/investigate` | Systematic root-cause debugging (4 phases) |
+| `/document-release` | Post-ship docs update (README, CHANGELOG, etc.) |
+| `/codex` | OpenAI Codex second-opinion: review, challenge, consult |
+| `/careful` | Safety mode — warns before destructive commands |
+| `/freeze` | Restrict edits to a specific directory |
+| `/guard` | Full safety: /careful + /freeze combined |
+| `/unfreeze` | Remove /freeze boundary |
+| `/gstack-upgrade` | Upgrade gstack to latest version |
+
+## Gstack / Web Browsing
+
+Use the `/browse` skill (gstack) for all web browsing tasks — navigating pages, taking screenshots, testing UI flows, scraping data, etc.
+
+**Never** use `mcp__claude-in-chrome__*` tools for any browsing.
+
+**If gstack skills are not working**, run the following command to build the binary and register the skills:
+
+```bash
+cd .claude/skills/gstack && ./setup
 ```
 
 ## Key Conventions

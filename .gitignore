@@ -53,3 +53,4 @@ backend/dist
 backend/uploads/
 .pnpm-store/
 .kiro
+.gstack/
