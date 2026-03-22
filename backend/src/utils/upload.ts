@@ -80,6 +80,31 @@ export const uploadUsersExcel = multer({
   },
 });
 
+const deviceImagesDir = path.join(process.cwd(), 'uploads', 'device-images');
+
+const deviceImageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    if (!fs.existsSync(deviceImagesDir)) {
+      fs.mkdirSync(deviceImagesDir, { recursive: true });
+    }
+    cb(null, deviceImagesDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `device-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+export const uploadDeviceImages = multer({
+  storage: deviceImageStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
+  fileFilter: (_req, file, cb) => {
+    if (AVATAR_ALLOWED.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Image type not allowed. Use JPG, PNG, GIF, or WEBP.'));
+  },
+});
+
 export const uploadAttendanceExcel = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },

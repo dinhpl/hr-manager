@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   ChevronDown,
+  Monitor,
 } from 'lucide-react';
 import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
@@ -77,6 +78,12 @@ const NAV_ITEMS = [
     label: 'Chấm công',
     icon: Table2,
     key: 'attendance',
+  },
+  {
+    href: '/dashboard/devices',
+    label: 'Quản lý thiết bị',
+    icon: Monitor,
+    key: 'devices',
   },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
   { href: '/dashboard/reports', label: 'Báo cáo', icon: BarChart3, key: 'reports' },

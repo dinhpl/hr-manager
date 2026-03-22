@@ -48,6 +48,43 @@ enum NotificationEntityType {
   OVERTIME
 }
 
+enum DeviceStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  RETIRED
+}
+
+enum DeviceType {
+  LAPTOP
+  DESKTOP_PC
+  MONITOR
+  PHONE
+  OTHER
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  RETURNED
+}
+
+enum MaintenanceStatus {
+  OPEN
+  RESOLVED
+}
+
+enum DeviceAuditAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  UNASSIGNED
+  TRANSFERRED
+  MAINTENANCE_OPENED
+  MAINTENANCE_RESOLVED
+  STATUS_CHANGED
+  RETIRED
+}
+
 model User {
   id              BigInt    @id @default(autoincrement())
   email           String    @unique @db.VarChar(255)
@@ -86,6 +123,13 @@ model User {
   leaveBalances    LeaveBalance[]
   attendances      Attendance[]
   notifications    Notification[]
+
+  deviceAssignments    DeviceAssignment[]   @relation("UserDeviceAssignments")
+  assignedDevices      DeviceAssignment[]   @relation("AssignedByUser")
+  returnedDevices      DeviceAssignment[]   @relation("ReturnedByUser")
+  reportedMaintenance  DeviceMaintenanceLog[] @relation("ReportedByUser")
+  maintainedDevices    DeviceMaintenanceLog[] @relation("MaintenanceAssignedTo")
+  deviceAuditLogs      DeviceAuditLog[]     @relation("DeviceAuditActor")
 
   @@map("users")
 }
@@ -270,4 +314,122 @@ model Attendance {
   @@index([date, status])
   @@index([userId, date])
   @@map("attendances")
+}
+
+model Device {
+  id            BigInt       @id @default(autoincrement())
+  code          String       @unique @db.VarChar(50)
+  name          String       @db.VarChar(255)
+  type          DeviceType
+  brand         String?      @db.VarChar(100)
+  model         String?      @db.VarChar(150)
+  serialNumber  String?      @unique @map("serial_number") @db.VarChar(100)
+  status        DeviceStatus @default(AVAILABLE)
+  purchaseDate  DateTime?    @map("purchase_date") @db.Date
+  purchasePrice Decimal?     @map("purchase_price") @db.Decimal(15, 2)
+  warrantyUntil DateTime?    @map("warranty_until") @db.Date
+  location      String?      @db.VarChar(255)
+  note          String?
+  imageUrl      String?      @map("image_url")
+  isActive      Boolean      @default(true) @map("is_active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  specs           DeviceSpec[]
+  images          DeviceImage[]
+  assignments     DeviceAssignment[]
+  maintenanceLogs DeviceMaintenanceLog[]
+  auditLogs       DeviceAuditLog[]
+
+  @@index([status])
+  @@index([type, status])
+  @@map("devices")
+}
+
+model DeviceImage {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  BigInt   @map("device_id")
+  imageUrl  String   @map("image_url")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@map("device_images")
+}
+
+model DeviceSpec {
+  id        BigInt @id @default(autoincrement())
+  deviceId  BigInt @map("device_id")
+  specKey   String @db.VarChar(100)
+  specValue String @db.VarChar(500)
+  sortOrder Int    @default(0) @map("sort_order")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, specKey])
+  @@map("device_specs")
+}
+
+model DeviceAssignment {
+  id           BigInt           @id @default(autoincrement())
+  deviceId     BigInt           @map("device_id")
+  userId       BigInt           @map("user_id")
+  assignedById BigInt           @map("assigned_by_id")
+  assignedAt   DateTime         @default(now()) @map("assigned_at")
+  returnedAt   DateTime?        @map("returned_at")
+  returnedById BigInt?          @map("returned_by_id")
+  status       AssignmentStatus @default(ACTIVE)
+  note         String?
+
+  device     Device @relation(fields: [deviceId], references: [id])
+  user       User   @relation("UserDeviceAssignments", fields: [userId], references: [id])
+  assignedBy User   @relation("AssignedByUser", fields: [assignedById], references: [id])
+  returnedBy User?  @relation("ReturnedByUser", fields: [returnedById], references: [id])
+
+  @@index([deviceId, status])
+  @@index([userId, status])
+  @@map("device_assignments")
+}
+
+model DeviceMaintenanceLog {
+  id           BigInt            @id @default(autoincrement())
+  deviceId     BigInt            @map("device_id")
+  reportedById BigInt            @map("reported_by_id")
+  assignedToId BigInt?           @map("assigned_to_id")
+  issue        String
+  resolution   String?
+  cost         Decimal?          @db.Decimal(15, 2)
+  note         String?
+  status       MaintenanceStatus @default(OPEN)
+  startDate    DateTime          @default(now()) @map("start_date")
+  resolvedAt   DateTime?         @map("resolved_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  device     Device @relation(fields: [deviceId], references: [id])
+  reportedBy User   @relation("ReportedByUser", fields: [reportedById], references: [id])
+  assignedTo User?  @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
+
+  @@index([deviceId, status])
+  @@map("device_maintenance_logs")
+}
+
+model DeviceAuditLog {
+  id        BigInt            @id @default(autoincrement())
+  deviceId  BigInt            @map("device_id")
+  actorId   BigInt            @map("actor_id")
+  action    DeviceAuditAction
+  targetId  BigInt?           @map("target_id")
+  meta      Json?
+  note      String?
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  device Device @relation(fields: [deviceId], references: [id])
+  actor  User   @relation("DeviceAuditActor", fields: [actorId], references: [id])
+
+  @@index([deviceId, createdAt])
+  @@index([actorId])
+  @@map("device_audit_logs")
 }
