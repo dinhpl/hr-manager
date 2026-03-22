@@ -591,7 +591,7 @@ function LeaveBalanceCards({
         style={{ border: '1px solid #e2ede9', borderTop: '3px solid #3b82f6' }}
       >
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Còn lại đến T{todayMonth}</p>
+          <p className="text-xs font-medium text-muted-foreground">Còn lại đến tháng hiện tại</p>
           <div
             className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: '#dbeafe' }}

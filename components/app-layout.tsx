@@ -28,7 +28,7 @@ import { formatNotificationTime, getNotificationHref } from '@/lib/notification-
 const NAV_ITEMS = [
   {
     href: '/dashboard',
-    label: 'Dashboard',
+    label: 'Tổng Quan',
     icon: LayoutDashboard,
     key: 'dashboard',
   },
@@ -148,8 +148,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // if (item.key === 'attendance') {
     //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     // }
-    if (item.key === 'employees' || item.key === 'settings') {
-      return currentRole === 'hr' || currentRole === 'admin';
+    if (item.key === 'employees' || item.key === 'settings' || item.key === 'devices') {
+      return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     }
     return true;
   });
