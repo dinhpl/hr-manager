@@ -170,7 +170,7 @@ export default function LeaveRequestModal({
   const effectiveUserId = requestForUserId || userInfo?.id || '';
   const requestForUser = handoverPersons.find((item) => item.id === effectiveUserId);
   const approverOptions = handoverPersons.filter((item) =>
-    ['MANAGER'].includes((item.role ?? '').toUpperCase()),
+    ['MANAGER', 'HR', 'ADMIN'].includes((item.role ?? '').toUpperCase()),
   );
 
   useEffect(() => {

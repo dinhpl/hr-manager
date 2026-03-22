@@ -153,9 +153,9 @@ export default function LeaveDetailPage() {
 
   const canApprove =
     isPending && !isEmployee && (role === 'hr' || role === 'admin' || (role === 'manager' && !isOwner));
-  const canEdit = (role === 'hr' || role === 'admin') || (isEmployee && isOwner && isPending);
+  const canEdit = role === 'hr' || role === 'admin';
   const canCancel = isEmployee && isOwner && isPending;
-
+  console.log('userInfo: ', userInfo)
   const handleCopyLink = () => {
     const url = `${window.location.origin}/dashboard/leave-detail/${requestId}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -190,11 +190,10 @@ export default function LeaveDetailPage() {
       setConfirmAction(null);
       return;
     }
-    if (!actionNote.trim()) { toast.error('Vui lòng nhập lý do từ chối'); setConfirmAction(null); return; }
     setConfirmAction(null);
     setActionLoading(true);
     try {
-      await apiClient.patch(`/api/leave-requests/${requestId}/reject`, { note: actionNote });
+      await apiClient.patch(`/api/leave-requests/${requestId}/reject`, { note: actionNote || undefined });
       toast.success('Đã từ chối yêu cầu');
       setActionNote('');
       void loadRequest();
@@ -405,7 +404,8 @@ export default function LeaveDetailPage() {
           )}
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — chỉ hiện với owner hoặc người có quyền action */}
+        {(canApprove || canEdit || canCancel) && (
         <div className="rounded-xl bg-white p-5 shadow-sm sm:p-6 space-y-4" style={{ border: '1px solid #e2ede9' }}>
           <h3 className="text-sm font-bold" style={{ color: '#203430' }}>Thao tác</h3>
 
@@ -432,10 +432,7 @@ export default function LeaveDetailPage() {
                   <Check size={14} /> Duyệt
                 </button>
                 <button
-                  onClick={() => {
-                    if (!actionNote.trim()) { toast.error('Vui lòng nhập lý do từ chối'); return; }
-                    setConfirmAction('reject');
-                  }}
+                  onClick={() => setConfirmAction('reject')}
                   disabled={actionLoading}
                   className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50"
                   style={{ background: '#dc2626' }}
@@ -484,6 +481,7 @@ export default function LeaveDetailPage() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Back link */}
         <Link

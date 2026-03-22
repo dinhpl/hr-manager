@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
-import { apiClient, getApiBaseUrl } from '@/lib/api-client';
+import { apiClient, getApiBaseUrl, getStoredUser } from '@/lib/api-client';
 import {
   buildApiDateTime,
   buildQuery,
@@ -44,6 +44,7 @@ import {
   inferLeaveRequestModeFromDbValue,
   numberValue,
   toDateInputValue,
+  toFrontendRole,
 } from '@/lib/hr-utils';
 
 type StatusKey = 'pending' | 'approved' | 'rejected' | 'cancelled';
@@ -302,6 +303,9 @@ export default function LeaveHistoryPage() {
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const { openConfirm, confirmDialog } = useConfirmDialog();
+
+  const storedUser = getStoredUser<{ role?: string }>();
+  const isEmployee = toFrontendRole(storedUser?.role) === 'employee';
 
   const pageSizeNum = Number(pageSize);
   const typeIdByCode = useMemo(
@@ -612,7 +616,7 @@ export default function LeaveHistoryPage() {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {!isEmployee && <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[
           {
             label: 'Tổng yêu cầu',
@@ -662,7 +666,7 @@ export default function LeaveHistoryPage() {
             </p>
           </div>
         ))}
-      </div>
+      </div>}
 
       <div
         className="overflow-hidden rounded-xl border bg-white"
