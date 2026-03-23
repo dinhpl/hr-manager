@@ -84,8 +84,8 @@ function CategoriesTab() {
 
   const loadCategories = useCallback(async () => {
     try {
-      const { data } = await apiClient.get<{ data: SkillCategory[] }>('/api/skills/categories');
-      setCategories(data.data);
+      const result = await apiClient.get<SkillCategory[]>('/api/skills/categories');
+      setCategories(result.data);
     } catch {
       toast.error('Không tải được dữ liệu');
     } finally {
@@ -340,8 +340,8 @@ function LevelsTab() {
 
   const loadLevels = useCallback(async () => {
     try {
-      const { data } = await apiClient.get<{ data: SkillLevel[] }>('/api/skills/levels');
-      setLevels(data.data);
+      const result = await apiClient.get<SkillLevel[]>('/api/skills/levels');
+      setLevels(result.data);
     } catch {
       toast.error('Không tải được cấp độ');
     } finally {

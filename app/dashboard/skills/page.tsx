@@ -329,14 +329,14 @@ export default function SkillManagementPage() {
   // Load master data once
   useEffect(() => {
     Promise.all([
-      apiClient.get<{ data: SkillCategory[] }>('/api/skills/categories'),
-      apiClient.get<{ data: Skill[] }>('/api/skills'),
-      apiClient.get<{ data: SkillLevel[] }>('/api/skills/levels'),
+      apiClient.get<SkillCategory[]>('/api/skills/categories'),
+      apiClient.get<Skill[]>('/api/skills'),
+      apiClient.get<SkillLevel[]>('/api/skills/levels'),
     ])
       .then(([cats, skills, lvls]) => {
-        setCategories(cats.data.data);
-        setAllSkills(skills.data.data);
-        setLevels(lvls.data.data);
+        setCategories(cats.data);
+        setAllSkills(skills.data);
+        setLevels(lvls.data);
       })
       .catch(() => toast.error('Không tải được dữ liệu cài đặt'));
   }, []);
@@ -357,11 +357,16 @@ export default function SkillManagementPage() {
         if (params.skillId) q.set('skillId', params.skillId);
         if (params.levelId) q.set('levelId', params.levelId);
 
-        const { data } = await apiClient.get<{ data: UserRow[]; meta: Meta }>(
-          `/api/user-skills?${q}`,
-        );
-        setUsers(data.data);
-        setMeta(data.meta);
+        const result = await apiClient.get<UserRow[]>(`/api/user-skills?${q}`);
+        setUsers(result.data);
+        if (result.meta) {
+          setMeta({
+            total: result.meta.total ?? 0,
+            page: result.meta.page ?? 1,
+            limit: result.meta.limit ?? 20,
+            totalPages: result.meta.totalPages ?? 1,
+          });
+        }
       } catch {
         toast.error('Không tải được danh sách');
       } finally {
