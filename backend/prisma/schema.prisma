@@ -124,12 +124,16 @@ model User {
   attendances      Attendance[]
   notifications    Notification[]
 
+  yoe        Int?    @map("yoe")
+  otaRanking String? @map("ota_ranking") @db.VarChar(100)
+
   deviceAssignments    DeviceAssignment[]   @relation("UserDeviceAssignments")
   assignedDevices      DeviceAssignment[]   @relation("AssignedByUser")
   returnedDevices      DeviceAssignment[]   @relation("ReturnedByUser")
   reportedMaintenance  DeviceMaintenanceLog[] @relation("ReportedByUser")
   maintainedDevices    DeviceMaintenanceLog[] @relation("MaintenanceAssignedTo")
   deviceAuditLogs      DeviceAuditLog[]     @relation("DeviceAuditActor")
+  userSkills           UserSkill[]
 
   @@map("users")
 }
@@ -432,4 +436,60 @@ model DeviceAuditLog {
   @@index([deviceId, createdAt])
   @@index([actorId])
   @@map("device_audit_logs")
+}
+
+// ── Skill Management ──────────────────────────────────────────
+
+model SkillCategory {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  skills    Skill[]
+
+  @@map("skill_categories")
+}
+
+model Skill {
+  id         BigInt        @id @default(autoincrement())
+  name       String        @db.VarChar(200)
+  categoryId BigInt        @map("category_id")
+  sortOrder  Int           @default(0) @map("sort_order")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  category   SkillCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  userSkills UserSkill[]
+
+  @@unique([name, categoryId])
+  @@map("skills")
+}
+
+model SkillLevel {
+  id          BigInt      @id @default(autoincrement())
+  level       Int         @unique
+  name        String      @db.VarChar(100)
+  description String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  userSkills  UserSkill[]
+
+  @@map("skill_levels")
+}
+
+model UserSkill {
+  id        BigInt     @id @default(autoincrement())
+  userId    BigInt     @map("user_id")
+  skillId   BigInt     @map("skill_id")
+  levelId   BigInt     @map("level_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  level     SkillLevel @relation(fields: [levelId], references: [id])
+
+  @@unique([userId, skillId])
+  @@index([userId])
+  @@index([skillId])
+  @@map("user_skills")
 }
