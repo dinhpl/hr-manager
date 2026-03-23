@@ -22,6 +22,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { attendancesRouter } from './modules/attendances/attendances.router';
 import { holidaysRouter } from './modules/holidays/holidays.router';
 import { devicesRouter } from './modules/devices/devices.router';
+import { skillsRouter } from './modules/skills/skills.router';
 
 export function createApp(): Application {
   const app = express();
@@ -91,6 +92,7 @@ export function createApp(): Application {
   app.use('/api/attendances', attendancesRouter);
   app.use('/api/holidays', holidaysRouter);
   app.use('/api/devices', devicesRouter);
+  app.use('/api/skills', skillsRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === 'development') {
