@@ -624,681 +624,651 @@ export default function EmployeesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div
-            className="h-9 w-9 rounded-xl flex items-center justify-center"
-            style={{ background: '#D3F2E7' }}
-          >
-            <Users size={18} style={{ color: '#0E474E' }} />
-          </div>
-          <h1 className="text-xl font-bold" style={{ color: '#203430' }}>
-            Quản lý nhân viên
-          </h1>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-            style={{ background: '#1DB87A' }}
-            disabled={isMutating}
-          >
-            <UserPlus size={14} /> Thêm nhân viên
-          </button>
-          <label
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
-            style={{ borderColor: '#e2ede9', color: '#203430' }}
-            title="Import nhân viên từ file Excel"
-          >
-            <Upload size={14} />
-            {isImporting ? 'Đang import...' : 'Import Excel'}
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              disabled={isImporting}
-              onChange={(e) => void handleImport(e)}
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => void handleExport()}
-            className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
-            style={{ borderColor: '#e2ede9', color: '#203430' }}
-            title="Xuất danh sách nhân viên ra Excel"
-          >
-            <FileDown size={14} /> Export
-          </button>
-        </div>
-      </div>
-
-      <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                label: 'Tổng nhân viên',
-                value: employees.length.toString(),
-                icon: Users,
-                color: '#3b82f6',
-                bg: '#eff6ff',
-              },
-              {
-                label: 'Đang làm việc',
-                value: employees
-                  .filter((employee) => employee.status === 'active')
-                  .length.toString(),
-                icon: UserCheck,
-                color: '#1DB87A',
-                bg: '#f0fdf9',
-              },
-              {
-                label: 'Nghỉ phép hôm nay',
-                value: '—',
-                icon: CalendarOff,
-                color: '#f59e0b',
-                bg: '#fffbeb',
-              },
-              {
-                label: 'Sinh nhật tháng này',
-                value: birthdayThisMonthCount.toString(),
-                icon: Cake,
-                color: '#06b6d4',
-                bg: '#ecfeff',
-              },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-white rounded-xl p-4 border flex items-center gap-4"
-                style={{ borderColor: '#e2ede9' }}
-              >
-                <div
-                  className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: stat.bg }}
-                >
-                  <stat.icon size={22} style={{ color: stat.color }} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-                    {stat.value}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
-                    {stat.label}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-white rounded-xl border p-4" style={{ borderColor: '#e2ede9' }}>
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                  Trạng thái
-                </label>
-                <Select
-                  value={statusFilter || 'all-status'}
-                  onValueChange={(value) => setStatusFilter(value === 'all-status' ? '' : value)}
-                >
-                  <SelectTrigger className="min-w-[150px]">
-                    <SelectValue placeholder="Trạng thái" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="active">Đang làm việc</SelectItem>
-                    <SelectItem value="inactive">Tạm nghỉ</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                  Phòng ban
-                </label>
-                <Select
-                  value={teamFilter || 'all-team'}
-                  onValueChange={(value) => setTeamFilter(value === 'all-team' ? '' : value)}
-                >
-                  <SelectTrigger className="min-w-[150px]">
-                    <SelectValue placeholder="Phòng ban" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.code} value={dept.name}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2 items-end flex-1 min-w-[220px]">
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
-                    Tìm kiếm
-                  </label>
-                  <Input
-                    type="text"
-                    value={searchInput}
-                    onChange={(event) => setSearchInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        handleSearch();
-                      }
-                    }}
-                    placeholder="Tìm theo tên, email, mã nhân viên..."
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSearch}
-                  className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
-                  style={{ background: '#1DB87A' }}
-                >
-                  <Search size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="bg-white rounded-xl border overflow-hidden"
-            style={{ borderColor: '#e2ede9' }}
-          >
+      <section className="flex h-[calc(100dvh-9rem)] flex-col gap-5 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3">
             <div
-              className="flex items-center justify-between px-5 py-3 border-b"
+              className="h-9 w-9 rounded-xl flex items-center justify-center"
+              style={{ background: '#D3F2E7' }}
+            >
+              <Users size={18} style={{ color: '#0E474E' }} />
+            </div>
+            <h1 className="text-xl font-bold" style={{ color: '#203430' }}>
+              Quản lý nhân viên
+            </h1>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              style={{ background: '#1DB87A' }}
+              disabled={isMutating}
+            >
+              <UserPlus size={14} /> Thêm nhân viên
+            </button>
+            <label
+              className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+              style={{ borderColor: '#e2ede9', color: '#203430' }}
+              title="Import nhân viên từ file Excel"
+            >
+              <Upload size={14} />
+              {isImporting ? 'Đang import...' : 'Import Excel'}
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                disabled={isImporting}
+                onChange={(e) => void handleImport(e)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+              style={{ borderColor: '#e2ede9', color: '#203430' }}
+              title="Xuất danh sách nhân viên ra Excel"
+            >
+              <FileDown size={14} /> Export
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+          {[
+            {
+              label: 'Tổng nhân viên',
+              value: employees.length.toString(),
+              icon: Users,
+              color: '#3b82f6',
+              bg: '#eff6ff',
+            },
+            {
+              label: 'Đang làm việc',
+              value: employees.filter((employee) => employee.status === 'active').length.toString(),
+              icon: UserCheck,
+              color: '#1DB87A',
+              bg: '#f0fdf9',
+            },
+            {
+              label: 'Nghỉ phép hôm nay',
+              value: '—',
+              icon: CalendarOff,
+              color: '#f59e0b',
+              bg: '#fffbeb',
+            },
+            {
+              label: 'Sinh nhật tháng này',
+              value: birthdayThisMonthCount.toString(),
+              icon: Cake,
+              color: '#06b6d4',
+              bg: '#ecfeff',
+            },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className="bg-white rounded-xl p-4 border flex items-center gap-4"
               style={{ borderColor: '#e2ede9' }}
             >
-              <div className="flex items-center gap-2">
-                <Table2 size={15} style={{ color: '#1DB87A' }} />
-                <h2 className="font-semibold text-sm" style={{ color: '#203430' }}>
-                  Danh sách nhân viên ({employees.length})
-                </h2>
+              <div
+                className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: stat.bg }}
+              >
+                <stat.icon size={22} style={{ color: stat.color }} />
               </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => void fetchEmployees()}
-                  className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ borderColor: '#e2ede9' }}
-                  disabled={isRefreshing || isMutating}
-                  title="Tải lại danh sách"
-                >
-                  <RefreshCw
-                    size={13}
-                    style={{
-                      color: '#6b7f78',
-                      transform: isRefreshing ? 'rotate(180deg)' : 'none',
-                      transition: 'transform 0.3s ease',
-                    }}
-                  />
-                </button>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+                  {stat.value}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
+                  {stat.label}
+                </p>
               </div>
             </div>
+          ))}
+        </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{ background: '#203430' }}>
-                    <th className="px-3 py-3 w-10">
-                      <Checkbox
-                        checked={selectedIds.length === employees.length && employees.length > 0}
-                        onCheckedChange={toggleAll}
-                        aria-label="Chọn tất cả nhân viên"
-                      />
-                    </th>
-                    {[
-                      'Avatar',
-                      'Họ tên',
-                      'Mã NV',
-                      'Email',
-                      'Phòng ban',
-                      'Vai trò',
-                      'Ngày tham gia',
-                      'Sinh nhật',
-                      'Trạng thái',
-                      'Thao tác',
-                    ].map((heading) => (
-                      <th
-                        key={heading}
-                        className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap"
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="px-3 py-8 text-center text-sm"
-                        style={{ color: '#6b7f78' }}
-                      >
-                        Đang tải dữ liệu nhân viên...
-                      </td>
-                    </tr>
-                  ) : employees.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="px-3 py-8 text-center text-sm"
-                        style={{ color: '#6b7f78' }}
-                      >
-                        Không có nhân viên phù hợp với bộ lọc hiện tại.
-                      </td>
-                    </tr>
-                  ) : (
-                    employees.map((employee) => {
-                      const isSelected = selectedIds.includes(employee.id);
-                      const initials =
-                        `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
-                          .trim()
-                          .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
-                      const deptIndex = departments.findIndex(
-                        (d) => d.name === employee.department,
-                      );
-                      const departmentColor = getDeptColor(
-                        employee.department,
-                        deptIndex >= 0 ? deptIndex : 0,
-                      );
+        <div className="bg-white rounded-xl border p-4 shrink-0" style={{ borderColor: '#e2ede9' }}>
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Trạng thái
+              </label>
+              <Select
+                value={statusFilter || 'all-status'}
+                onValueChange={(value) => setStatusFilter(value === 'all-status' ? '' : value)}
+              >
+                <SelectTrigger className="min-w-[150px]">
+                  <SelectValue placeholder="Trạng thái" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="active">Đang làm việc</SelectItem>
+                  <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Phòng ban
+              </label>
+              <Select
+                value={teamFilter || 'all-team'}
+                onValueChange={(value) => setTeamFilter(value === 'all-team' ? '' : value)}
+              >
+                <SelectTrigger className="min-w-[150px]">
+                  <SelectValue placeholder="Phòng ban" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all-team">Tất cả phòng ban</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.code} value={dept.name}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 items-end flex-1 min-w-[220px]">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
+                  Tìm kiếm
+                </label>
+                <Input
+                  type="text"
+                  value={searchInput}
+                  onChange={(event) => setSearchInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleSearch();
+                    }
+                  }}
+                  placeholder="Tìm theo tên, email, mã nhân viên..."
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSearch}
+                className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
+                style={{ background: '#1DB87A' }}
+              >
+                <Search size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
 
-                      return (
-                        <tr
-                          key={employee.id}
-                          className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
-                          style={{
-                            background: isSelected ? '#f0fdf9' : undefined,
-                            opacity: employee.status === 'inactive' ? 0.75 : 1,
-                          }}
-                          onClick={() => toggleSelect(employee.id)}
-                        >
-                          <td className="px-3 py-3 w-10">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={() => toggleSelect(employee.id)}
-                              onClick={(event) => event.stopPropagation()}
-                              aria-label={`Chọn nhân viên ${employee.fullName}`}
-                            />
-                          </td>
-                          <td className="px-3 py-3">
-                            {getAvatarUrl(employee.profileImageUrl) ? (
-                              <img
-                                src={getAvatarUrl(employee.profileImageUrl) || ''}
-                                alt={employee.fullName}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div
-                                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
-                                style={{
-                                  background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
-                                }}
-                              >
-                                {initials}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3">
-                            <p
-                              className="font-semibold whitespace-nowrap"
-                              style={{ color: '#203430' }}
-                            >
-                              {employee.fullName}
-                            </p>
-                            {employee.department && (
-                              <p
-                                className="truncate text-[11px] font-medium mt-0.5"
-                                style={{ color: '#6b7f78' }}
-                              >
-                                {employee.department}
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 min-w-[120px]">
-                            {editingCellId === employee.id && editingField === 'employeeCode' ? (
-                              <div onClick={(event) => event.stopPropagation()}>
-                                <Input
-                                  autoFocus
-                                  value={editingValue}
-                                  onChange={(event) => setEditingValue(event.target.value)}
-                                  onBlur={() => {
-                                    void handleCellEdit(employee.id, 'employeeCode', editingValue);
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                      event.preventDefault();
-                                      void handleCellEdit(
-                                        employee.id,
-                                        'employeeCode',
-                                        editingValue,
-                                      );
-                                    }
-                                  }}
-                                  placeholder="Nhập mã nhân viên"
-                                  className="h-8"
-                                />
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setEditingCellId(employee.id);
-                                  setEditingField('employeeCode');
-                                  setEditingValue(employee.employeeCode);
-                                }}
-                                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
-                                style={{
-                                  color: employee.employeeCode ? '#203430' : '#b45309',
-                                  background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
-                                }}
-                              >
-                                {employee.employeeCode || 'Chưa có mã'}
-                                <Pencil size={10} style={{ color: '#f59e0b' }} />
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
-                            {employee.email}
-                          </td>
-                          <td className="px-3 py-3 min-w-[160px]">
-                            {editingCellId === employee.id && editingField === 'department' ? (
-                              <div onClick={(event) => event.stopPropagation()}>
-                                <select
-                                  autoFocus
-                                  value={editingValue}
-                                  onChange={(event) => {
-                                    void handleCellEdit(
-                                      employee.id,
-                                      'department',
-                                      event.target.value,
-                                    );
-                                  }}
-                                  onBlur={closeInlineEdit}
-                                  className="px-2 py-1 rounded border text-xs w-full"
-                                  style={{ borderColor: '#e2ede9', color: '#203430' }}
-                                >
-                                  <option value="Chưa phân bổ">Chưa phân bổ</option>
-                                  {departments.map((dept) => (
-                                    <option key={dept.code} value={dept.name}>
-                                      {dept.name}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : (
-                              <div
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setEditingCellId(employee.id);
-                                  setEditingField('department');
-                                  setEditingValue(employee.department);
-                                }}
-                                className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
-                                style={{ background: departmentColor.bg }}
-                              >
-                                <span
-                                  className="text-xs font-semibold"
-                                  style={{ color: departmentColor.color }}
-                                >
-                                  {employee.department}
-                                </span>
-                                <Pencil size={10} style={{ color: departmentColor.color }} />
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 min-w-[140px]">
-                            {editingCellId === employee.id && editingField === 'role' ? (
-                              <div onClick={(event) => event.stopPropagation()}>
-                                <select
-                                  autoFocus
-                                  value={editingValue}
-                                  onChange={(event) => {
-                                    void handleCellEdit(employee.id, 'role', event.target.value);
-                                  }}
-                                  onBlur={closeInlineEdit}
-                                  className="px-2 py-1 rounded border text-xs w-full"
-                                  style={{ borderColor: '#e2ede9', color: '#203430' }}
-                                >
-                                  <option value="">Chưa phân bổ</option>
-                                  {ROLE_OPTIONS.map((role) => (
-                                    <option key={role.value} value={role.value}>
-                                      {role.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : (
-                              <div
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setEditingCellId(employee.id);
-                                  setEditingField('role');
-                                  setEditingValue(employee.role);
-                                }}
-                                className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
-                                style={{ color: '#203430' }}
-                              >
-                                {getRoleLabel(employee.role)}
-                                <Pencil size={10} style={{ color: '#3b82f6' }} />
-                              </div>
-                            )}
-                          </td>
-                          <td
-                            className="px-3 py-3 text-xs whitespace-nowrap"
-                            style={{ color: '#6b7f78' }}
-                          >
-                            {formatDate(employee.companyJoinDate)}
-                          </td>
-                          <td
-                            className="px-3 py-3 text-xs whitespace-nowrap"
-                            style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
-                          >
-                            {employee.birthday ? `🎂 ${formatDate(employee.birthday)}` : '—'}
-                          </td>
-                          <td className="px-3 py-3">
-                            <span
-                              className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[employee.status].badge}`}
-                            >
-                              {STATUS_CONFIG[employee.status].label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div
-                              className="flex items-center gap-1"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => setEditingEmployee(employee)}
-                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
-                                title="Chỉnh sửa nhân viên"
-                              >
-                                <Pencil size={13} style={{ color: '#f59e0b' }} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDeleteEmployee(employee.id, employee.fullName)
-                                }
-                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
-                                title="Xóa"
-                              >
-                                <Trash2 size={13} style={{ color: '#ef4444' }} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+        <div
+          className="bg-white rounded-xl border overflow-hidden flex min-h-0 flex-1 flex-col"
+          style={{ borderColor: '#e2ede9' }}
+        >
+          <div
+            className="flex items-center justify-between px-5 py-3 border-b shrink-0"
+            style={{ borderColor: '#e2ede9' }}
+          >
+            <div className="flex items-center gap-2">
+              <Table2 size={15} style={{ color: '#1DB87A' }} />
+              <h2 className="font-semibold text-sm" style={{ color: '#203430' }}>
+                Danh sách nhân viên ({employees.length})
+              </h2>
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => void fetchEmployees()}
+                className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{ borderColor: '#e2ede9' }}
+                disabled={isRefreshing || isMutating}
+                title="Tải lại danh sách"
+              >
+                <RefreshCw
+                  size={13}
+                  style={{
+                    color: '#6b7f78',
+                    transform: isRefreshing ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.3s ease',
+                  }}
+                />
+              </button>
             </div>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-5">
-            <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
-              <div className="flex items-center gap-2 mb-4">
-                <Building2 size={15} style={{ color: '#1DB87A' }} />
-                <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-                  Phân bố theo phòng ban
-                </h3>
-              </div>
-              {departmentDistribution.length > 0 ? (
-                <div className="space-y-4 pt-2">
-                  {departmentDistribution.map((department) => {
-                    const words = department.label.trim().split(' ').filter(Boolean);
-                    let initials = '';
-
-                    if (words.length >= 2) {
-                      initials = (words[0][0] + words[1][0]).toUpperCase();
-                    } else {
-                      const upperLetters = department.label.replace(/[^A-Z]/g, '');
-                      initials =
-                        upperLetters.length >= 2
-                          ? upperLetters.slice(0, 2)
-                          : department.label.slice(0, 2).toUpperCase();
-                    }
+          <div className="min-h-0 overflow-auto">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 z-10">
+                <tr style={{ background: '#203430' }}>
+                  <th className="px-3 py-3 w-10">
+                    <Checkbox
+                      checked={selectedIds.length === employees.length && employees.length > 0}
+                      onCheckedChange={toggleAll}
+                      aria-label="Chọn tất cả nhân viên"
+                    />
+                  </th>
+                  {[
+                    'Avatar',
+                    'Họ tên',
+                    'Mã NV',
+                    'Email',
+                    'Phòng ban',
+                    'Vai trò',
+                    'Ngày tham gia',
+                    'Sinh nhật',
+                    'Trạng thái',
+                    'Thao tác',
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      className="px-3 py-3 text-left font-semibold text-white whitespace-nowrap"
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="px-3 py-8 text-center text-sm"
+                      style={{ color: '#6b7f78' }}
+                    >
+                      Đang tải dữ liệu nhân viên...
+                    </td>
+                  </tr>
+                ) : employees.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="px-3 py-8 text-center text-sm"
+                      style={{ color: '#6b7f78' }}
+                    >
+                      Không có nhân viên phù hợp với bộ lọc hiện tại.
+                    </td>
+                  </tr>
+                ) : (
+                  employees.map((employee) => {
+                    const isSelected = selectedIds.includes(employee.id);
+                    const initials =
+                      `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
+                        .trim()
+                        .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
+                    const deptIndex = departments.findIndex((d) => d.name === employee.department);
+                    const departmentColor = getDeptColor(
+                      employee.department,
+                      deptIndex >= 0 ? deptIndex : 0,
+                    );
 
                     return (
-                      <div key={department.label} className="flex flex-col gap-2.5">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-3">
+                      <tr
+                        key={employee.id}
+                        className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
+                        style={{
+                          background: isSelected ? '#f0fdf9' : undefined,
+                          opacity: employee.status === 'inactive' ? 0.75 : 1,
+                        }}
+                        onClick={() => toggleSelect(employee.id)}
+                      >
+                        <td className="px-3 py-3 w-10">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelect(employee.id)}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={`Chọn nhân viên ${employee.fullName}`}
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          {getAvatarUrl(employee.profileImageUrl) ? (
+                            <img
+                              src={getAvatarUrl(employee.profileImageUrl) || ''}
+                              alt={employee.fullName}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
                             <div
-                              className="flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs shrink-0"
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0"
                               style={{
-                                background: `${department.color}15`,
-                                color: department.color,
+                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
                               }}
                             >
                               {initials}
                             </div>
-                            <span className="font-semibold text-sm" style={{ color: '#203430' }}>
-                              {department.label}
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-bold text-sm" style={{ color: '#203430' }}>
-                              {department.count}
-                            </span>
-                            <span className="text-xs font-medium" style={{ color: '#6b7f78' }}>
-                              người
-                            </span>
-                            <div
-                              className="text-xs font-bold px-1.5 py-0.5 rounded-md ml-1 min-w-[44px] text-center"
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <p
+                            className="font-semibold whitespace-nowrap"
+                            style={{ color: '#203430' }}
+                          >
+                            {employee.fullName}
+                          </p>
+                          {employee.department && (
+                            <p
+                              className="truncate text-[11px] font-medium mt-0.5"
+                              style={{ color: '#6b7f78' }}
+                            >
+                              {employee.department}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 min-w-[120px]">
+                          {editingCellId === employee.id && editingField === 'employeeCode' ? (
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <Input
+                                autoFocus
+                                value={editingValue}
+                                onChange={(event) => setEditingValue(event.target.value)}
+                                onBlur={() => {
+                                  void handleCellEdit(employee.id, 'employeeCode', editingValue);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    void handleCellEdit(employee.id, 'employeeCode', editingValue);
+                                  }
+                                }}
+                                placeholder="Nhập mã nhân viên"
+                                className="h-8"
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingCellId(employee.id);
+                                setEditingField('employeeCode');
+                                setEditingValue(employee.employeeCode);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
                               style={{
-                                background: `${department.color}10`,
-                                color: department.color,
+                                color: employee.employeeCode ? '#203430' : '#b45309',
+                                background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
                               }}
                             >
-                              {department.pct}%
+                              {employee.employeeCode || 'Chưa có mã'}
+                              <Pencil size={10} style={{ color: '#f59e0b' }} />
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
+                          {employee.email}
+                        </td>
+                        <td className="px-3 py-3 min-w-[160px]">
+                          {editingCellId === employee.id && editingField === 'department' ? (
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <select
+                                autoFocus
+                                value={editingValue}
+                                onChange={(event) => {
+                                  void handleCellEdit(
+                                    employee.id,
+                                    'department',
+                                    event.target.value,
+                                  );
+                                }}
+                                onBlur={closeInlineEdit}
+                                className="px-2 py-1 rounded border text-xs w-full"
+                                style={{ borderColor: '#e2ede9', color: '#203430' }}
+                              >
+                                <option value="Chưa phân bổ">Chưa phân bổ</option>
+                                {departments.map((dept) => (
+                                  <option key={dept.code} value={dept.name}>
+                                    {dept.name}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
-                          </div>
-                        </div>
-                        <div className="pl-11 pr-1">
-                          <div
-                            className="h-2 w-full rounded-full overflow-hidden"
-                            style={{ background: '#f0f4f2' }}
-                          >
+                          ) : (
                             <div
-                              className="h-full rounded-full transition-all duration-700 ease-out"
-                              style={{
-                                width: `${department.pct}%`,
-                                background: department.color,
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingCellId(employee.id);
+                                setEditingField('department');
+                                setEditingValue(employee.department);
                               }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm" style={{ color: '#6b7f78' }}>
-                  Chưa có dữ liệu phòng ban để hiển thị.
-                </p>
-              )}
-            </div>
-
-            {/* ĐỀ XUẤT THAY THẾ: Cơ cấu vai trò nhân sự */}
-            <div
-              className="bg-white rounded-xl border p-5 flex flex-col"
-              style={{ borderColor: '#e2ede9' }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Shield size={15} style={{ color: '#1DB87A' }} />
-                <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-                  Cơ cấu vai trò nhân sự
-                </h3>
-              </div>
-
-              <div className="flex-1 flex flex-col justify-center">
-                {roleDistribution.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    {roleDistribution.map((role) => (
-                      <div
-                        key={role.role}
-                        className="border rounded-xl p-3 flex flex-col justify-between hover:-translate-y-0.5 transition-transform"
-                        style={{ borderColor: '#e2ede9', backgroundColor: '#fafdfa' }}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div
-                            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ background: role.iconBg, color: role.color }}
-                          >
-                            <span className="font-bold text-xs" style={{ color: role.color }}>
-                              {role.label.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
+                              className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
+                              style={{ background: departmentColor.bg }}
+                            >
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: departmentColor.color }}
+                              >
+                                {employee.department}
+                              </span>
+                              <Pencil size={10} style={{ color: departmentColor.color }} />
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 min-w-[140px]">
+                          {editingCellId === employee.id && editingField === 'role' ? (
+                            <div onClick={(event) => event.stopPropagation()}>
+                              <select
+                                autoFocus
+                                value={editingValue}
+                                onChange={(event) => {
+                                  void handleCellEdit(employee.id, 'role', event.target.value);
+                                }}
+                                onBlur={closeInlineEdit}
+                                className="px-2 py-1 rounded border text-xs w-full"
+                                style={{ borderColor: '#e2ede9', color: '#203430' }}
+                              >
+                                <option value="">Chưa phân bổ</option>
+                                {ROLE_OPTIONS.map((role) => (
+                                  <option key={role.value} value={role.value}>
+                                    {role.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingCellId(employee.id);
+                                setEditingField('role');
+                                setEditingValue(employee.role);
+                              }}
+                              className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
+                              style={{ color: '#203430' }}
+                            >
+                              {getRoleLabel(employee.role)}
+                              <Pencil size={10} style={{ color: '#3b82f6' }} />
+                            </div>
+                          )}
+                        </td>
+                        <td
+                          className="px-3 py-3 text-xs whitespace-nowrap"
+                          style={{ color: '#6b7f78' }}
+                        >
+                          {formatDate(employee.companyJoinDate)}
+                        </td>
+                        <td
+                          className="px-3 py-3 text-xs whitespace-nowrap"
+                          style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
+                        >
+                          {employee.birthday ? `🎂 ${formatDate(employee.birthday)}` : '—'}
+                        </td>
+                        <td className="px-3 py-3">
                           <span
-                            className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
-                            style={{ background: '#f0f4f2', color: '#6b7f78' }}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${STATUS_CONFIG[employee.status].badge}`}
                           >
-                            {role.pct}%
+                            {STATUS_CONFIG[employee.status].label}
                           </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div
+                            className="flex items-center gap-1"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setEditingEmployee(employee)}
+                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                              title="Chỉnh sửa nhân viên"
+                            >
+                              <Pencil size={13} style={{ color: '#f59e0b' }} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleDeleteEmployee(employee.id, employee.fullName)
+                              }
+                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                              title="Xóa"
+                            >
+                              <Trash2 size={13} style={{ color: '#ef4444' }} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Building2 size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
+              Phân bố theo phòng ban
+            </h3>
+          </div>
+          {departmentDistribution.length > 0 ? (
+            <div className="space-y-4 pt-2">
+              {departmentDistribution.map((department) => {
+                const words = department.label.trim().split(' ').filter(Boolean);
+                let initials = '';
+
+                if (words.length >= 2) {
+                  initials = (words[0][0] + words[1][0]).toUpperCase();
+                } else {
+                  const upperLetters = department.label.replace(/[^A-Z]/g, '');
+                  initials =
+                    upperLetters.length >= 2
+                      ? upperLetters.slice(0, 2)
+                      : department.label.slice(0, 2).toUpperCase();
+                }
+
+                return (
+                  <div key={department.label} className="flex flex-col gap-2.5">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex items-center justify-center w-8 h-8 rounded-lg font-bold text-xs shrink-0"
+                          style={{
+                            background: `${department.color}15`,
+                            color: department.color,
+                          }}
+                        >
+                          {initials}
                         </div>
-                        <div>
-                          <h4 className="text-sm font-bold mb-0.5" style={{ color: '#203430' }}>
-                            {role.count}
-                          </h4>
-                          <p className="text-[11px] font-semibold" style={{ color: '#6b7f78' }}>
-                            {role.label}
-                          </p>
+                        <span className="font-semibold text-sm" style={{ color: '#203430' }}>
+                          {department.label}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="font-bold text-sm" style={{ color: '#203430' }}>
+                          {department.count}
+                        </span>
+                        <span className="text-xs font-medium" style={{ color: '#6b7f78' }}>
+                          người
+                        </span>
+                        <div
+                          className="text-xs font-bold px-1.5 py-0.5 rounded-md ml-1 min-w-[44px] text-center"
+                          style={{
+                            background: `${department.color}10`,
+                            color: department.color,
+                          }}
+                        >
+                          {department.pct}%
                         </div>
                       </div>
-                    ))}
+                    </div>
+                    <div className="pl-11 pr-1">
+                      <div
+                        className="h-2 w-full rounded-full overflow-hidden"
+                        style={{ background: '#f0f4f2' }}
+                      >
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{
+                            width: `${department.pct}%`,
+                            background: department.color,
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-sm" style={{ color: '#6b7f78' }}>
-                    Chưa có dữ liệu vai trò.
-                  </p>
-                )}
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: '#6b7f78' }}>
+              Chưa có dữ liệu phòng ban để hiển thị.
+            </p>
+          )}
+        </div>
+
+        <div
+          className="bg-white rounded-xl border p-5 flex flex-col"
+          style={{ borderColor: '#e2ede9' }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Shield size={15} style={{ color: '#1DB87A' }} />
+            <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
+              Cơ cấu vai trò nhân sự
+            </h3>
+          </div>
+
+          <div className="flex-1 flex flex-col justify-center">
+            {roleDistribution.length > 0 ? (
+              <div className="grid grid-cols-2 gap-4">
+                {roleDistribution.map((role) => (
+                  <div
+                    key={role.role}
+                    className="border rounded-xl p-3 flex flex-col justify-between hover:-translate-y-0.5 transition-transform"
+                    style={{ borderColor: '#e2ede9', backgroundColor: '#fafdfa' }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: role.iconBg, color: role.color }}
+                      >
+                        <span className="font-bold text-xs" style={{ color: role.color }}>
+                          {role.label.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <span
+                        className="text-[11px] font-bold px-1.5 py-0.5 rounded-md"
+                        style={{ background: '#f0f4f2', color: '#6b7f78' }}
+                      >
+                        {role.pct}%
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold mb-0.5" style={{ color: '#203430' }}>
+                        {role.count}
+                      </h4>
+                      <p className="text-[11px] font-semibold" style={{ color: '#6b7f78' }}>
+                        {role.label}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-
-            {/* 
-          TẠM ẨN: Hoạt động gần đây 
-          <div className="bg-white rounded-xl border p-5" style={{ borderColor: '#e2ede9' }}>
-            <div className="flex items-center gap-2 mb-4">
-              <Clock size={15} style={{ color: '#1DB87A' }} />
-              <h3 className="font-semibold text-sm" style={{ color: '#203430' }}>
-                Hoạt động gần đây
-              </h3>
-            </div>
-            <div
-              className="rounded-xl border border-dashed p-4 text-sm"
-              style={{ borderColor: '#d6e5df', color: '#6b7f78' }}
-            >
-              Backend hiện chưa có feed hoạt động cho trang này, nên khu vực này đang được giữ ở trạng
-              thái an toàn.
-            </div>
+            ) : (
+              <p className="text-sm" style={{ color: '#6b7f78' }}>
+                Chưa có dữ liệu vai trò.
+              </p>
+            )}
           </div>
-        */}
-          </div>
-        </>
-
-
+        </div>
+      </div>
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent
           showCloseButton={false}
