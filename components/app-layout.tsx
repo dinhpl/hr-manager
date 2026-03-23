@@ -18,6 +18,7 @@ import {
   X,
   ChevronDown,
   Monitor,
+  BookOpen,
 } from 'lucide-react';
 import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
@@ -85,6 +86,12 @@ const NAV_ITEMS = [
     icon: Monitor,
     key: 'devices',
   },
+  {
+    href: '/dashboard/skills',
+    label: 'Quản lý Kỹ Năng',
+    icon: BookOpen,
+    key: 'skills',
+  },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
   { href: '/dashboard/reports', label: 'Báo cáo', icon: BarChart3, key: 'reports' },
   {
@@ -148,7 +155,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // if (item.key === 'attendance') {
     //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     // }
-    if (item.key === 'employees' || item.key === 'settings' || item.key === 'devices') {
+    if (item.key === 'employees' || item.key === 'settings' || item.key === 'devices' || item.key === 'skills') {
       return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     }
     return true;
