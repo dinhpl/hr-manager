@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Monitor,
   BookOpen,
+  ClipboardList,
 } from 'lucide-react';
 import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
@@ -92,6 +93,12 @@ const NAV_ITEMS = [
     icon: BookOpen,
     key: 'skills',
   },
+  {
+    href: '/dashboard/activity-log',
+    label: 'Nhật ký hoạt động',
+    icon: ClipboardList,
+    key: 'activity-log',
+  },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
   { href: '/dashboard/reports', label: 'Báo cáo', icon: BarChart3, key: 'reports' },
   {
@@ -149,13 +156,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const roleTitle = userInfo ? getRoleLabel(userInfo.role) : '';
   const currentRole = toFrontendRole(userInfo?.role);
   const isSystemAdmin = userInfo?.systemRole?.toUpperCase() === 'ADMIN';
+  const canViewActivityLog = currentRole === 'hr' || isSystemAdmin;
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (item.key === 'approval') return currentRole !== 'employee';
     if (item.key === 'reports') return currentRole !== 'employee';
+    if (item.key === 'activity-log') return canViewActivityLog;
     // if (item.key === 'attendance') {
     //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     // }
-    if (item.key === 'employees' || item.key === 'settings' || item.key === 'devices' || item.key === 'skills') {
+    if (
+      item.key === 'employees' ||
+      item.key === 'settings' ||
+      item.key === 'devices' ||
+      item.key === 'skills'
+    ) {
       return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     }
     return true;
@@ -184,7 +198,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo */}
         <div
-          className="flex items-center gap-3 px-5 py-5"
+          className="flex items-center gap-3 px-5 py-5 h-[64px]"
           style={{ borderBottom: '1px solid #e2ede9' }}
         >
           <BrandLogo
@@ -239,7 +253,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             className="px-4 py-3 mx-3 mb-1 rounded-lg"
             style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
           >
-            <p className="text-[10px] font-medium uppercase tracking-wide mb-0.5" style={{ color: '#6b7f78' }}>
+            <p
+              className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
+              style={{ color: '#6b7f78' }}
+            >
               Ngày gia nhập (Chính thức)
             </p>
             <p className="text-sm font-semibold" style={{ color: '#0E474E' }}>

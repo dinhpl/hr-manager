@@ -151,13 +151,14 @@ function sanitizeLeaveRequestForViewer<
     reason?: string | null;
   },
 >(request: T, requestingUser: AuthUser) {
-  const ownerId = request.userId ?? request.user?.id;
-  if (ownerId === requestingUser.id) return request;
+  return request;
+  // const ownerId = request.userId ?? request.user?.id;
+  // if (ownerId === requestingUser.id) return request;
 
-  return {
-    ...request,
-    reason: null,
-  };
+  // return {
+  //   ...request,
+  //   reason: null,
+  // };
 }
 
 function canApproveRequest(

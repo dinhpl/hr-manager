@@ -85,6 +85,36 @@ enum DeviceAuditAction {
   RETIRED
 }
 
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  CANCEL
+  LOGIN
+  LOGOUT
+  EXPORT
+  UPLOAD
+}
+
+enum AuditModule {
+  AUTH
+  USER
+  LEAVE_REQUEST
+  LEAVE_TYPE
+  LEAVE_BALANCE
+  OVERTIME
+  COMP_OFF
+  ATTENDANCE
+  HOLIDAY
+  DEPARTMENT
+  DEVICE
+  SKILL
+  USER_SKILL
+  SETTING
+}
+
 model User {
   id              BigInt    @id @default(autoincrement())
   email           String    @unique @db.VarChar(255)
@@ -134,6 +164,7 @@ model User {
   maintainedDevices    DeviceMaintenanceLog[] @relation("MaintenanceAssignedTo")
   deviceAuditLogs      DeviceAuditLog[]     @relation("DeviceAuditActor")
   userSkills           UserSkill[]
+  auditLogs            AuditLog[]           @relation("AuditLogActor")
 
   @@map("users")
 }
@@ -436,6 +467,27 @@ model DeviceAuditLog {
   @@index([deviceId, createdAt])
   @@index([actorId])
   @@map("device_audit_logs")
+}
+
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  actorId    BigInt      @map("actor_id")
+  actorName  String      @map("actor_name")
+  actorRole  String      @map("actor_role")
+  action     AuditAction
+  module     AuditModule
+  entityId   String?     @map("entity_id")
+  entityName String?     @map("entity_name")
+  changes    Json?
+  ipAddress  String?     @map("ip_address")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  actor User @relation("AuditLogActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([module, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // ── Skill Management ──────────────────────────────────────────

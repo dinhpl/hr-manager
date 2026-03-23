@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
-import { CalendarDays, FileDown, RefreshCw, Save, Upload, X } from 'lucide-react';
+import {
+  CalendarDays,
+  Eye,
+  FileDown,
+  History,
+  Pencil,
+  RefreshCw,
+  Save,
+  Upload,
+  X,
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -9,11 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -24,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { api, apiClient, getStoredToken } from '@/lib/api-client';
-import { toFrontendRole } from '@/lib/hr-utils';
+import { buildQuery, formatDate, formatDateTimeVN, toFrontendRole } from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
 
 interface LeaveBalanceApiRow {
@@ -53,8 +59,32 @@ interface LeaveBalanceApiRow {
 }
 
 interface CurrentUserInfo {
+  id?: string | null;
   role?: string | null;
   systemRole?: string | null;
+}
+
+interface LeaveBalanceHistoryItem {
+  id: string;
+  status: string;
+  fromDate: string;
+  toDate: string;
+  totalDays: number | string;
+  reason?: string | null;
+  createdAt: string;
+  approvedAt?: string | null;
+  leaveType?: {
+    code?: string | null;
+    name?: string | null;
+    color?: string | null;
+  } | null;
+  approver?: {
+    fullName?: string | null;
+  } | null;
+  user?: {
+    id?: string | null;
+    fullName?: string | null;
+  } | null;
 }
 
 const BALANCE_FORM_SECTIONS = [
@@ -103,6 +133,40 @@ function roundBalanceDisplay(value: number) {
   return Math.round(value * 10) / 10;
 }
 
+function getStatusBadge(status?: string | null) {
+  switch ((status ?? '').toUpperCase()) {
+    case 'APPROVED':
+      return {
+        label: 'Đã duyệt',
+        className: 'border border-emerald-200 bg-emerald-50 text-emerald-600',
+      };
+    case 'REJECTED':
+      return {
+        label: 'Từ chối',
+        className: 'border border-red-200 bg-red-50 text-red-500',
+      };
+    case 'CANCELLED':
+      return {
+        label: 'Đã hủy',
+        className: 'border border-slate-200 bg-slate-100 text-slate-500',
+      };
+    default:
+      return {
+        label: 'Chờ duyệt',
+        className: 'border border-amber-200 bg-amber-50 text-amber-600',
+      };
+  }
+}
+
+function getHistoryReason(reason?: string | null) {
+  if (!reason) return '—';
+  const firstLine = reason
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstLine || '—';
+}
+
 export default function LeaveBalancesPage() {
   const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceApiRow[]>([]);
   const [balanceYear, setBalanceYear] = useState(new Date().getFullYear());
@@ -124,6 +188,10 @@ export default function LeaveBalancesPage() {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUserInfo | null>(null);
   const [isLoadingCurrentUser, setIsLoadingCurrentUser] = useState(true);
+  const [historyBalance, setHistoryBalance] = useState<LeaveBalanceApiRow | null>(null);
+  const [balanceHistory, setBalanceHistory] = useState<LeaveBalanceHistoryItem[]>([]);
+  const [isLoadingBalanceHistory, setIsLoadingBalanceHistory] = useState(false);
+  const [balanceHistoryError, setBalanceHistoryError] = useState<string | null>(null);
 
   const currentRole: FrontendRole | null = currentUser ? toFrontendRole(currentUser.role) : null;
   const canManageLeaveBalances =
@@ -260,8 +328,7 @@ export default function LeaveBalancesPage() {
     }
   };
 
-  const openEditBalance = (row: LeaveBalanceApiRow) => {
-    if (!canManageLeaveBalances) return;
+  const openInfoDialog = (row: LeaveBalanceApiRow) => {
     setEditingBalance(row);
     setBalanceForm({
       annualDays: String(row.annualDays),
@@ -274,6 +341,52 @@ export default function LeaveBalancesPage() {
       usedCompOffDays: String(row.usedCompOffDays ?? 0),
     });
   };
+
+  const openHistoryDialog = (row: LeaveBalanceApiRow) => {
+    setHistoryBalance(row);
+    setBalanceHistory([]);
+    setBalanceHistoryError(null);
+  };
+
+  useEffect(() => {
+    if (!historyBalance) {
+      setBalanceHistory([]);
+      setBalanceHistoryError(null);
+      setIsLoadingBalanceHistory(false);
+      return;
+    }
+
+    const query = buildQuery({
+      userId: historyBalance.userId,
+      fromDate: `${historyBalance.year}-01-01 00:00`,
+      toDate: `${historyBalance.year}-12-31 23:59`,
+      limit: 100,
+      page: 1,
+    });
+
+    setIsLoadingBalanceHistory(true);
+    setBalanceHistoryError(null);
+
+    apiClient
+      .get<LeaveBalanceHistoryItem[]>(`/api/leave-requests?${query}`)
+      .then((response) => {
+        const rows = (response.data ?? []).filter(
+          (item) =>
+            String(item.user?.id ?? '') === String(historyBalance.userId) &&
+            !['REJECTED', 'CANCELLED'].includes(String(item.status ?? '').toUpperCase()),
+        );
+        setBalanceHistory(rows);
+      })
+      .catch((error) => {
+        setBalanceHistory([]);
+        setBalanceHistoryError(
+          error instanceof Error ? error.message : 'Không thể tải lịch sử nghỉ phép.',
+        );
+      })
+      .finally(() => {
+        setIsLoadingBalanceHistory(false);
+      });
+  }, [historyBalance]);
 
   const handleSaveBalance = async () => {
     if (!editingBalance || !canManageLeaveBalances) return;
@@ -389,7 +502,9 @@ export default function LeaveBalancesPage() {
         </div>
         <p className="text-xs" style={{ color: '#6b7f78' }}>
           {leaveBalances.length} bản ghi ·{' '}
-          {canManageLeaveBalances ? 'Click vào hàng để chỉnh sửa' : 'Chỉ xem dữ liệu'}
+          {canManageLeaveBalances
+            ? 'Click vào hàng để chỉnh sửa hoặc xem lịch sử'
+            : 'Click vào hàng để xem lịch sử'}
         </p>
       </div>
 
@@ -404,18 +519,19 @@ export default function LeaveBalancesPage() {
               <tr style={{ background: '#203430' }}>
                 {[
                   'Nhân viên',
-                  'Mã NV',
+                  'MãNV',
                   'Phòng ban',
                   `Phép năm ${balanceYear}`,
                   'Thâm niên',
                   `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
                   'Comp-Off',
                   'WFH',
-                  'Đã dùng carry-over',
+                  'Đã dùng phép chuyển',
                   'Đã dùng phép',
                   'Đã dùng Comp-Off',
                   'Số ngày nghỉ còn lại tính ĐẾN tháng hiện tại',
                   'Số ngày nghỉ còn lại TẠM tính trong năm',
+                  'Action',
                 ].map((h) => (
                   <th
                     key={h}
@@ -430,7 +546,7 @@ export default function LeaveBalancesPage() {
               {isLoadingBalances ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -440,7 +556,7 @@ export default function LeaveBalancesPage() {
               ) : leaveBalances.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -486,13 +602,11 @@ export default function LeaveBalancesPage() {
                   return (
                     <tr
                       key={row.id}
-                      className={`border-b last:border-0 transition-colors ${
-                        canManageLeaveBalances
-                          ? 'cursor-pointer hover:bg-emerald-50'
-                          : 'cursor-default'
-                      }`}
+                      className="cursor-pointer border-b last:border-0 transition-colors hover:bg-emerald-50"
                       style={{ borderColor: '#e2ede9' }}
-                      onClick={() => openEditBalance(row)}
+                      onClick={() =>
+                        canManageLeaveBalances ? openInfoDialog(row) : openHistoryDialog(row)
+                      }
                     >
                       <td
                         className="px-3 py-2.5 font-semibold whitespace-nowrap"
@@ -538,7 +652,9 @@ export default function LeaveBalancesPage() {
                       </td>
                       <td
                         className="px-3 py-2.5 text-center"
-                        style={{ color: Number(row.usedCarryOverDays ?? 0) < 0 ? '#ef4444' : '#f59e0b' }}
+                        style={{
+                          color: Number(row.usedCarryOverDays ?? 0) < 0 ? '#ef4444' : '#f59e0b',
+                        }}
                       >
                         {Number(row.usedCarryOverDays ?? 0)}
                       </td>
@@ -562,9 +678,7 @@ export default function LeaveBalancesPage() {
                       >
                         <HoverCard openDelay={100} closeDelay={100}>
                           <HoverCardTrigger asChild>
-                            <span className="cursor-help">
-                              {currentMonthRemaining}
-                            </span>
+                            <span className="cursor-help">{currentMonthRemaining}</span>
                           </HoverCardTrigger>
                           <HoverCardContent
                             className="w-72 p-0 overflow-hidden"
@@ -572,23 +686,34 @@ export default function LeaveBalancesPage() {
                           >
                             <div
                               className="px-4 py-3 border-b text-xs font-bold"
-                              style={{ borderColor: '#e2ede9', color: '#203430', background: '#f8fdfb' }}
+                              style={{
+                                borderColor: '#e2ede9',
+                                color: '#203430',
+                                background: '#f8fdfb',
+                              }}
                             >
-                              Cách tính — ĐẾN tháng {new Date().getMonth() + 1}/{new Date().getFullYear()}
+                              Cách tính — ĐẾN tháng {new Date().getMonth() + 1}/
+                              {new Date().getFullYear()}
                             </div>
                             <div className="px-4 py-3 space-y-1.5 text-xs">
                               <div className="flex justify-between items-center">
                                 <span style={{ color: '#6b7f78' }}>
                                   Phép năm {balanceYear} ({new Date().getMonth() + 1}/12 tháng)
                                 </span>
-                                <span className="font-semibold tabular-nums" style={{ color: '#203430' }}>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#203430' }}
+                                >
                                   {currentMonthAccruedAnnualDays}
                                 </span>
                               </div>
                               {Number(row.seniorityDays) !== 0 && (
                                 <div className="flex justify-between items-center">
                                   <span style={{ color: '#6b7f78' }}>+ Thâm niên</span>
-                                  <span className="font-semibold tabular-nums" style={{ color: '#203430' }}>
+                                  <span
+                                    className="font-semibold tabular-nums"
+                                    style={{ color: '#203430' }}
+                                  >
                                     {Number(row.seniorityDays)}
                                   </span>
                                 </div>
@@ -601,14 +726,24 @@ export default function LeaveBalancesPage() {
                                 </span>
                                 <span
                                   className="font-semibold tabular-nums"
-                                  style={{ color: today < resetDate ? (effectiveCarryOver < 0 ? '#ef4444' : '#203430') : '#9ca3af' }}
+                                  style={{
+                                    color:
+                                      today < resetDate
+                                        ? effectiveCarryOver < 0
+                                          ? '#ef4444'
+                                          : '#203430'
+                                        : '#9ca3af',
+                                  }}
                                 >
                                   {today < resetDate ? effectiveCarryOver : 0}
                                 </span>
                               </div>
                               <div className="flex justify-between items-center">
                                 <span style={{ color: '#6b7f78' }}>− Đã dùng phép</span>
-                                <span className="font-semibold tabular-nums" style={{ color: '#f59e0b' }}>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#f59e0b' }}
+                                >
                                   {Number(row.usedDays)}
                                 </span>
                               </div>
@@ -617,7 +752,11 @@ export default function LeaveBalancesPage() {
                                 style={{ borderColor: '#e2ede9' }}
                               >
                                 <span style={{ color: '#203430' }}>=</span>
-                                <span style={{ color: currentMonthRemaining < 0 ? '#ef4444' : '#1DB87A' }}>
+                                <span
+                                  style={{
+                                    color: currentMonthRemaining < 0 ? '#ef4444' : '#1DB87A',
+                                  }}
+                                >
                                   {currentMonthRemaining} ngày
                                 </span>
                               </div>
@@ -633,6 +772,36 @@ export default function LeaveBalancesPage() {
                       >
                         {yearlyRemaining}
                       </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {canManageLeaveBalances ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openInfoDialog(row);
+                              }}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-emerald-50"
+                              style={{ borderColor: '#d1fae5', color: '#059669' }}
+                              title="Chỉnh sửa thông tin"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openHistoryDialog(row);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-sky-50"
+                            style={{ borderColor: '#dbeafe', color: '#2563eb' }}
+                            title="Xem lịch sử"
+                          >
+                            {canManageLeaveBalances ? <History size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -642,9 +811,9 @@ export default function LeaveBalancesPage() {
         </div>
       </div>
 
-      {/* Edit balance modal */}
+      {/* Info modal */}
       <Dialog
-        open={canManageLeaveBalances && Boolean(editingBalance)}
+        open={Boolean(editingBalance)}
         onOpenChange={(open) => !open && setEditingBalance(null)}
       >
         {editingBalance && (
@@ -653,7 +822,7 @@ export default function LeaveBalancesPage() {
             className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-3xl"
           >
             <DialogHeader className="sr-only">
-              <DialogTitle>Chỉnh sửa phép năm</DialogTitle>
+              <DialogTitle>Thông Tin phép năm</DialogTitle>
               <DialogDescription>
                 Cập nhật quỹ phép năm và phần đã sử dụng của nhân viên.
               </DialogDescription>
@@ -756,7 +925,7 @@ export default function LeaveBalancesPage() {
                       );
                     })()}
                     <h2 className="text-lg font-bold" style={{ color: '#203430' }}>
-                      Chỉnh sửa phép năm
+                      Thông Tin phép năm
                     </h2>
                     <p className="mt-1 text-sm" style={{ color: '#6b7f78' }}>
                       {editingBalance.user.fullName} · {editingBalance.year}
@@ -827,6 +996,7 @@ export default function LeaveBalancesPage() {
                   </p>
                 </div>
               </div>
+
               <div
                 className="flex justify-end gap-2 border-t px-6 py-4"
                 style={{ borderColor: '#e2ede9' }}
@@ -848,6 +1018,157 @@ export default function LeaveBalancesPage() {
                 >
                   <Save size={14} />
                   {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* History modal */}
+      <Dialog
+        open={Boolean(historyBalance)}
+        onOpenChange={(open) => !open && setHistoryBalance(null)}
+      >
+        {historyBalance && (
+          <DialogContent
+            showCloseButton={false}
+            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-3xl"
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>Lịch Sử phép năm</DialogTitle>
+              <DialogDescription>
+                Xem lịch sử nghỉ phép của nhân viên trong năm đã chọn.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex max-h-[min(88vh,760px)] flex-col overflow-hidden rounded-3xl bg-white">
+              <div
+                className="flex items-start justify-between gap-4 border-b px-6 py-5"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <div>
+                  <h2 className="text-lg font-bold" style={{ color: '#203430' }}>
+                    Lịch Sử phép năm
+                  </h2>
+                  <p className="mt-1 text-sm" style={{ color: '#6b7f78' }}>
+                    {historyBalance.user.fullName} · {historyBalance.year}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setHistoryBalance(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl hover:bg-gray-100"
+                  style={{ color: '#6b7f78' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto px-6 py-5">
+                <div
+                  className="rounded-2xl border"
+                  style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
+                >
+                  <div
+                    className="flex items-center justify-between gap-3 border-b px-4 py-3"
+                    style={{ borderColor: '#e2ede9' }}
+                  >
+                    <div>
+                      <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                        Lịch sử nghỉ phép năm {historyBalance.year}
+                      </h3>
+                      <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
+                        Chỉ hiển thị các đơn của member đang chọn.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                      {balanceHistory.length} bản ghi
+                    </span>
+                  </div>
+
+                  {isLoadingBalanceHistory ? (
+                    <div className="px-4 py-8 text-center text-sm" style={{ color: '#6b7f78' }}>
+                      Đang tải lịch sử...
+                    </div>
+                  ) : balanceHistoryError ? (
+                    <div className="px-4 py-8 text-center text-sm text-red-500">
+                      {balanceHistoryError}
+                    </div>
+                  ) : balanceHistory.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-sm" style={{ color: '#6b7f78' }}>
+                      Chưa có lịch sử nghỉ phép trong năm {historyBalance.year}.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 p-4">
+                      {balanceHistory.map((item) => {
+                        const status = getStatusBadge(item.status);
+                        const leaveTypeLabel = item.leaveType?.name
+                          ? `${item.leaveType.code} - ${item.leaveType.name}`
+                          : item.leaveType?.code || 'Nghỉ phép';
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="rounded-2xl border p-4"
+                            style={{ borderColor: '#e2ede9', background: '#fff' }}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                    style={{
+                                      background: `${item.leaveType?.color || '#e2ede9'}20`,
+                                      color: item.leaveType?.color || '#203430',
+                                    }}
+                                  >
+                                    {leaveTypeLabel}
+                                  </span>
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status.className}`}
+                                  >
+                                    {status.label}
+                                  </span>
+                                </div>
+                                <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                                  {formatDate(item.fromDate)} - {formatDate(item.toDate)} ·{' '}
+                                  {Number(item.totalDays)} ngày
+                                </p>
+                                <p className="text-xs" style={{ color: '#6b7f78' }}>
+                                  Lý do: {getHistoryReason(item.reason)}
+                                </p>
+                              </div>
+                              <div
+                                className="space-y-1 text-right text-xs"
+                                style={{ color: '#6b7f78' }}
+                              >
+                                <p>Tạo lúc: {formatDateTimeVN(item.createdAt)}</p>
+                                <p>
+                                  Duyệt lúc:{' '}
+                                  {item.approvedAt ? formatDateTimeVN(item.approvedAt) : '—'}
+                                </p>
+                                <p>Người duyệt: {item.approver?.fullName || '—'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div
+                className="flex justify-end gap-2 border-t px-6 py-4"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setHistoryBalance(null)}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+                  style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+                >
+                  Đóng
                 </button>
               </div>
             </div>

@@ -22,15 +22,16 @@ function sanitizeLeaveReasonForViewer<
     reason?: string | null;
   },
 >(request: T, viewer: { id: bigint; role: UserRole }) {
-  if (viewer.role !== 'EMPLOYEE') return request;
+  return request;
+  // if (viewer.role !== 'EMPLOYEE') return request;
 
-  const ownerId = request.userId ?? request.user?.id;
-  if (ownerId === viewer.id) return request;
+  // const ownerId = request.userId ?? request.user?.id;
+  // if (ownerId === viewer.id) return request;
 
-  return {
-    ...request,
-    reason: null,
-  };
+  // return {
+  //   ...request,
+  //   reason: null,
+  // };
 }
 
 async function getEmployeeSummary(userId: bigint) {

@@ -1,7 +1,69 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import * as service from './leave-balances.service';
 import { sendSuccess } from '../../utils/response';
+import { buildChanges, createAuditLog, getClientIp } from '../audit-logs/audit-logs.service';
+import prisma from '../../config/prisma';
+
+const LEAVE_BALANCE_AUDIT_INCLUDE = {
+  user: { select: { fullName: true, username: true, employeeCode: true } },
+  leaveType: { select: { code: true, name: true } },
+} satisfies Prisma.LeaveBalanceInclude;
+
+const LEAVE_BALANCE_AUDIT_FIELDS = [
+  'annualDays',
+  'carryOverDays',
+  'seniorityDays',
+  'compOffDays',
+  'wfhDays',
+  'usedCarryOverDays',
+  'usedDays',
+  'usedCompOffDays',
+] as const;
+
+function getLeaveBalanceEntityName(balance: {
+  year?: number;
+  user?: {
+    fullName?: string | null;
+    username?: string | null;
+    employeeCode?: string | null;
+  } | null;
+  leaveType?: { code?: string | null; name?: string | null } | null;
+}) {
+  const userLabel =
+    balance.user?.fullName?.trim() ||
+    balance.user?.username?.trim() ||
+    balance.user?.employeeCode?.trim() ||
+    'Nhân viên';
+  const leaveTypeLabel = balance.leaveType?.name
+    ? `${balance.leaveType.code} - ${balance.leaveType.name}`
+    : balance.leaveType?.code || 'Nghỉ phép';
+
+  return `${userLabel} • ${leaveTypeLabel} • Năm ${balance.year ?? ''}`.trim();
+}
+
+function toLeaveBalanceAuditSnapshot(balance: {
+  annualDays?: unknown;
+  carryOverDays?: unknown;
+  seniorityDays?: unknown;
+  compOffDays?: unknown;
+  wfhDays?: unknown;
+  usedCarryOverDays?: unknown;
+  usedDays?: unknown;
+  usedCompOffDays?: unknown;
+}) {
+  return {
+    annualDays: Number(balance.annualDays ?? 0),
+    carryOverDays: Number(balance.carryOverDays ?? 0),
+    seniorityDays: Number(balance.seniorityDays ?? 0),
+    compOffDays: Number(balance.compOffDays ?? 0),
+    wfhDays: Number(balance.wfhDays ?? 0),
+    usedCarryOverDays: Number(balance.usedCarryOverDays ?? 0),
+    usedDays: Number(balance.usedDays ?? 0),
+    usedCompOffDays: Number(balance.usedCompOffDays ?? 0),
+  } satisfies Record<(typeof LEAVE_BALANCE_AUDIT_FIELDS)[number], unknown>;
+}
 
 export async function exportLeaveBalances(req: Request, res: Response, next: NextFunction) {
   try {
@@ -81,6 +143,7 @@ export async function initializeBalances(req: Request, res: Response, next: Next
 
 export async function adjustBalance(req: Request, res: Response, next: NextFunction) {
   try {
+    const id = BigInt(String(req.params.id));
     const data = z
       .object({
         annualDays: z.coerce.number().optional(),
@@ -93,7 +156,38 @@ export async function adjustBalance(req: Request, res: Response, next: NextFunct
         usedCompOffDays: z.coerce.number().optional(),
       })
       .parse(req.body);
-    const balance = await service.adjustBalance(BigInt(String(req.params.id)), data);
+    const before = await prisma.leaveBalance.findUnique({
+      where: { id },
+      include: LEAVE_BALANCE_AUDIT_INCLUDE,
+    });
+    const balance = await service.adjustBalance(id, data);
+    const after = await prisma.leaveBalance.findUnique({
+      where: { id },
+      include: LEAVE_BALANCE_AUDIT_INCLUDE,
+    });
+    const changes =
+      after && before
+        ? buildChanges(
+            toLeaveBalanceAuditSnapshot(before) as Record<string, unknown>,
+            toLeaveBalanceAuditSnapshot(after) as Record<string, unknown>,
+            [...LEAVE_BALANCE_AUDIT_FIELDS],
+          )
+        : undefined;
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'UPDATE',
+      module: 'LEAVE_BALANCE',
+      entityId: id.toString(),
+      entityName: after
+        ? getLeaveBalanceEntityName(after)
+        : before
+          ? getLeaveBalanceEntityName(before)
+          : 'Điều chỉnh số dư nghỉ phép',
+      changes,
+      ipAddress: getClientIp(req),
+    });
     sendSuccess(res, balance);
   } catch (err) {
     next(err);

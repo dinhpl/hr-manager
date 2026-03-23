@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import * as authService from './auth.service';
 import { loginSchema, updateProfileSchema, changePasswordSchema } from './auth.validation';
 import { sendSuccess } from '../../utils/response';
+import { createAuditLog, getClientIp } from '../audit-logs/audit-logs.service';
 
 const REFRESH_COOKIE_BASE = {
   httpOnly: true,
@@ -21,6 +22,17 @@ export async function loginController(req: Request, res: Response, next: NextFun
     res.cookie('refreshToken', result.refreshToken, {
       ...REFRESH_COOKIE_BASE,
       maxAge: cookieMaxAge,
+    });
+
+    void createAuditLog({
+      actorId: BigInt(result.user.id),
+      actorName: result.user.fullName || result.user.username || result.user.email,
+      actorRole: result.user.role,
+      action: 'LOGIN',
+      module: 'AUTH',
+      entityId: result.user.id.toString(),
+      entityName: result.user.email,
+      ipAddress: getClientIp(req),
     });
 
     sendSuccess(res, { accessToken: result.accessToken, user: result.user });
@@ -44,7 +56,19 @@ export async function refreshController(req: Request, res: Response, next: NextF
   }
 }
 
-export async function logoutController(_req: Request, res: Response) {
+export async function logoutController(req: Request, res: Response) {
+  if (req.user) {
+    void createAuditLog({
+      actorId: req.user.id,
+      actorName: req.user.username || req.user.email,
+      actorRole: req.user.role,
+      action: 'LOGOUT',
+      module: 'AUTH',
+      entityId: req.user.id.toString(),
+      entityName: req.user.email,
+      ipAddress: getClientIp(req),
+    });
+  }
   res.clearCookie('refreshToken');
   sendSuccess(res, { message: 'Logged out successfully' });
 }

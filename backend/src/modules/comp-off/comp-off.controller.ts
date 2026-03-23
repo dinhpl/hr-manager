@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import * as service from './comp-off.service';
 import { sendSuccess } from '../../utils/response';
+import { createAuditLog, getClientIp } from '../audit-logs/audit-logs.service';
 
 const createSchema = z.object({
   fromDate: z.string().datetime(),
@@ -42,6 +43,16 @@ export async function create(req: Request, res: Response, next: NextFunction) {
   try {
     const data = createSchema.parse(req.body);
     const record = await service.createCompOff(req.user!.id, data);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'CREATE',
+      module: 'COMP_OFF',
+      entityId: record.id.toString(),
+      entityName: 'Comp-Off #' + record.id,
+      ipAddress: getClientIp(req),
+    });
     sendSuccess(res, record, undefined, 201);
   } catch (err) {
     next(err);
@@ -50,7 +61,18 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 
 export async function approve(req: Request, res: Response, next: NextFunction) {
   try {
-    const record = await service.approveCompOff(BigInt(String(req.params.id)), req.user!.id);
+    const id = BigInt(String(req.params.id));
+    const record = await service.approveCompOff(id, req.user!.id);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'APPROVE',
+      module: 'COMP_OFF',
+      entityId: id.toString(),
+      entityName: 'Comp-Off #' + id,
+      ipAddress: getClientIp(req),
+    });
     sendSuccess(res, record);
   } catch (err) {
     next(err);
@@ -59,7 +81,18 @@ export async function approve(req: Request, res: Response, next: NextFunction) {
 
 export async function reject(req: Request, res: Response, next: NextFunction) {
   try {
-    const record = await service.rejectCompOff(BigInt(String(req.params.id)), req.user!.id);
+    const id = BigInt(String(req.params.id));
+    const record = await service.rejectCompOff(id, req.user!.id);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'REJECT',
+      module: 'COMP_OFF',
+      entityId: id.toString(),
+      entityName: 'Comp-Off #' + id,
+      ipAddress: getClientIp(req),
+    });
     sendSuccess(res, record);
   } catch (err) {
     next(err);
