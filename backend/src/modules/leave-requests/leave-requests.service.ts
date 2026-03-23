@@ -88,7 +88,11 @@ function getVietnamStartOfToday() {
   return parseVietnamDateTime(`${todayDatePart} 00:00`);
 }
 
-function shouldEnforceAdvanceRequestDays(fromDate: Date, todayStart: Date, advanceRequestDays?: number) {
+function shouldEnforceAdvanceRequestDays(
+  fromDate: Date,
+  todayStart: Date,
+  advanceRequestDays?: number,
+) {
   return typeof advanceRequestDays === 'number' && advanceRequestDays > 0 && fromDate > todayStart;
 }
 
@@ -108,8 +112,9 @@ function requiresLeaveBalanceCheck(leaveTypeCode?: string | null) {
 
 function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery) {
   const and: Prisma.LeaveRequestWhereInput[] = [];
+  const isGlobalScope = query.scope === 'global';
 
-  if (query.scope === 'global') {
+  if (isGlobalScope) {
     // Intentionally skip role-based scoping so the leave history screen can show the same dataset to all members.
   } else if (requestingUser.role === 'EMPLOYEE') {
     and.push({ userId: requestingUser.id });
@@ -123,7 +128,9 @@ function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery
     });
   }
 
-  if (query.userId && requestingUser.role !== 'EMPLOYEE') and.push({ userId: query.userId });
+  if (query.userId && (isGlobalScope || requestingUser.role !== 'EMPLOYEE')) {
+    and.push({ userId: query.userId });
+  }
   if (query.leaveTypeId) and.push({ leaveTypeId: query.leaveTypeId });
   if (query.status) and.push({ status: query.status });
   if (query.department) and.push({ user: { department: query.department } });
@@ -151,14 +158,13 @@ function sanitizeLeaveRequestForViewer<
     reason?: string | null;
   },
 >(request: T, requestingUser: AuthUser) {
-  return request;
-  // const ownerId = request.userId ?? request.user?.id;
-  // if (ownerId === requestingUser.id) return request;
+  const ownerId = request.userId ?? request.user?.id;
+  if (ownerId === requestingUser.id) return request;
 
-  // return {
-  //   ...request,
-  //   reason: null,
-  // };
+  return {
+    ...request,
+    reason: null,
+  };
 }
 
 function canApproveRequest(
@@ -357,7 +363,9 @@ async function validateLeaveRequestRules(params: {
   const inclusiveDays = countInclusiveVietnamDates(params.fromDate, params.toDate);
   const todayStart = getVietnamStartOfToday();
 
-  if (shouldEnforceAdvanceRequestDays(params.fromDate, todayStart, leavePolicy.advanceRequestDays)) {
+  if (
+    shouldEnforceAdvanceRequestDays(params.fromDate, todayStart, leavePolicy.advanceRequestDays)
+  ) {
     const minStartDate = new Date(todayStart);
     minStartDate.setUTCDate(minStartDate.getUTCDate() + (leavePolicy.advanceRequestDays ?? 0));
     if (params.fromDate < minStartDate) {
@@ -443,10 +451,7 @@ function computeEffectiveCarryOver(
   year: number,
 ): number {
   if (!resetCarryOverDate) {
-    return Math.max(
-      0,
-      Number(balance.carryOverDays) - Number(balance.usedCarryOverDays),
-    );
+    return Math.max(0, Number(balance.carryOverDays) - Number(balance.usedCarryOverDays));
   }
   const parts = resetCarryOverDate.split('-');
   if (parts.length !== 2) return 0;
@@ -472,7 +477,12 @@ export async function getLeaveRequests(requestingUser: AuthUser, query: GetLeave
     prisma.leaveRequest.count({ where }),
   ]);
 
-  return { data: requests.map(serializeLeaveRequestDates), meta: buildMeta(total, page, limit) };
+  return {
+    data: requests.map((request) =>
+      serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser)),
+    ),
+    meta: buildMeta(total, page, limit),
+  };
 }
 
 export async function getLeaveRequestById(id: bigint, requestingUser: AuthUser) {

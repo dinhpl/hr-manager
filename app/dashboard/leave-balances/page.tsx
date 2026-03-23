@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import {
   CalendarDays,
   Eye,
@@ -192,12 +192,38 @@ export default function LeaveBalancesPage() {
   const [balanceHistory, setBalanceHistory] = useState<LeaveBalanceHistoryItem[]>([]);
   const [isLoadingBalanceHistory, setIsLoadingBalanceHistory] = useState(false);
   const [balanceHistoryError, setBalanceHistoryError] = useState<string | null>(null);
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [nameKeyword, setNameKeyword] = useState('');
 
   const currentRole: FrontendRole | null = currentUser ? toFrontendRole(currentUser.role) : null;
   const canManageLeaveBalances =
     currentRole === 'hr' ||
     currentRole === 'admin' ||
     currentUser?.systemRole?.toUpperCase() === 'ADMIN';
+
+  const departmentOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        leaveBalances
+          .map((row) => row.user.department?.trim())
+          .filter((department): department is string => Boolean(department)),
+      ),
+    ).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [leaveBalances]);
+
+  const filteredLeaveBalances = useMemo(() => {
+    const normalizedKeyword = nameKeyword.trim().toLowerCase();
+
+    return leaveBalances.filter((row) => {
+      const matchesDepartment =
+        departmentFilter === 'all' || (row.user.department ?? '') === departmentFilter;
+      const matchesKeyword =
+        normalizedKeyword.length === 0 ||
+        row.user.fullName.toLowerCase().includes(normalizedKeyword);
+
+      return matchesDepartment && matchesKeyword;
+    });
+  }, [departmentFilter, leaveBalances, nameKeyword]);
 
   useEffect(() => {
     let isMounted = true;
@@ -357,6 +383,7 @@ export default function LeaveBalancesPage() {
     }
 
     const query = buildQuery({
+      scope: 'global',
       userId: historyBalance.userId,
       fromDate: `${historyBalance.year}-01-01 00:00`,
       toDate: `${historyBalance.year}-12-31 23:59`,
@@ -483,25 +510,58 @@ export default function LeaveBalancesPage() {
         className="bg-white rounded-xl justify-between border p-4 flex flex-wrap items-center gap-4"
         style={{ borderColor: '#e2ede9' }}
       >
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-            Năm
-          </label>
-          <Select value={String(balanceYear)} onValueChange={(v) => setBalanceYear(Number(v))}>
-            <SelectTrigger className="min-w-[100px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
-                <SelectItem key={y} value={String(y)}>
-                  {y}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-1 flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              Năm
+            </label>
+            <Select value={String(balanceYear)} onValueChange={(v) => setBalanceYear(Number(v))}>
+              <SelectTrigger className="min-w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+                  <SelectItem key={y} value={String(y)}>
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              Phòng ban
+            </label>
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="min-w-[180px]">
+                <SelectValue placeholder="Tất cả phòng ban" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả phòng ban</SelectItem>
+                {departmentOptions.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex min-w-[240px] flex-1 flex-col gap-1">
+            <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              Tìm theo tên
+            </label>
+            <Input
+              value={nameKeyword}
+              onChange={(event) => setNameKeyword(event.target.value)}
+              placeholder="Nhập tên nhân viên..."
+              className="max-w-sm"
+            />
+          </div>
         </div>
         <p className="text-xs" style={{ color: '#6b7f78' }}>
-          {leaveBalances.length} bản ghi ·{' '}
+          {filteredLeaveBalances.length}/{leaveBalances.length} bản ghi ·{' '}
           {canManageLeaveBalances
             ? 'Click vào hàng để chỉnh sửa hoặc xem lịch sử'
             : 'Click vào hàng để xem lịch sử'}
@@ -513,9 +573,9 @@ export default function LeaveBalancesPage() {
         className="bg-white rounded-xl border overflow-hidden"
         style={{ borderColor: '#e2ede9' }}
       >
-        <div className="overflow-x-auto">
+        <div className="max-h-[calc(100dvh-18rem)] overflow-auto">
           <table className="w-full text-xs">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr style={{ background: '#203430' }}>
                 {[
                   'Nhân viên',
@@ -553,19 +613,18 @@ export default function LeaveBalancesPage() {
                     Đang tải...
                   </td>
                 </tr>
-              ) : leaveBalances.length === 0 ? (
+              ) : filteredLeaveBalances.length === 0 ? (
                 <tr>
                   <td
                     colSpan={14}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
-                    Chưa có dữ liệu phép năm {balanceYear}. Hãy nhấn &quot;Tính toán lại phép
-                    năm&quot; để khởi tạo.
+                    Không có nhân sự nào khớp bộ lọc hiện tại.
                   </td>
                 </tr>
               ) : (
-                leaveBalances.map((row) => {
+                filteredLeaveBalances.map((row) => {
                   const today = new Date();
                   const isCurrentBalanceYear = balanceYear === today.getFullYear();
                   const currentMonth = today.getMonth() + 1;
