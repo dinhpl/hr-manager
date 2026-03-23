@@ -22,11 +22,7 @@ export async function listUsersWithSkills(query: ListUsersWithSkillsQueryDto) {
   const skip = (page - 1) * limit;
   const take = limit;
 
-  const skillFilter = skillId
-    ? { skillId }
-    : categoryId
-      ? { skill: { categoryId } }
-      : undefined;
+  const skillFilter = skillId ? { skillId } : categoryId ? { skill: { categoryId } } : undefined;
 
   const levelFilter = levelId ? { levelId } : undefined;
   const hasSkillFilter = !!(skillId || categoryId || levelId);
@@ -59,6 +55,7 @@ export async function listUsersWithSkills(query: ListUsersWithSkillsQueryDto) {
         fullName: true,
         username: true,
         email: true,
+        avatar: true,
         department: true,
         position: true,
         yoe: true,

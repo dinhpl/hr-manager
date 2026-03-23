@@ -5,8 +5,8 @@ import path from 'node:path';
 import { DesignSystemShowcase } from '@/components/design-system/design-system-showcase';
 
 export const metadata: Metadata = {
-  title: 'UI Guidelines | Leave Management System',
-  description: 'UI playground và design system showcase cho frontend của Leave Management System.',
+  title: 'Guild UI | Leave Management System',
+  description: 'Trang tham chiếu UI tối giản cho palette màu và reusable components.',
 };
 
 function getAvailableUiComponents() {
