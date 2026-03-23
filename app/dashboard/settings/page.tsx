@@ -806,6 +806,9 @@ export default function SettingsPage() {
                             ngày
                           </span>
                         </div>
+                        <p className="text-xs mt-1" style={{ color: '#6b7f78' }}>
+                          Chỉ áp dụng cho đơn có ngày bắt đầu trong tương lai. Đơn bổ sung cho ngày đã qua vẫn có thể tạo.
+                        </p>
                       </div>
                     </div>
                   </div>

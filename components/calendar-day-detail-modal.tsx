@@ -29,7 +29,6 @@ export interface CalendarDayBirthday {
 interface CalendarDayDetailModalProps {
   date?: string;
   users?: CalendarDayUser[];
-  holidays?: CalendarDayHoliday[];
   birthdays?: CalendarDayBirthday[];
   onClose: () => void;
   onViewDetail: (user: CalendarDayUser) => void;
@@ -64,17 +63,15 @@ function getInitials(name: string): string {
 export default function CalendarDayDetailModal({
   date,
   users,
-  holidays,
   birthdays,
   onClose,
   onViewDetail,
   onAddLeave,
 }: CalendarDayDetailModalProps) {
   const dayUsers = users ?? [];
-  const dayHolidays = holidays ?? [];
   const dayBirthdays = birthdays ?? [];
 
-  if (!date || (dayUsers.length === 0 && dayHolidays.length === 0 && dayBirthdays.length === 0)) return null;
+  if (!date || (dayUsers.length === 0 && dayBirthdays.length === 0)) return null;
 
   const pendingUsers = dayUsers.filter((u) => u.status === 'pending');
   const approvedUsers = dayUsers.filter((u) => u.status === 'approved');
@@ -103,10 +100,10 @@ export default function CalendarDayDetailModal({
             </div>
             <div>
               <h2 className="font-bold text-lg" style={{ color: '#203430' }}>
-                Lịch nghỉ và holiday
+                Lịch nghỉ
               </h2>
               <p className="text-sm font-medium" style={{ color: '#6b7f78' }}>
-                {formatDateVN(date)} · {dayUsers.length} nghỉ phép · {dayHolidays.length} holiday{dayBirthdays.length > 0 ? ` · ${dayBirthdays.length} sinh nhật` : ''}
+                {formatDateVN(date)} · {dayUsers.length} nghỉ phép{dayBirthdays.length > 0 ? ` · ${dayBirthdays.length} sinh nhật` : ''}
               </p>
             </div>
           </div>
@@ -121,25 +118,9 @@ export default function CalendarDayDetailModal({
 
         {/* Summary Stats */}
         <div
-          className="px-6 py-4 border-b grid gap-4 shrink-0 md:grid-cols-3"
+          className="px-6 py-4 border-b grid gap-4 shrink-0 md:grid-cols-2"
           style={{ borderColor: '#e2ede9', background: '#f8faf9' }}
         >
-          <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: '#fff7ed' }}>
-            <div
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ background: '#fed7aa' }}
-            >
-              <Calendar size={20} style={{ color: '#ea580c' }} />
-            </div>
-            <div>
-              <p className="text-2xl font-bold" style={{ color: '#c2410c' }}>
-                {dayHolidays.length}
-              </p>
-              <p className="text-xs font-medium" style={{ color: '#c2410c' }}>
-                Holiday
-              </p>
-            </div>
-          </div>
           <div className="p-4 rounded-xl flex items-center gap-3" style={{ background: '#dcfce7' }}>
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center"
@@ -176,25 +157,6 @@ export default function CalendarDayDetailModal({
 
         {/* User List - Redesigned */}
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          {dayHolidays.length > 0 && (
-            <div className="rounded-2xl border p-4" style={{ borderColor: '#fdba74', background: '#fff7ed' }}>
-              <p className="mb-3 text-sm font-semibold" style={{ color: '#9a3412' }}>
-                Holiday trong ngày
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {dayHolidays.map((holiday) => (
-                  <span
-                    key={holiday.id}
-                    className="rounded-full px-3 py-1.5 text-xs font-semibold"
-                    style={{ background: '#fff', color: '#c2410c', border: '1px solid #fdba74' }}
-                  >
-                    {holiday.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
           {dayBirthdays.length > 0 && (
             <div className="rounded-2xl border p-4" style={{ borderColor: '#f9a8d4', background: '#fdf2f8' }}>
               <div className="flex items-center gap-2 mb-3">

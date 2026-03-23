@@ -38,6 +38,7 @@ import {
   getVietnamTodayDateInput,
   getLeaveRequestPolicyValidation,
   getLeaveRequestApiPayload,
+  shouldEnforceAdvanceRequestDays,
   type ApprovalFlowConfig,
   type LeavePolicyConfig,
   LEAVE_REQUEST_MODE_CONFIG,
@@ -337,10 +338,10 @@ export default function LeaveRequestPage() {
             {policyHints.map((hint) => (
               <p key={hint}>- {hint}</p>
             ))}
-            {typeof leavePolicy?.advanceRequestDays === 'number' ? (
+            {shouldEnforceAdvanceRequestDays(fromDate, leavePolicy?.advanceRequestDays) ? (
               <p>
-                - Nếu áp dụng ngay hôm nay, ngày bắt đầu sớm nhất nên từ{' '}
-                {addDaysToDateInput(getVietnamTodayDateInput(), leavePolicy.advanceRequestDays) ||
+                - Với đơn nghỉ tương lai, ngày bắt đầu sớm nhất nên từ{' '}
+                {addDaysToDateInput(getVietnamTodayDateInput(), leavePolicy?.advanceRequestDays ?? 0) ||
                   'hom nay'}
                 .
               </p>

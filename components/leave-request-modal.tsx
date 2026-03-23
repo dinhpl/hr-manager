@@ -45,6 +45,7 @@ import {
   getVietnamTodayDateInput,
   LEAVE_REQUEST_MODE_CONFIG,
   numberValue,
+  shouldEnforceAdvanceRequestDays,
   toFrontendRole,
   type ApprovalFlowConfig,
   type LeavePolicyConfig,
@@ -588,12 +589,12 @@ export default function LeaveRequestModal({
                 {policyHints.map((hint) => (
                   <p key={hint}>- {hint}</p>
                 ))}
-                {typeof leavePolicy?.advanceRequestDays === 'number' ? (
+                {shouldEnforceAdvanceRequestDays(fromDate, leavePolicy?.advanceRequestDays) ? (
                   <p>
-                    - Ngày bắt đầu sớm nhất từ{' '}
+                    - Với đơn nghỉ tương lai, ngày bắt đầu sớm nhất từ{' '}
                     {addDaysToDateInput(
                       getVietnamTodayDateInput(),
-                      leavePolicy.advanceRequestDays,
+                      leavePolicy?.advanceRequestDays ?? 0,
                     ) || 'hôm nay'}
                     .
                   </p>

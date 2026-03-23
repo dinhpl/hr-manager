@@ -1510,7 +1510,6 @@ export default function DashboardPage() {
       <CalendarDayDetailModal
         date={selectedDayDetail?.date}
         users={selectedDayDetail?.users}
-        holidays={selectedDayDetail?.holidays}
         birthdays={selectedDayDetail?.birthdays}
         onClose={() => setSelectedDayDetail(null)}
         onViewDetail={(user) => void handleOpenCalendarRequestDetail(user)}

@@ -260,6 +260,18 @@ export function addDaysToDateInput(value: string, days: number) {
   return toDateInputValue(nextDate);
 }
 
+export function shouldEnforceAdvanceRequestDays(
+  fromDate: string,
+  advanceRequestDays?: number | null,
+) {
+  if (!fromDate || typeof advanceRequestDays !== 'number' || advanceRequestDays <= 0) {
+    return false;
+  }
+
+  const today = getVietnamTodayDateInput();
+  return fromDate > today;
+}
+
 export function buildLeavePolicyHints(
   leavePolicy?: LeavePolicyConfig | null,
   approvalFlow?: ApprovalFlowConfig | null,
@@ -267,7 +279,9 @@ export function buildLeavePolicyHints(
   const hints: string[] = [];
 
   if (typeof leavePolicy?.advanceRequestDays === 'number' && leavePolicy.advanceRequestDays > 0) {
-    hints.push(`Gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày.`);
+    hints.push(
+      `Ngày tương lai phải gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày. Đơn bổ sung cho ngày đã qua vẫn được phép tạo.`,
+    );
   }
 
   if (typeof leavePolicy?.maxConsecutiveDays === 'number' && leavePolicy.maxConsecutiveDays > 0) {
@@ -301,14 +315,14 @@ export function getLeaveRequestPolicyValidation(params: {
 
   if (!fromDate || !toDate || days <= 0) return null;
 
-  if (typeof leavePolicy?.advanceRequestDays === 'number') {
+  if (shouldEnforceAdvanceRequestDays(fromDate, leavePolicy?.advanceRequestDays)) {
     const earliestAllowedDate = addDaysToDateInput(
       getVietnamTodayDateInput(),
-      leavePolicy.advanceRequestDays,
+      leavePolicy?.advanceRequestDays ?? 0,
     );
 
     if (earliestAllowedDate && fromDate < earliestAllowedDate) {
-      return `Đơn nghỉ phải được gửi trước ít nhất ${leavePolicy.advanceRequestDays} ngày.`;
+      return `Đơn nghỉ cho ngày tương lai phải được gửi trước ít nhất ${leavePolicy?.advanceRequestDays} ngày.`;
     }
   }
 

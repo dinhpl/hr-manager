@@ -88,6 +88,10 @@ function getVietnamStartOfToday() {
   return parseVietnamDateTime(`${todayDatePart} 00:00`);
 }
 
+function shouldEnforceAdvanceRequestDays(fromDate: Date, todayStart: Date, advanceRequestDays?: number) {
+  return typeof advanceRequestDays === 'number' && advanceRequestDays > 0 && fromDate > todayStart;
+}
+
 function getLeavePolicySettings(value: unknown): LeavePolicySettings {
   if (!value || typeof value !== 'object') return {};
   return value as LeavePolicySettings;
@@ -352,13 +356,13 @@ async function validateLeaveRequestRules(params: {
   const inclusiveDays = countInclusiveVietnamDates(params.fromDate, params.toDate);
   const todayStart = getVietnamStartOfToday();
 
-  if (typeof leavePolicy.advanceRequestDays === 'number') {
+  if (shouldEnforceAdvanceRequestDays(params.fromDate, todayStart, leavePolicy.advanceRequestDays)) {
     const minStartDate = new Date(todayStart);
-    minStartDate.setUTCDate(minStartDate.getUTCDate() + leavePolicy.advanceRequestDays);
+    minStartDate.setUTCDate(minStartDate.getUTCDate() + (leavePolicy.advanceRequestDays ?? 0));
     if (params.fromDate < minStartDate) {
       throw Object.assign(
         new Error(
-          `Requests must be submitted at least ${leavePolicy.advanceRequestDays} day(s) in advance.`,
+          `Future leave requests must be submitted at least ${leavePolicy.advanceRequestDays ?? 0} day(s) in advance.`,
         ),
         { status: 400 },
       );
