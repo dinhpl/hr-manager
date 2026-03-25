@@ -109,6 +109,34 @@ const NAV_ITEMS = [
   },
 ];
 
+const NAV_GROUPS = [
+  {
+    key: 'attendance-leave-group',
+    label: 'Chấm công & Nghỉ phép',
+    items: ['attendance', 'leave-history', 'approval'],
+  },
+  {
+    key: 'hr-group',
+    label: 'Nhân sự',
+    items: ['employees', 'skills', 'devices'],
+  },
+  {
+    key: 'policy-group',
+    label: 'Chính sách',
+    items: ['leave-balances'],
+  },
+  {
+    key: 'report-group',
+    label: 'Báo cáo',
+    items: ['reports', 'activity-log'],
+  },
+  {
+    key: 'system-group',
+    label: 'Hệ thống',
+    items: ['settings'],
+  },
+];
+
 interface UserInfo {
   id: string;
   username: string;
@@ -174,6 +202,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
     return true;
   });
+  const visibleNavGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items
+      .map((itemKey) => visibleNavItems.find((item) => item.key === itemKey))
+      .filter((item): item is (typeof NAV_ITEMS)[number] => Boolean(item)),
+  })).filter((group) => group.items.length > 0);
+  const dashboardNavItem = visibleNavItems.find((item) => item.key === 'dashboard');
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#f7f7f7' }}>
@@ -191,23 +226,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         style={{
-          width: 240,
+          width: 220,
           background: '#fff',
           borderRight: '1px solid #e2ede9',
         }}
       >
         {/* Logo */}
         <div
-          className="flex items-center gap-3 px-5 py-5 h-[64px]"
+          className="flex items-center gap-2.5 px-3.5 py-3 h-[54px]"
           style={{ borderBottom: '1px solid #e2ede9' }}
         >
           <BrandLogo
-            size={42}
+            size={32}
             title="Leave Management"
             subtitle="HR workspace"
-            imageClassName="p-1.5"
-            titleClassName="text-sm leading-none text-[#203430]"
-            subtitleClassName="mt-1 text-[11px] uppercase tracking-[0.18em] text-[#6b7f78]"
+            imageClassName="p-0.5"
+            titleClassName="text-xs leading-none text-[#203430]"
+            subtitleClassName="mt-0.5 text-[8px] uppercase tracking-[0.14em] text-[#6b7f78]"
             wrapperClassName="min-w-0 flex-1"
           />
           <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -216,35 +251,90 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="space-y-1">
-            {visibleNavItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <li key={item.key}>
+        <nav className="flex-1 overflow-y-auto px-2.5 py-2.5">
+          <div className="space-y-2.5">
+            {dashboardNavItem ? (
+              <ul className="space-y-1">
+                <li key={dashboardNavItem.key}>
                   <Link
-                    href={item.href}
+                    href={dashboardNavItem.href}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? 'text-white'
-                        : 'text-[#6b7f78] hover:bg-[#f0f9f5] hover:text-[#203430]'
+                    className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] ${
+                      pathname === dashboardNavItem.href
+                        ? 'text-white shadow-[0_8px_18px_rgba(14,71,78,0.14)]'
+                        : 'text-[#5f746d] hover:bg-[#f5faf8] hover:text-[#203430]'
                     }`}
                     style={
-                      isActive
+                      pathname === dashboardNavItem.href
                         ? {
                             background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
                           }
                         : {}
                     }
                   >
-                    <item.icon size={17} className="shrink-0" />
-                    {item.label}
+                    <span
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                        pathname === dashboardNavItem.href
+                          ? 'bg-white/14 text-white scale-105'
+                          : 'bg-[#eef6f2] text-[#5f746d] group-hover:scale-105'
+                      }`}
+                    >
+                      <dashboardNavItem.icon size={14} className="shrink-0" />
+                    </span>
+                    <span className="truncate">{dashboardNavItem.label}</span>
                   </Link>
                 </li>
-              );
-            })}
-          </ul>
+              </ul>
+            ) : null}
+
+            {visibleNavGroups.map((group) => (
+              <div key={group.key}>
+                <p className="px-2.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#93a59f]">
+                  {group.label}
+                </p>
+                <ul className="space-y-1">
+                  {group.items.map((item) => {
+                    const isActive =
+                      item.href === '/dashboard'
+                        ? pathname === item.href
+                        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                    return (
+                      <li key={item.key}>
+                        <Link
+                          href={item.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.985] ${
+                            isActive
+                              ? 'text-white shadow-[0_8px_18px_rgba(14,71,78,0.14)]'
+                              : 'text-[#5f746d] hover:bg-[#f5faf8] hover:text-[#203430]'
+                          }`}
+                          style={
+                            isActive
+                              ? {
+                                  background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                                }
+                              : {}
+                          }
+                        >
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                              isActive
+                                ? 'bg-white/14 text-white scale-105'
+                                : 'bg-[#eef6f2] text-[#5f746d] group-hover:scale-105'
+                            }`}
+                          >
+                            <item.icon size={14} className="shrink-0" />
+                          </span>
+                          <span className="truncate">{item.label}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         </nav>
 
         {/* User join date */}
@@ -282,7 +372,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header
           className="flex items-center gap-4 px-5 py-3 bg-white"
-          style={{ borderBottom: '1px solid #e2ede9', height: 64 }}
+          style={{ borderBottom: '1px solid #e2ede9', height: 54 }}
         >
           <button className="lg:hidden" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} className="text-muted-foreground" />

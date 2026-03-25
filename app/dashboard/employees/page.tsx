@@ -7,10 +7,8 @@ import {
   CalendarOff,
   FileDown,
   Pencil,
-  RefreshCw,
   Search,
   Shield,
-  Table2,
   Trash2,
   Upload,
   UserCheck,
@@ -623,8 +621,8 @@ export default function EmployeesPage() {
   }, [employees]);
 
   return (
-    <div className="space-y-5">
-      <section className="flex h-[calc(100dvh-9rem)] flex-col gap-5 overflow-hidden">
+    <div className="space-y-4">
+      <section className="flex h-[calc(100dvh)] flex-col gap-4 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
             <div
@@ -673,7 +671,7 @@ export default function EmployeesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 shrink-0">
           {[
             {
               label: 'Tổng nhân viên',
@@ -706,20 +704,20 @@ export default function EmployeesPage() {
           ].map((stat) => (
             <div
               key={stat.label}
-              className="bg-white rounded-xl p-4 border flex items-center gap-4"
+              className="flex items-center gap-3 rounded-xl border bg-white px-3.5 py-3"
               style={{ borderColor: '#e2ede9' }}
             >
               <div
-                className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                 style={{ background: stat.bg }}
               >
-                <stat.icon size={22} style={{ color: stat.color }} />
+                <stat.icon size={18} style={{ color: stat.color }} />
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+                <p className="text-xl font-bold leading-none" style={{ color: '#203430' }}>
                   {stat.value}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: '#6b7f78' }}>
+                <p className="mt-1 text-[11px] leading-4" style={{ color: '#6b7f78' }}>
                   {stat.label}
                 </p>
               </div>
@@ -727,17 +725,17 @@ export default function EmployeesPage() {
           ))}
         </div>
 
-        <div className="bg-white rounded-xl border p-4 shrink-0" style={{ borderColor: '#e2ede9' }}>
-          <div className="flex flex-wrap gap-3 items-end">
+        <div className="shrink-0 rounded-xl border bg-white p-3" style={{ borderColor: '#e2ede9' }}>
+          <div className="flex flex-wrap items-end gap-2.5">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              <label className="text-[11px] font-semibold leading-4" style={{ color: '#6b7f78' }}>
                 Trạng thái
               </label>
               <Select
                 value={statusFilter || 'all-status'}
                 onValueChange={(value) => setStatusFilter(value === 'all-status' ? '' : value)}
               >
-                <SelectTrigger className="min-w-[150px]">
+                <SelectTrigger className="h-9 min-w-[144px] text-xs">
                   <SelectValue placeholder="Trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
@@ -748,14 +746,14 @@ export default function EmployeesPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              <label className="text-[11px] font-semibold leading-4" style={{ color: '#6b7f78' }}>
                 Phòng ban
               </label>
               <Select
                 value={teamFilter || 'all-team'}
                 onValueChange={(value) => setTeamFilter(value === 'all-team' ? '' : value)}
               >
-                <SelectTrigger className="min-w-[150px]">
+                <SelectTrigger className="h-9 min-w-[144px] text-xs">
                   <SelectValue placeholder="Phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
@@ -768,9 +766,12 @@ export default function EmployeesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 items-end flex-1 min-w-[220px]">
+            <div className="flex min-w-[220px] flex-1 items-end gap-2">
               <div className="flex-1">
-                <label className="block text-xs font-semibold mb-1" style={{ color: '#6b7f78' }}>
+                <label
+                  className="mb-1 block text-[11px] font-semibold leading-4"
+                  style={{ color: '#6b7f78' }}
+                >
                   Tìm kiếm
                 </label>
                 <Input
@@ -784,12 +785,13 @@ export default function EmployeesPage() {
                     }
                   }}
                   placeholder="Tìm theo tên, email, mã nhân viên..."
+                  className="h-9 text-xs"
                 />
               </div>
               <button
                 type="button"
                 onClick={handleSearch}
-                className="flex items-center h-[36px] gap-1.5 px-4 py-2 rounded-lg font-semibold text-white"
+                className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-white"
                 style={{ background: '#1DB87A' }}
               >
                 <Search size={14} />
@@ -802,36 +804,6 @@ export default function EmployeesPage() {
           className="bg-white rounded-xl border overflow-hidden flex min-h-0 flex-1 flex-col"
           style={{ borderColor: '#e2ede9' }}
         >
-          <div
-            className="flex items-center justify-between px-5 py-3 border-b shrink-0"
-            style={{ borderColor: '#e2ede9' }}
-          >
-            <div className="flex items-center gap-2">
-              <Table2 size={15} style={{ color: '#1DB87A' }} />
-              <h2 className="font-semibold text-sm" style={{ color: '#203430' }}>
-                Danh sách nhân viên ({employees.length})
-              </h2>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => void fetchEmployees()}
-                className="w-8 h-8 rounded-lg border flex items-center justify-center hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: '#e2ede9' }}
-                disabled={isRefreshing || isMutating}
-                title="Tải lại danh sách"
-              >
-                <RefreshCw
-                  size={13}
-                  style={{
-                    color: '#6b7f78',
-                    transform: isRefreshing ? 'rotate(180deg)' : 'none',
-                    transition: 'transform 0.3s ease',
-                  }}
-                />
-              </button>
-            </div>
-          </div>
-
           <div className="min-h-0 overflow-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10">
