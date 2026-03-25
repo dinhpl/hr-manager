@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createMailService,
+  sendMailTemplateTest,
   sendLeaveRequestApprovedEmail,
   sendLeaveRequestCreatedEmail,
   sendLeaveRequestRejectedEmail,
@@ -83,6 +84,47 @@ describe('leave request email delivery', () => {
         to: 'employee@example.com',
         subject: expect.stringContaining('bi tu choi'),
         html: expect.stringContaining('Can bo sung ke hoach ban giao.'),
+      }),
+    );
+  });
+
+  it('skips business mail when system mail toggle is disabled', async () => {
+    const mailer = createMailService(
+      { sendMail },
+      {
+        templateEnabledResolver: async () => false,
+      },
+    );
+
+    const result = await sendLeaveRequestApprovedEmail(mailer, {
+      requesterEmail: 'employee@example.com',
+      requesterName: 'Nguyen Van A',
+      approverName: 'Tran Thi B',
+      leaveTypeName: 'Nghi phep nam',
+      fromDateLabel: '25/03/2026 08:00',
+      toDateLabel: '25/03/2026 17:15',
+      totalDaysLabel: '1 ngay',
+      note: 'Da duyet.',
+    });
+
+    expect(result).toEqual({ skipped: true, reason: 'mail_template_disabled' });
+    expect(sendMail).not.toHaveBeenCalled();
+  });
+
+  it('sends test mail even when system mail toggle is disabled', async () => {
+    const mailer = createMailService(
+      { sendMail },
+      {
+        templateEnabledResolver: async () => false,
+      },
+    );
+
+    await sendMailTemplateTest(mailer, 'tester@example.com', 'leave_request_rejected');
+
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'tester@example.com',
+        subject: expect.stringContaining('bi tu choi'),
       }),
     );
   });

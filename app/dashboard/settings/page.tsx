@@ -6,6 +6,8 @@ import {
   Check,
   Download,
   Edit2,
+  Eye,
+  Mail,
   Plus,
   RotateCcw,
   Save,
@@ -70,11 +72,40 @@ interface LeaveTypeData {
   usesAnnualBalance: boolean;
 }
 
+interface MailSettings {
+  leave_request_created: boolean;
+  leave_request_approved: boolean;
+  leave_request_rejected: boolean;
+}
+
+type MailTemplateType =
+  | 'leave_request_created'
+  | 'leave_request_approved'
+  | 'leave_request_rejected';
+
+interface MailTestForm {
+  recipientEmail: string;
+  template: MailTemplateType;
+}
+
+interface MailTestResult {
+  skipped: boolean;
+  reason?: string;
+  messageId?: string | null;
+}
+
+interface MailPreviewResponse {
+  html: string;
+}
+
+type SettingsTabId = 'leave' | 'approval' | 'leave-types' | 'holidays' | 'mail';
+
 const TAB_ITEMS = [
   { id: 'leave', label: 'Thiết lập chung', icon: Calendar },
   // { id: 'approval', label: 'Luồng duyệt', icon: RotateCcw },
   { id: 'leave-types', label: 'Loại nghỉ phép', icon: Tag },
   { id: 'holidays', label: 'Ngày nghỉ lễ', icon: Calendar },
+  { id: 'mail', label: 'Setting Mail', icon: Mail },
 ] as const;
 
 const APPROVER_ROLE_OPTIONS: ApprovalLevel['approverRole'][] = [
@@ -105,6 +136,31 @@ const DEFAULT_APPROVAL_FLOW: ApprovalFlow = {
   autoApproveWFH: false,
   requireDocumentTypes: ['SL', 'ML'],
 };
+
+const DEFAULT_MAIL_SETTINGS: MailSettings = {
+  leave_request_created: true,
+  leave_request_approved: true,
+  leave_request_rejected: true,
+};
+
+const MAIL_TEMPLATE_OPTIONS: Array<{ value: MailTemplateType; label: string; description: string }> =
+  [
+    {
+      value: 'leave_request_created',
+      label: 'Đơn nghỉ phép mới',
+      description: 'Mail gửi cho người duyệt khi có đơn mới.',
+    },
+    {
+      value: 'leave_request_approved',
+      label: 'Đơn nghỉ phép đã duyệt',
+      description: 'Mail gửi cho nhân viên khi đơn được phê duyệt.',
+    },
+    {
+      value: 'leave_request_rejected',
+      label: 'Đơn nghỉ phép bị từ chối',
+      description: 'Mail gửi cho nhân viên khi đơn bị từ chối.',
+    },
+  ];
 
 function toSafeNumber(value: unknown, fallback: number) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -193,12 +249,32 @@ function parseDocumentTypes(input: string) {
   );
 }
 
+function normalizeMailSettings(raw: Partial<MailSettings> | null | undefined): MailSettings {
+  return {
+    leave_request_created:
+      typeof raw?.leave_request_created === 'boolean'
+        ? raw.leave_request_created
+        : DEFAULT_MAIL_SETTINGS.leave_request_created,
+    leave_request_approved:
+      typeof raw?.leave_request_approved === 'boolean'
+        ? raw.leave_request_approved
+        : DEFAULT_MAIL_SETTINGS.leave_request_approved,
+    leave_request_rejected:
+      typeof raw?.leave_request_rejected === 'boolean'
+        ? raw.leave_request_rejected
+        : DEFAULT_MAIL_SETTINGS.leave_request_rejected,
+  };
+}
+
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<(typeof TAB_ITEMS)[number]['id']>('leave');
+  const [activeTab, setActiveTab] = useState<SettingsTabId>('leave');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingMailTest, setIsSendingMailTest] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [leavePolicy, setLeavePolicy] = useState<LeavePolicy>(DEFAULT_LEAVE_POLICY);
   const [approvalFlow, setApprovalFlow] = useState<ApprovalFlow>(DEFAULT_APPROVAL_FLOW);
+  const [mailSettings, setMailSettings] = useState<MailSettings>(DEFAULT_MAIL_SETTINGS);
   const [editingLeaveIndex, setEditingLeaveIndex] = useState<number | null>(null);
   const [editingLevelIndex, setEditingLevelIndex] = useState<number | null>(null);
   const [leaveDraft, setLeaveDraft] = useState<AnnualLeaveRule>({
@@ -220,6 +296,12 @@ export default function SettingsPage() {
   const [editingLeaveType, setEditingLeaveType] = useState<LeaveTypeData | null>(null);
   const [isLeaveTypeModalOpen, setIsLeaveTypeModalOpen] = useState(false);
   const [leaveTypeForm, setLeaveTypeForm] = useState<Partial<LeaveTypeData>>({});
+  const [mailTestForm, setMailTestForm] = useState<MailTestForm>({
+    recipientEmail: '',
+    template: 'leave_request_created',
+  });
+  const [previewTemplate, setPreviewTemplate] = useState<MailTemplateType | null>(null);
+  const [previewHtml, setPreviewHtml] = useState('');
 
   const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -228,16 +310,19 @@ export default function SettingsPage() {
   const loadSettings = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [leaveResponse, flowResponse, leaveTypesResponse] = await Promise.all([
+      const [leaveResponse, flowResponse, mailResponse, leaveTypesResponse] = await Promise.all([
         apiClient.get<LeavePolicy>('/api/settings/leave-policy'),
         apiClient.get<ApprovalFlow>('/api/settings/approval-flow'),
+        apiClient.get<MailSettings>('/api/settings/mail'),
         apiClient.get<LeaveTypeData[]>('/api/leave-types?activeOnly=false'),
       ]);
       const nextLeavePolicy = normalizeLeavePolicy(leaveResponse.data);
       const nextApprovalFlow = normalizeApprovalFlow(flowResponse.data);
+      const nextMailSettings = normalizeMailSettings(mailResponse.data);
 
       setLeavePolicy(nextLeavePolicy);
       setApprovalFlow(nextApprovalFlow);
+      setMailSettings(nextMailSettings);
       setDocumentTypesInput(nextApprovalFlow.requireDocumentTypes.join(', '));
       setLeaveTypes(leaveTypesResponse.data);
       setEditingLeaveIndex(null);
@@ -260,10 +345,28 @@ export default function SettingsPage() {
       approvalFlow.levels.map((level) => ({ ...level, label: getRoleLabel(level.approverRole) })),
     [approvalFlow.levels],
   );
+  const selectedMailTemplate = useMemo(
+    () => MAIL_TEMPLATE_OPTIONS.find((option) => option.value === mailTestForm.template),
+    [mailTestForm.template],
+  );
+  const mailTemplateRows = useMemo(
+    () =>
+      MAIL_TEMPLATE_OPTIONS.map((option) => ({
+        ...option,
+        enabled: mailSettings[option.value],
+      })),
+    [mailSettings],
+  );
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      if (activeTab === 'mail') {
+        await apiClient.patch('/api/settings/mail', mailSettings);
+        toast.success('Cấu hình mail đã được lưu thành công.');
+        return;
+      }
+
       const nextApprovalFlow = {
         ...approvalFlow,
         levels: renumberLevels(approvalFlow.levels),
@@ -293,6 +396,59 @@ export default function SettingsPage() {
   const handleReset = () => {
     void loadSettings();
     toast.success('Đã tải lại cấu hình từ hệ thống.');
+  };
+
+  const handleSendMailTest = async () => {
+    const recipientEmail = mailTestForm.recipientEmail.trim();
+    if (!recipientEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      toast.error('Vui lòng nhập email nhận test hợp lệ.');
+      return;
+    }
+
+    setIsSendingMailTest(true);
+    try {
+      const response = await apiClient.post<MailTestResult>('/api/settings/mail/test', {
+        recipientEmail,
+        template: mailTestForm.template,
+      });
+
+      if (response.data.skipped) {
+        const reasonMap: Record<string, string> = {
+          mail_disabled: 'Mail đang tắt ở cấu hình SMTP backend.',
+          mail_template_disabled: 'Template mail này hiện đang bị tắt.',
+          missing_approver_email: 'Template test thiếu email người nhận.',
+          missing_requester_email: 'Template test thiếu email người nhận.',
+        };
+        toast.error(reasonMap[response.data.reason || ''] || 'Mail test chưa được gửi.');
+        return;
+      }
+
+      toast.success(
+        response.data.messageId
+          ? `Đã gửi mail test thành công. Message ID: ${response.data.messageId}`
+          : 'Đã gửi mail test thành công.',
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể gửi mail test.');
+    } finally {
+      setIsSendingMailTest(false);
+    }
+  };
+
+  const handleOpenMailPreview = async (template: MailTemplateType) => {
+    setPreviewTemplate(template);
+    setPreviewHtml('');
+    setIsPreviewLoading(true);
+    try {
+      const response = await apiClient.get<MailPreviewResponse>(
+        `/api/settings/mail/preview?template=${template}`,
+      );
+      setPreviewHtml(response.data.html);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể tải preview mail.');
+    } finally {
+      setIsPreviewLoading(false);
+    }
   };
 
   const handleExportConfig = () => {
@@ -436,7 +592,12 @@ export default function SettingsPage() {
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
             style={{ background: '#1DB87A' }}
           >
-            <Save size={14} /> {isSaving ? 'Đang lưu...' : 'Lưu tất cả'}
+            <Save size={14} />{' '}
+            {isSaving
+              ? 'Đang lưu...'
+              : activeTab === 'mail'
+                ? 'Lưu Setting Mail'
+                : 'Lưu tất cả'}
           </button>
           <button
             onClick={handleReset}
@@ -1239,12 +1400,197 @@ export default function SettingsPage() {
               )}
 
               {activeTab === 'holidays' && <SettingsHolidaysTab />}
+
+              {activeTab === 'mail' && (
+                <div className="space-y-6">
+                  <div className="border-l-4 border-sky-500 pl-4">
+                    <h3 className="font-semibold text-sm mb-4" style={{ color: '#203430' }}>
+                      Cấu hình mail nghiệp vụ
+                    </h3>
+                    <div className="space-y-3">
+                      {mailTemplateRows.map((item) => (
+                        <div
+                          key={item.value}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                          style={{ borderColor: '#e2ede9', background: '#ffffff' }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                              {item.label}
+                            </p>
+                            <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
+                              {item.description}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => void handleOpenMailPreview(item.value)}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-gray-50"
+                              style={{ borderColor: '#e2ede9', color: '#0E474E' }}
+                              aria-label={`Xem template ${item.label}`}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <div className="flex items-center gap-3 rounded-lg bg-[#f8fbfa] px-3 py-2">
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: item.enabled ? '#1DB87A' : '#ef4444' }}
+                              >
+                                {item.enabled ? 'Đang bật' : 'Đang tắt'}
+                              </span>
+                              <Checkbox
+                                checked={item.enabled}
+                                onCheckedChange={(checked) =>
+                                  setMailSettings((prev) => ({
+                                    ...prev,
+                                    [item.value]: checked === true,
+                                  }))
+                                }
+                                aria-label={`Bật tắt ${item.label}`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div
+                      className="mt-4 rounded-xl border px-4 py-3 text-xs"
+                      style={{ borderColor: '#e2ede9', color: '#6b7f78', background: '#f8fbfa' }}
+                    >
+                      Mỗi toggle chỉ ảnh hưởng mail gửi tự động theo nghiệp vụ. Chức năng view
+                      template và test mail vẫn dùng được để kiểm tra giao diện và SMTP.
+                    </div>
+                  </div>
+
+                  <div className="border-l-4 border-amber-500 pl-4">
+                    <h3 className="font-semibold text-sm mb-4" style={{ color: '#203430' }}>
+                      Test mail template
+                    </h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label
+                          className="block text-xs font-semibold mb-2"
+                          style={{ color: '#6b7f78' }}
+                        >
+                          Mail nhận test
+                        </label>
+                        <Input
+                          type="email"
+                          value={mailTestForm.recipientEmail}
+                          onChange={(event) =>
+                            setMailTestForm((prev) => ({
+                              ...prev,
+                              recipientEmail: event.target.value,
+                            }))
+                          }
+                          placeholder="example@company.com"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="block text-xs font-semibold mb-2"
+                          style={{ color: '#6b7f78' }}
+                        >
+                          Template test
+                        </label>
+                        <Select
+                          value={mailTestForm.template}
+                          onValueChange={(value) =>
+                            setMailTestForm((prev) => ({
+                              ...prev,
+                              template: value as MailTemplateType,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Chọn template mail" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MAIL_TEMPLATE_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div
+                      className="mt-4 rounded-xl border p-4"
+                      style={{ borderColor: '#e2ede9', background: '#fffdf7' }}
+                    >
+                      <p className="text-sm font-medium" style={{ color: '#203430' }}>
+                        {selectedMailTemplate?.label}
+                      </p>
+                      <p className="text-xs mt-1" style={{ color: '#6b7f78' }}>
+                        {selectedMailTemplate?.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        onClick={() => void handleSendMailTest()}
+                        disabled={isLoading || isSendingMailTest}
+                        className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                        style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                      >
+                        <Mail size={14} />
+                        {isSendingMailTest ? 'Đang gửi test...' : 'Gửi mail test'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* Leave Type Modal */}
+      <Dialog
+        open={previewTemplate !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewTemplate(null);
+            setPreviewHtml('');
+          }
+        }}
+      >
+        <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-7xl">
+          <DialogHeader>
+            <DialogTitle>
+              View Template Mail
+              {previewTemplate
+                ? ` · ${MAIL_TEMPLATE_OPTIONS.find((item) => item.value === previewTemplate)?.label ?? ''}`
+                : ''}
+            </DialogTitle>
+          </DialogHeader>
+          <div
+            className="rounded-xl border"
+            style={{ borderColor: '#e2ede9', background: '#f7f7f7' }}
+          >
+            {isPreviewLoading ? (
+              <div className="px-6 py-16 text-center text-sm" style={{ color: '#6b7f78' }}>
+                Đang tải preview mail...
+              </div>
+            ) : previewHtml ? (
+              <iframe
+                title="Mail template preview"
+                srcDoc={previewHtml}
+                className="h-[720px] w-full rounded-xl bg-white"
+              />
+            ) : (
+              <div className="px-6 py-16 text-center text-sm" style={{ color: '#6b7f78' }}>
+                Không có dữ liệu preview.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isLeaveTypeModalOpen} onOpenChange={setIsLeaveTypeModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

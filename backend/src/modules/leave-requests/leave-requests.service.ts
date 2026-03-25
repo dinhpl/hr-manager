@@ -640,6 +640,7 @@ export async function createLeaveRequest(
         approverEmail: createdRequest.approver?.email,
         approverName: createdRequest.approver?.fullName,
         requesterName: createdRequest.user?.fullName || 'Nhan vien',
+        handoverName: createdRequest.handoverPerson?.fullName || null,
         leaveTypeName:
           createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
         fromDateLabel: formatVietnamDateTime(createdRequest.fromDate) || createdRequest.fromDate,
@@ -890,6 +891,7 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       requesterEmail: approvedRequest.user.email,
       requesterName: approvedRequest.user.fullName || 'Nhan vien',
       approverName: getActorName(requestingUser, approvedRequest.approver?.fullName),
+      handoverName: approvedRequest.handoverPerson?.fullName || null,
       leaveTypeName:
         approvedRequest.leaveType?.name || approvedRequest.leaveType?.code || 'nghi phep',
       fromDateLabel: formatVietnamDateTime(approvedRequest.fromDate) || approvedRequest.fromDate,
@@ -948,6 +950,7 @@ export async function rejectLeaveRequest(id: bigint, requestingUser: AuthUser, n
       requesterEmail: serializedRequest.user.email,
       requesterName: serializedRequest.user.fullName || 'Nhan vien',
       approverName: getActorName(requestingUser, serializedRequest.approver?.fullName),
+      handoverName: serializedRequest.handoverPerson?.fullName || null,
       leaveTypeName:
         serializedRequest.leaveType?.name || serializedRequest.leaveType?.code || 'nghi phep',
       fromDateLabel:

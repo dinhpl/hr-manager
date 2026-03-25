@@ -4,6 +4,7 @@ const SETTINGS_KEYS = {
   LEAVE_POLICY: 'leave_policy',
   APPROVAL_FLOW: 'approval_flow',
   ATTENDANCE: 'attendance',
+  MAIL: 'mail_settings',
 } as const;
 
 const DEFAULTS: Record<string, unknown> = {
@@ -31,6 +32,11 @@ const DEFAULTS: Record<string, unknown> = {
     fulfillmentCase: 'case_1',
     hoursDisplayCase: 'case_1',
     showRanking: true,
+  },
+  mail_settings: {
+    leave_request_created: true,
+    leave_request_approved: true,
+    leave_request_rejected: true,
   },
 };
 
@@ -69,4 +75,12 @@ export async function getAttendance() {
 
 export async function updateAttendance(value: unknown) {
   return updateSetting(SETTINGS_KEYS.ATTENDANCE, value);
+}
+
+export async function getMailSettings() {
+  return getSetting(SETTINGS_KEYS.MAIL);
+}
+
+export async function updateMailSettings(value: unknown) {
+  return updateSetting(SETTINGS_KEYS.MAIL, value);
 }

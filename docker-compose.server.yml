@@ -43,6 +43,15 @@ services:
       NODE_ENV: production
       PORT: 5501
       UPLOAD_DIR: ${UPLOAD_DIR:-uploads/leave-attachments}
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_SECURE: ${MAIL_SECURE:-false}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-no-reply@ota.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-OTA HR System}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
     volumes:
       - uploads_data:/app/uploads
     networks:

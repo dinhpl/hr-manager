@@ -1,5 +1,25 @@
-import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
 import { z } from 'zod';
+
+function loadEnvFiles() {
+  const cwd = process.cwd();
+  const candidates = [
+    path.resolve(cwd, '../.env'),
+    path.resolve(cwd, '../.env.local'),
+    path.resolve(cwd, '.env'),
+    path.resolve(cwd, '.env.local'),
+  ];
+
+  for (const filePath of candidates) {
+    if (fs.existsSync(filePath)) {
+      dotenv.config({ path: filePath, override: false });
+    }
+  }
+}
+
+loadEnvFiles();
 
 const booleanSchema = z.preprocess((value) => {
   if (typeof value === 'boolean') return value;

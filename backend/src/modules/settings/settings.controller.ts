@@ -2,6 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import * as service from './settings.service';
 import { sendSuccess } from '../../utils/response';
 import { createAuditLog, getClientIp } from '../audit-logs/audit-logs.service';
+import {
+  mailService,
+  renderMailTemplatePreview,
+  sendMailTemplateTest,
+  type MailTemplateType,
+} from '../mail/mail.service';
 
 export async function getLeavePolicy(req: Request, res: Response, next: NextFunction) {
   try {
@@ -79,6 +85,86 @@ export async function updateAttendance(req: Request, res: Response, next: NextFu
       ipAddress: getClientIp(req),
     });
     sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMailSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await service.getMailSettings();
+    sendSuccess(res, data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateMailSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.updateMailSettings(req.body);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'UPDATE',
+      module: 'SETTING',
+      entityName: 'Mail Settings',
+      ipAddress: getClientIp(req),
+    });
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function testMailTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const recipientEmail = String(req.body?.recipientEmail ?? '').trim();
+    const template = String(req.body?.template ?? '').trim() as MailTemplateType;
+
+    if (!recipientEmail.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+      throw Object.assign(new Error('Email nhận test không hợp lệ'), { status: 400 });
+    }
+
+    if (
+      template !== 'leave_request_created' &&
+      template !== 'leave_request_approved' &&
+      template !== 'leave_request_rejected'
+    ) {
+      throw Object.assign(new Error('Template mail test không hợp lệ'), { status: 400 });
+    }
+
+    const result = await sendMailTemplateTest(mailService, recipientEmail, template);
+
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'CREATE',
+      module: 'SETTING',
+      entityName: `Mail Test: ${template}`,
+      ipAddress: getClientIp(req),
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function previewMailTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = String(req.query.template ?? '').trim() as MailTemplateType;
+
+    if (
+      template !== 'leave_request_created' &&
+      template !== 'leave_request_approved' &&
+      template !== 'leave_request_rejected'
+    ) {
+      throw Object.assign(new Error('Template mail preview không hợp lệ'), { status: 400 });
+    }
+
+    sendSuccess(res, { html: renderMailTemplatePreview(template) });
   } catch (err) {
     next(err);
   }
