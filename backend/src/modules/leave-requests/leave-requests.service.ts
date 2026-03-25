@@ -10,6 +10,12 @@ import {
 import { buildMeta, getPaginationParams } from '../../utils/pagination';
 import { deductBalance, restoreBalance } from '../leave-balances/leave-balances.service';
 import {
+  mailService,
+  sendLeaveRequestApprovedEmail,
+  sendLeaveRequestCreatedEmail,
+  sendLeaveRequestRejectedEmail,
+} from '../mail/mail.service';
+import {
   buildLeaveRequestNotification,
   createManyNotifications,
   createNotification,
@@ -48,6 +54,7 @@ const LEAVE_REQUEST_INCLUDE = {
       username: true,
       department: true,
       managerId: true,
+      email: true,
     },
   },
   leaveType: {
@@ -60,7 +67,7 @@ const LEAVE_REQUEST_INCLUDE = {
       maxConsecutiveDays: true,
     },
   },
-  approver: { select: { id: true, fullName: true } },
+  approver: { select: { id: true, fullName: true, email: true } },
   handoverPerson: { select: { id: true, fullName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
@@ -104,6 +111,23 @@ function getLeavePolicySettings(value: unknown): LeavePolicySettings {
 function getApprovalFlowSettings(value: unknown): ApprovalFlowSettings {
   if (!value || typeof value !== 'object') return {};
   return value as ApprovalFlowSettings;
+}
+
+function formatLeaveTotalDaysLabel(totalDays: string | number | Prisma.Decimal) {
+  const numericTotalDays = Number(totalDays);
+  if (Number.isInteger(numericTotalDays)) {
+    return `${numericTotalDays} ngay`;
+  }
+
+  return `${numericTotalDays.toFixed(1)} ngay`;
+}
+
+async function sendLeaveMailSafely(task: () => Promise<unknown>) {
+  try {
+    await task();
+  } catch (error) {
+    console.error('[mail] Failed to send leave request email', error);
+  }
 }
 
 function requiresLeaveBalanceCheck(leaveTypeCode?: string | null) {
@@ -610,6 +634,21 @@ export async function createLeaveRequest(
         toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
       }),
     );
+
+    await sendLeaveMailSafely(() =>
+      sendLeaveRequestCreatedEmail(mailService, {
+        approverEmail: createdRequest.approver?.email,
+        approverName: createdRequest.approver?.fullName,
+        requesterName: createdRequest.user?.fullName || 'Nhan vien',
+        leaveTypeName:
+          createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
+        fromDateLabel: formatVietnamDateTime(createdRequest.fromDate) || createdRequest.fromDate,
+        toDateLabel: formatVietnamDateTime(createdRequest.toDate) || createdRequest.toDate,
+        totalDaysLabel: formatLeaveTotalDaysLabel(createdRequest.totalDays),
+        reason: createdRequest.reason || 'Khong co ly do',
+        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/approval`,
+      }),
+    );
   }
 
   return createdRequest;
@@ -846,6 +885,21 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
     }),
   );
 
+  await sendLeaveMailSafely(() =>
+    sendLeaveRequestApprovedEmail(mailService, {
+      requesterEmail: approvedRequest.user.email,
+      requesterName: approvedRequest.user.fullName || 'Nhan vien',
+      approverName: getActorName(requestingUser, approvedRequest.approver?.fullName),
+      leaveTypeName:
+        approvedRequest.leaveType?.name || approvedRequest.leaveType?.code || 'nghi phep',
+      fromDateLabel: formatVietnamDateTime(approvedRequest.fromDate) || approvedRequest.fromDate,
+      toDateLabel: formatVietnamDateTime(approvedRequest.toDate) || approvedRequest.toDate,
+      totalDaysLabel: formatLeaveTotalDaysLabel(approvedRequest.totalDays),
+      note: approvedRequest.approvedNote,
+      detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/leave-history`,
+    }),
+  );
+
   return approvedRequest;
 }
 
@@ -886,6 +940,22 @@ export async function rejectLeaveRequest(id: bigint, requestingUser: AuthUser, n
         serializedRequest.leaveType?.name || serializedRequest.leaveType?.code || 'nghi phep',
       fromDateLabel: getVietnamDatePart(parseVietnamDateTime(serializedRequest.fromDate)),
       toDateLabel: getVietnamDatePart(parseVietnamDateTime(serializedRequest.toDate)),
+    }),
+  );
+
+  await sendLeaveMailSafely(() =>
+    sendLeaveRequestRejectedEmail(mailService, {
+      requesterEmail: serializedRequest.user.email,
+      requesterName: serializedRequest.user.fullName || 'Nhan vien',
+      approverName: getActorName(requestingUser, serializedRequest.approver?.fullName),
+      leaveTypeName:
+        serializedRequest.leaveType?.name || serializedRequest.leaveType?.code || 'nghi phep',
+      fromDateLabel:
+        formatVietnamDateTime(serializedRequest.fromDate) || serializedRequest.fromDate,
+      toDateLabel: formatVietnamDateTime(serializedRequest.toDate) || serializedRequest.toDate,
+      totalDaysLabel: formatLeaveTotalDaysLabel(serializedRequest.totalDays),
+      note,
+      detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/leave-history`,
     }),
   );
 
