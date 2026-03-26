@@ -16,7 +16,17 @@ type ParsedHoliday = {
 };
 
 function getHolidaySeedFilePath() {
-  return path.join(__dirname, 'data', 'holidays.json');
+  const candidates = [
+    path.join(__dirname, 'data', 'holidays.json'),
+    path.join(process.cwd(), 'prisma', 'data', 'holidays.json'),
+  ];
+
+  const existing = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!existing) {
+    throw new Error(`Holiday seed file not found. Checked: ${candidates.join(', ')}`);
+  }
+
+  return existing;
 }
 
 function toUtcDate(dateValue: string) {

@@ -105,8 +105,10 @@ fi
 log_step "Bước 2/4: Save images"
 log_info "Đóng gói frontend image"
 docker save "${FRONTEND_IMAGE}:${FRONTEND_VERSION}" | gzip > "${LOCAL_FRONTEND_TAR}"
+log_info "Frontend tar size: $(du -h "${LOCAL_FRONTEND_TAR}" | cut -f1)"
 log_info "Đóng gói backend image"
 docker save "${BACKEND_IMAGE}:${BACKEND_VERSION}" | gzip > "${LOCAL_BACKEND_TAR}"
+log_info "Backend tar size: $(du -h "${LOCAL_BACKEND_TAR}" | cut -f1)"
 log_success "Đã tạo tar images"
 
 log_step "Bước 3/4: Rsync files lên server"
@@ -139,18 +141,45 @@ ssh_run "
   gunzip -c '${REMOTE_BACKEND_TAR}' | sudo docker load
   rm -f '${REMOTE_BACKEND_TAR}'
 
-  sudo docker network create backend 2>/dev/null || echo 'Network backend đã tồn tại'
+  FRONTEND_IMAGE='${FRONTEND_IMAGE}' FRONTEND_VERSION='${FRONTEND_VERSION}' BACKEND_IMAGE='${BACKEND_IMAGE}' BACKEND_VERSION='${BACKEND_VERSION}' \
+    sudo docker compose up -d db
 
   FRONTEND_IMAGE='${FRONTEND_IMAGE}' FRONTEND_VERSION='${FRONTEND_VERSION}' BACKEND_IMAGE='${BACKEND_IMAGE}' BACKEND_VERSION='${BACKEND_VERSION}' \
-    sudo docker compose down --remove-orphans
+    sudo docker compose up -d --no-deps --force-recreate --wait backend
 
   FRONTEND_IMAGE='${FRONTEND_IMAGE}' FRONTEND_VERSION='${FRONTEND_VERSION}' BACKEND_IMAGE='${BACKEND_IMAGE}' BACKEND_VERSION='${BACKEND_VERSION}' \
-    sudo docker compose up -d
+    sudo docker compose up -d --no-deps --force-recreate --wait frontend
 
   echo ''
   sudo docker compose ps
   echo ''
-  sudo docker image prune -f
+
+  cleanup_old_project_images() {
+    image_name=\"\$1\"
+    keep_ref=\"\$2\"
+    removed_any=0
+    image_lines=\$(sudo docker images --format '{{.Repository}}:{{.Tag}} {{.Repository}} {{.ID}}')
+
+    echo \"🧹 Cleanup old images for \$image_name (keeping \$keep_ref)\"
+
+    while read -r full_ref repo image_id; do
+      [ -n \"\$full_ref\" ] || continue
+      [ \"\$repo\" = \"\$image_name\" ] || continue
+      [ \"\$full_ref\" = \"\$keep_ref\" ] && continue
+      echo \" - removing \$full_ref (\$image_id)\"
+      sudo docker image rm -f \"\$image_id\" || true
+      removed_any=1
+    done <<EOF
+\$image_lines
+EOF
+
+    if [ \"\$removed_any\" = \"0\" ]; then
+      echo \" - no old images to remove\"
+    fi
+  }
+
+  cleanup_old_project_images '${FRONTEND_IMAGE}' '${FRONTEND_IMAGE}:${FRONTEND_VERSION}'
+  cleanup_old_project_images '${BACKEND_IMAGE}' '${BACKEND_IMAGE}:${BACKEND_VERSION}'
 "
 
 ELAPSED=$((SECONDS - START_TIME))
