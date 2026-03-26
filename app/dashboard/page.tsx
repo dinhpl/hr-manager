@@ -42,6 +42,7 @@ interface UserInfo {
   username: string;
   fullName?: string | null;
   role: string;
+  systemRole?: string | null;
 }
 
 interface DashboardEmployeeSummary {
@@ -632,6 +633,7 @@ function EmployeeDashboard({
   currentMonth,
   currentYear,
   calendarData,
+  birthdayData,
   recentRequests,
   summary,
   leaveBalance,
@@ -643,6 +645,7 @@ function EmployeeDashboard({
   onPrevMonth,
 }: SharedDashboardProps & {
   summary: DashboardEmployeeSummary['stats'];
+  birthdayData?: BirthdayData;
   leaveBalance?: EmployeeLeaveBalance | null;
   resetCarryOverDate?: string;
 }) {
@@ -704,11 +707,21 @@ function EmployeeDashboard({
               />
               <span className="text-xs text-gray-500">Chờ duyệt</span>
             </div>
+            {birthdayData && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="inline-block h-3 w-2.5 rounded-sm"
+                  style={{ background: '#fce7f3', borderLeft: '2px solid #ec4899' }}
+                />
+                <span className="text-xs text-gray-500">Sinh nhật</span>
+              </div>
+            )}
           </div>
 
           <CalendarGrid
             calendarDays={calendarDays}
             calendarData={calendarData}
+            birthdayData={birthdayData}
             onDayClick={onOpenDayDetail}
           />
         </div>
@@ -1211,6 +1224,9 @@ export default function DashboardPage() {
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const canViewDashboardBirthdays =
+    userInfo?.role === 'HR' || userInfo?.role === 'ADMIN' || userInfo?.systemRole?.toUpperCase() === 'ADMIN';
+
   const loadCurrentUser = useCallback(async () => {
     setLoadingUser(true);
 
@@ -1285,8 +1301,8 @@ export default function DashboardPage() {
   }, [currentMonth, currentYear]);
 
   const loadBirthdayData = useCallback(
-    async (role: string) => {
-      if (showBirthdaysOnDashboard !== true || (role !== 'HR' && role !== 'ADMIN')) {
+    async () => {
+      if (showBirthdaysOnDashboard !== true || !canViewDashboardBirthdays) {
         setBirthdayData({});
         return;
       }
@@ -1299,7 +1315,7 @@ export default function DashboardPage() {
         setBirthdayData({});
       }
     },
-    [currentMonth, currentYear, showBirthdaysOnDashboard],
+    [canViewDashboardBirthdays, currentMonth, currentYear, showBirthdaysOnDashboard],
   );
 
   useEffect(() => {
@@ -1311,10 +1327,10 @@ export default function DashboardPage() {
   }, [loadDashboardData]);
 
   useEffect(() => {
-    if (userInfo?.role) {
-      void loadBirthdayData(userInfo.role);
+    if (userInfo) {
+      void loadBirthdayData();
     }
-  }, [loadBirthdayData, userInfo?.role]);
+  }, [loadBirthdayData, userInfo]);
 
   useEffect(() => {
     if (userInfo) {
@@ -1343,25 +1359,16 @@ export default function DashboardPage() {
   };
 
   const handleOpenCalendarRequestDetail = useCallback(
-    async (user: CalendarData[string]['users'][number]) => {
+    (user: CalendarData[string]['users'][number]) => {
       if (!user.requestId) {
         setSelectedDayDetail(null);
         return;
       }
 
-      try {
-        const response = await apiClient.get<DashboardLeaveRequest>(
-          `/api/leave-requests/${user.requestId}`,
-        );
-        setSelectedRawRequest(response.data);
-        setSelectedDetail(toDetailData(response.data));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Không tải được chi tiết yêu cầu nghỉ phép.');
-      } finally {
-        setSelectedDayDetail(null);
-      }
+      setSelectedDayDetail(null);
+      router.push(`/dashboard/leave-detail/${user.requestId}`);
     },
-    [],
+    [router],
   );
 
   const handleEditRequest = useCallback(async () => {
@@ -1444,6 +1451,7 @@ export default function DashboardPage() {
           currentMonth={currentMonth}
           currentYear={currentYear}
           calendarData={calendarData}
+          birthdayData={showBirthdaysOnDashboard === true ? birthdayData : undefined}
           recentRequests={recentRequests}
           summary={summary.stats}
           leaveBalance={leaveBalance}

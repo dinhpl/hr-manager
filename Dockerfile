@@ -5,8 +5,10 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
 ARG NEXT_PUBLIC_API_URL=https://hr.onetech.vn
+ARG NEXT_PUBLIC_VERSION=
 ARG BACKEND_URL=https://hr.onetech.vn
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
 ENV BACKEND_URL=$BACKEND_URL
 RUN pnpm exec next build
 

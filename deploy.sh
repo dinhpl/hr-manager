@@ -50,6 +50,7 @@ else
 fi
 
 NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL:-https://hr.onetech.vn}"
+NEXT_PUBLIC_VERSION="${NEXT_PUBLIC_VERSION:-}"
 BACKEND_URL="${BACKEND_URL:-http://backend:5501}"
 
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -p ${SERVER_PORT}"
@@ -74,6 +75,7 @@ echo -e "${CYAN}╠════════════════════�
 echo -e "${CYAN}║${NC} Server : ${SERVER_USER}@${SERVER_HOST}:${SERVER_PORT}"
 echo -e "${CYAN}║${NC} Dir    : ${SERVER_DIR}"
 echo -e "${CYAN}║${NC} FE API : ${NEXT_PUBLIC_API_URL}"
+echo -e "${CYAN}║${NC} FE Ver : ${NEXT_PUBLIC_VERSION:-<empty>}"
 echo -e "${CYAN}║${NC} FE BE  : ${BACKEND_URL}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════╝${NC}"
 
@@ -85,6 +87,7 @@ if [ "${SKIP_BUILD}" = false ]; then
   docker build \
     --platform linux/amd64 \
     --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
+    --build-arg NEXT_PUBLIC_VERSION="${NEXT_PUBLIC_VERSION}" \
     --build-arg BACKEND_URL="${BACKEND_URL}" \
     -t "${FRONTEND_IMAGE}:${FRONTEND_VERSION}" \
     .

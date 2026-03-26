@@ -30,8 +30,8 @@ services:
         pnpm install --frozen-lockfile --ignore-scripts=false &&
         pnpm exec prisma generate &&
         pnpm exec prisma db push --accept-data-loss &&
-        USER_COUNT=$(node -e \"const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.user.count().then(n => { console.log(n); return p['$disconnect'](); }).catch(() => { console.log(0); process.exit(0); });\") &&
-        if [ \"$USER_COUNT\" = \"0\" ]; then pnpm exec tsx prisma/seed.ts; fi &&
+        USER_COUNT=$$(node -e \"const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.user.count().then(n => { console.log(n); return p['$$disconnect'](); }).catch(() => { console.log(0); process.exit(0); });\") &&
+        if [ \"$$USER_COUNT\" = \"0\" ]; then pnpm exec tsx prisma/seed.ts; fi &&
         pnpm exec tsx prisma/seed-holidays.ts &&
         mkdir -p uploads &&
         pnpm dev
@@ -85,6 +85,7 @@ services:
       PORT: 5500
       HOSTNAME: 0.0.0.0
       NEXT_PUBLIC_API_URL: http://localhost:5501
+      NEXT_PUBLIC_VERSION: ${NEXT_PUBLIC_VERSION:-}
       BACKEND_URL: http://backend:5501
       CHOKIDAR_USEPOLLING: 'true'
       WATCHPACK_POLLING: 'true'

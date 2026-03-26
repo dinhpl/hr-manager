@@ -24,6 +24,7 @@ import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
 import LeaveRequestModal, { LeaveRequestData } from '@/components/leave-request-modal';
+import { useRef } from 'react';
 
 interface LeaveRequestDetail {
   id: string;
@@ -59,6 +60,19 @@ interface UserInfo {
   id: string;
   role: string;
 }
+
+const LEAVE_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+const LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+];
 
 type StatusKey = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
@@ -97,10 +111,16 @@ function getInitials(name: string) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+function isValidLeaveAttachment(file: File) {
+  const lowerName = file.name.toLowerCase();
+  return LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+}
+
 export default function LeaveDetailPage() {
   const params = useParams();
   const router = useRouter();
   const requestId = params.id as string;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [data, setData] = useState<LeaveRequestDetail | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -112,6 +132,7 @@ export default function LeaveDetailPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editData, setEditData] = useState<LeaveRequestData | null>(null);
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null);
+  const [attachmentUpdating, setAttachmentUpdating] = useState(false);
   const { openConfirm, confirmDialog } = useConfirmDialog();
 
   const loadUser = useCallback(async () => {
@@ -153,9 +174,10 @@ export default function LeaveDetailPage() {
 
   const canApprove =
     isPending && !isEmployee && (role === 'hr' || role === 'admin' || (role === 'manager' && !isOwner));
-  const canEdit = role === 'hr' || role === 'admin';
+  const canEdit = isPending && (role === 'hr' || role === 'admin' || isOwner);
   const canCancel = isEmployee && isOwner && isPending;
-  console.log('userInfo: ', userInfo)
+  const canEditAttachment = isOwner && (statusKey === 'pending' || statusKey === 'approved');
+
   const handleCopyLink = () => {
     const url = `${window.location.origin}/dashboard/leave-detail/${requestId}`;
     navigator.clipboard.writeText(url).then(() => {
@@ -234,6 +256,37 @@ export default function LeaveDetailPage() {
       approverId: data.approver?.id ? String(data.approver.id) : '',
     });
     setEditModalOpen(true);
+  };
+
+  const handleAttachmentSelect = async (file: File | null) => {
+    if (!file || !canEditAttachment) return;
+    if (!isValidLeaveAttachment(file)) {
+      toast.error(
+        'Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG hoặc HEIC.',
+      );
+      return;
+    }
+    if (file.size > LEAVE_ATTACHMENT_MAX_SIZE) {
+      toast.error('File vượt quá 10MB. Vui lòng chọn file nhỏ hơn.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('attachment', file);
+
+    setAttachmentUpdating(true);
+    try {
+      await apiClient.patch(`/api/leave-requests/${requestId}/attachment`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      toast.success(data?.attachmentUrl ? 'Đã cập nhật file đính kèm.' : 'Đã tải file đính kèm.');
+      void loadRequest();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Không thể cập nhật file đính kèm.');
+    } finally {
+      setAttachmentUpdating(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   if (loading) {
@@ -373,6 +426,37 @@ export default function LeaveDetailPage() {
                 >
                   {data.attachmentUrl}
                 </a>
+              </div>
+            )}
+            {canEditAttachment && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <FileText size={15} style={{ color: '#1DB87A' }} />
+                <span className="text-sm" style={{ color: '#6b7f78' }}>
+                  {data.attachmentUrl ? 'Sửa file đính kèm:' : 'Thêm file đính kèm:'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={attachmentUpdating}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-gray-50 disabled:opacity-60"
+                  style={{ borderColor: '#e2ede9', color: '#1DB87A' }}
+                >
+                  {attachmentUpdating
+                    ? 'Đang tải lên...'
+                    : data.attachmentUrl
+                      ? 'Chọn file mới'
+                      : 'Tải file lên'}
+                </button>
+                <span className="text-xs" style={{ color: '#6b7f78' }}>
+                  PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG, HEIC, tối đa 10MB
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.heic"
+                  onChange={(e) => void handleAttachmentSelect(e.target.files?.[0] ?? null)}
+                />
               </div>
             )}
             <div className="flex items-center gap-2">

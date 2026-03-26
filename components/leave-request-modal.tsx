@@ -124,6 +124,24 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
   } as const;
 }
 
+const LEAVE_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+const LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+];
+
+function isValidLeaveAttachment(file: File) {
+  const lowerName = file.name.toLowerCase();
+  return LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+}
+
 
 export default function LeaveRequestModal({
   isOpen,
@@ -331,20 +349,14 @@ export default function LeaveRequestModal({
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
-    const maxSize = 5 * 1024 * 1024;
-    const allowed = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'image/jpeg',
-      'image/png',
-    ];
-    if (!allowed.includes(file.type)) {
-      toast.error('Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, JPG hoặc PNG.');
+    if (!isValidLeaveAttachment(file)) {
+      toast.error(
+        'Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG hoặc HEIC.',
+      );
       return;
     }
-    if (file.size > maxSize) {
-      toast.error('File vượt quá 5MB. Vui lòng chọn file nhỏ hơn.');
+    if (file.size > LEAVE_ATTACHMENT_MAX_SIZE) {
+      toast.error('File vượt quá 10MB. Vui lòng chọn file nhỏ hơn.');
       return;
     }
     setAttachedFile(file);
@@ -896,69 +908,67 @@ export default function LeaveRequestModal({
               </Select>
             </div>
 
-            {false && (
-              <div>
-                <label
-                  className="flex items-center gap-2 text-sm font-semibold mb-2"
-                  style={{ color: '#203430' }}
+            <div>
+              <label
+                className="flex items-center gap-2 text-sm font-semibold mb-2"
+                style={{ color: '#203430' }}
+              >
+                <Paperclip size={14} style={{ color: '#1DB87A' }} /> File đính kèm (nếu có)
+              </label>
+              {attachedFile ? (
+                <div
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg"
+                  style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
                 >
-                  <Paperclip size={14} style={{ color: '#1DB87A' }} /> File đính kèm (nếu có)
-                </label>
-                {attachedFile ? (
-                  <div
-                    className="flex items-center gap-3 px-4 py-3 rounded-lg"
-                    style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
+                  <FileText size={16} style={{ color: '#1DB87A' }} />
+                  <span
+                    className="text-sm font-medium flex-1 truncate"
+                    style={{ color: '#203430' }}
                   >
-                    <FileText size={16} style={{ color: '#1DB87A' }} />
-                    <span
-                      className="text-sm font-medium flex-1 truncate"
-                      style={{ color: '#203430' }}
-                    >
-                      {attachedFile?.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {(Number(attachedFile?.size) / 1024).toFixed(0)} KB
-                    </span>
-                    <button
-                      onClick={() => setAttachedFile(null)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors"
-                    >
-                      <X size={15} />
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    className="rounded-lg p-6 text-center cursor-pointer transition-all"
-                    style={{
-                      border: `2px dashed ${dragging ? '#1DB87A' : '#D3F2E7'}`,
-                      background: dragging ? '#f0f9f5' : '#fafffe',
-                    }}
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragging(true);
-                    }}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={handleDrop}
+                    {attachedFile.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {(attachedFile.size / 1024).toFixed(0)} KB
+                  </span>
+                  <button
+                    onClick={() => setAttachedFile(null)}
+                    className="text-muted-foreground hover:text-red-500 transition-colors"
                   >
-                    <CloudUpload size={28} className="mx-auto mb-2" style={{ color: '#1DB87A' }} />
-                    <p className="text-sm font-medium" style={{ color: '#203430' }}>
-                      Nhấp để chọn file hoặc kéo thả file vào đây
-                    </p>
-                    <p className="text-xs mt-1 text-muted-foreground">
-                      Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 5MB)
-                    </p>
-                  </div>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            )}
+                    <X size={15} />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="rounded-lg p-6 text-center cursor-pointer transition-all"
+                  style={{
+                    border: `2px dashed ${dragging ? '#1DB87A' : '#D3F2E7'}`,
+                    background: dragging ? '#f0f9f5' : '#fafffe',
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={handleDrop}
+                >
+                  <CloudUpload size={28} className="mx-auto mb-2" style={{ color: '#1DB87A' }} />
+                  <p className="text-sm font-medium" style={{ color: '#203430' }}>
+                    Nhấp để chọn file hoặc kéo thả file vào đây
+                  </p>
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    Hỗ trợ: PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG, HEIC (Tối đa 10MB)
+                  </p>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.heic"
+                onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
+              />
+            </div>
           </div>
         </div>
 

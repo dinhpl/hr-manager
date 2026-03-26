@@ -19,8 +19,7 @@ export async function getBirthdaysByMonth(req: Request, res: Response, next: Nex
   try {
     const year = parseInt(String(req.query.year)) || new Date().getFullYear();
     const month = parseInt(String(req.query.month)) || new Date().getMonth() + 1;
-    const callerRole = req.user?.role || '';
-    const data = await usersService.getUsersBirthdaysByMonth(year, month, callerRole);
+    const data = await usersService.getUsersBirthdaysByMonth(year, month, req.user);
     sendSuccess(res, data);
   } catch (err) {
     next(err);

@@ -8,10 +8,24 @@ const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'image/jpeg',
   'image/png',
-  'image/gif',
-  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
+const ALLOWED_FILE_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
 ];
 
 const storage = multer.diskStorage({
@@ -25,10 +39,18 @@ const storage = multer.diskStorage({
 
 export const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) cb(null, true);
-    else cb(new Error('File type not allowed. Use PDF, DOC, DOCX, JPG, PNG, GIF, or WEBP.'));
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_MIME_TYPES.includes(file.mimetype) || ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+      cb(null, true);
+      return;
+    }
+    cb(
+      new Error(
+        'File type not allowed. Use PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG, or HEIC.',
+      ),
+    );
   },
 });
 

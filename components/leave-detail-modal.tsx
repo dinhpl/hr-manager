@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Info, Pencil } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/api-client';
 
 /** Normalized shape accepted by the modal — adapters in each page convert to this */
 export interface LeaveDetailData {
@@ -222,9 +223,15 @@ export default function LeaveDetailModal({ data, onClose, onEdit }: LeaveDetailM
               <span className="text-sm" style={{ color: '#6b7f78' }}>
                 File đính kèm:
               </span>
-              <span className="text-sm font-semibold" style={{ color: '#3b82f6' }}>
+              <a
+                href={`${getApiBaseUrl()}/uploads/leave-attachments/${data.fileAttachment}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-semibold hover:underline"
+                style={{ color: '#3b82f6' }}
+              >
                 {data.fileAttachment}
-              </span>
+              </a>
             </div>
           )}
 

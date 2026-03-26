@@ -3,6 +3,16 @@ set -euo pipefail
 
 COMPOSE_FILE="docker-compose.dev.yml"
 
+load_env_file() {
+  local env_file="$1"
+  [ -f "$env_file" ] || return 1
+  set -a
+  # shellcheck disable=SC1090
+  . "./$env_file"
+  set +a
+  return 0
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -16,6 +26,10 @@ EOF
 }
 
 cmd="${1:-up}"
+
+if ! load_env_file ".env.local"; then
+  load_env_file ".env" || true
+fi
 
 case "$cmd" in
   up)

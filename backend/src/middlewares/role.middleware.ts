@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@prisma/client';
+import { hasAppRole, isSystemSuperAdmin } from '../utils/authz';
 
 // RBAC guard — restrict route to specific roles
 export function requireRoles(...roles: UserRole[]) {
@@ -10,8 +11,8 @@ export function requireRoles(...roles: UserRole[]) {
         .json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not authenticated' } });
     }
 
-    const hasRole = roles.includes(req.user.role);
-    const hasSystemAdmin = roles.includes('ADMIN') && req.user.systemRole === 'ADMIN';
+    const hasRole = hasAppRole(req.user, ...roles);
+    const hasSystemAdmin = roles.includes('ADMIN') && isSystemSuperAdmin(req.user);
 
     if (!hasRole && !hasSystemAdmin) {
       return res.status(403).json({

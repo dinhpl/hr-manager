@@ -46,6 +46,24 @@ import {
   type LeaveRequestMode,
 } from '@/lib/hr-utils';
 
+const LEAVE_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+const LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.heic',
+];
+
+function isValidLeaveAttachment(file: File) {
+  const lowerName = file.name.toLowerCase();
+  return LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+}
+
 interface LeaveTypeOption {
   id: string;
   code: string;
@@ -188,23 +206,16 @@ export default function LeaveRequestPage() {
 
   const handleFileSelect = (file: File | null) => {
     if (!file) return;
-    const maxSize = 5 * 1024 * 1024;
-    const allowed = [
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'image/jpeg',
-      'image/png',
-    ];
-    if (!allowed.includes(file.type)) {
+    if (!isValidLeaveAttachment(file)) {
       setAlert({
         type: 'warning',
-        message: 'Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, JPG hoặc PNG.',
+        message:
+          'Định dạng file không hỗ trợ. Vui lòng chọn PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG hoặc HEIC.',
       });
       return;
     }
-    if (file.size > maxSize) {
-      setAlert({ type: 'warning', message: 'File vượt quá 5MB. Vui lòng chọn file nhỏ hơn.' });
+    if (file.size > LEAVE_ATTACHMENT_MAX_SIZE) {
+      setAlert({ type: 'warning', message: 'File vượt quá 10MB. Vui lòng chọn file nhỏ hơn.' });
       return;
     }
     setAttachedFile(file);
@@ -637,7 +648,7 @@ export default function LeaveRequestPage() {
                   Nhấp để chọn file hoặc kéo thả file vào đây
                 </p>
                 <p className="text-xs mt-1 text-muted-foreground">
-                  Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 5MB)
+                  Hỗ trợ: PDF, DOC, DOCX, XLS, XLSX, JPG, JPEG, PNG, HEIC (Tối đa 10MB)
                 </p>
               </div>
             )}
@@ -645,7 +656,7 @@ export default function LeaveRequestPage() {
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.heic"
               onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
             />
           </div>

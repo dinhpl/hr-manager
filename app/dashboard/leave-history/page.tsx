@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
-  Download,
   Eye,
   FileDown,
   Filter,
@@ -1103,21 +1102,6 @@ export default function LeaveHistoryPage() {
                             title="Hủy"
                           >
                             <X size={13} style={{ color: '#ef4444' }} />
-                          </button>
-                        ) : null}
-                        {row.attachmentUrl ? (
-                          <button
-                            onClick={() =>
-                              window.open(
-                                `${getApiBaseUrl()}/uploads/${row.attachmentUrl}`,
-                                '_blank',
-                                'noopener,noreferrer',
-                              )
-                            }
-                            className="flex h-6 w-6 items-center justify-center rounded hover:bg-emerald-50"
-                            title="Tải file đính kèm"
-                          >
-                            <Download size={13} style={{ color: '#1DB87A' }} />
                           </button>
                         ) : null}
                       </div>

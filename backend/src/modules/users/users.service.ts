@@ -2,6 +2,7 @@ import prisma from '../../config/prisma';
 import { UserRole } from '@prisma/client';
 import { hashPassword } from '../../utils/hash';
 import { getPaginationParams, buildMeta } from '../../utils/pagination';
+import { canViewAllBirthdays } from '../../utils/authz';
 import { GetUsersQuery, CreateUserDto, UpdateUserDto } from './users.validation';
 import * as XLSX from 'xlsx';
 import { syncCurrentYearAnnualLeaveBalanceForUser } from '../leave-balances/leave-balances.service';
@@ -9,6 +10,7 @@ import { syncCurrentYearAnnualLeaveBalanceForUser } from '../leave-balances/leav
 type AuthUser = {
   id: bigint;
   role: UserRole;
+  systemRole?: string | null;
 };
 
 // Fields returned in list/detail — password excluded
@@ -258,11 +260,15 @@ export async function deleteUser(id: bigint) {
 }
 
 // Birthday map for a given month: "YYYY-MM-DD" → list of employees with birthday that day
-export async function getUsersBirthdaysByMonth(year: number, month: number, callerRole: string = '') {
-  const isHrOrAdmin = callerRole === 'HR';
+export async function getUsersBirthdaysByMonth(
+  year: number,
+  month: number,
+  caller?: AuthUser | null,
+) {
+  const canSeeAllBirthdays = canViewAllBirthdays(caller);
 
   const whereClause: Record<string, unknown> = { birthday: { not: null }, isActive: true };
-  if (!isHrOrAdmin) {
+  if (!canSeeAllBirthdays) {
     whereClause.hideBirthday = false;
   }
 

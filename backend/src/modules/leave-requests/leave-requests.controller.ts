@@ -185,6 +185,35 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function updateAttachment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = BigInt(String(req.params.id));
+    const before = await prisma.leaveRequest.findUnique({
+      where: { id },
+      include: LEAVE_REQUEST_AUDIT_INCLUDE,
+    });
+    const attachmentUrl = (req.file as Express.Multer.File | undefined)?.filename;
+    if (!attachmentUrl) {
+      throw Object.assign(new Error('No attachment uploaded'), { status: 400 });
+    }
+    const request = await service.updateLeaveRequestAttachment(id, req.user!, attachmentUrl);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'UPDATE',
+      module: 'LEAVE_REQUEST',
+      entityId: id.toString(),
+      entityName: getLeaveRequestEntityName(request),
+      changes: buildLeaveRequestAuditChanges(before, request),
+      ipAddress: getClientIp(req),
+    });
+    sendSuccess(res, request);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function approve(req: Request, res: Response, next: NextFunction) {
   try {
     const id = BigInt(String(req.params.id));

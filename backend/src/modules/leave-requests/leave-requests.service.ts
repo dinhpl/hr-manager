@@ -718,6 +718,42 @@ export async function updateLeaveRequest(
   return serializeLeaveRequestDates(updatedRequest);
 }
 
+export async function updateLeaveRequestAttachment(
+  id: bigint,
+  requestingUser: AuthUser,
+  attachmentUrl: string,
+) {
+  const existingRequest = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: LEAVE_REQUEST_INCLUDE,
+  });
+
+  if (!existingRequest) throw Object.assign(new Error('Leave request not found'), { status: 404 });
+  if (!['PENDING', 'APPROVED'].includes(existingRequest.status)) {
+    throw Object.assign(
+      new Error('Only PENDING or APPROVED requests can update attachment'),
+      { status: 400 },
+    );
+  }
+
+  const canUpdateAttachment =
+    existingRequest.userId === requestingUser.id ||
+    requestingUser.role === 'ADMIN' ||
+    requestingUser.role === 'HR';
+
+  if (!canUpdateAttachment) {
+    throw Object.assign(new Error('Access denied'), { status: 403 });
+  }
+
+  const updatedRequest = await prisma.leaveRequest.update({
+    where: { id },
+    data: { attachmentUrl },
+    include: LEAVE_REQUEST_INCLUDE,
+  });
+
+  return serializeLeaveRequestDates(updatedRequest);
+}
+
 export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, note?: string) {
   const leavePolicyRaw = await getLeavePolicy();
   const leavePolicy = getLeavePolicySettings(leavePolicyRaw);
