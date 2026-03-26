@@ -84,12 +84,12 @@ function normalizeMailTemplateSettings(value: unknown): Record<MailTemplateType,
   };
 }
 
-function normalizeAddressList(value: SendMailOptions['to'] | SendMailOptions['cc']) {
+function normalizeAddressList(value: SendMailOptions['to'] | SendMailOptions['cc']): string[] {
   if (!value) return [];
   if (Array.isArray(value)) {
     return value
       .flatMap((item) => normalizeAddressList(item as SendMailOptions['to']))
-      .filter(Boolean);
+      .filter(Boolean) as string[];
   }
   if (typeof value === 'string') {
     return value
