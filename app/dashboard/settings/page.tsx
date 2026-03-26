@@ -1559,7 +1559,7 @@ export default function SettingsPage() {
           }
         }}
       >
-        <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-7xl">
+        <DialogContent className="w-[480px] max-w-[96vw]">
           <DialogHeader>
             <DialogTitle>
               View Template Mail
@@ -1568,22 +1568,20 @@ export default function SettingsPage() {
                 : ''}
             </DialogTitle>
           </DialogHeader>
-          <div
-            className="rounded-xl border"
-            style={{ borderColor: '#e2ede9', background: '#f7f7f7' }}
-          >
+          <div className="rounded-xl border" style={{ borderColor: '#e2ede9', background: '#f5f7f6' }}>
             {isPreviewLoading ? (
-              <div className="px-6 py-16 text-center text-sm" style={{ color: '#6b7f78' }}>
+              <div className="px-6 py-12 text-center text-sm" style={{ color: '#6b7f78' }}>
                 Đang tải preview mail...
               </div>
             ) : previewHtml ? (
               <iframe
                 title="Mail template preview"
                 srcDoc={previewHtml}
-                className="h-[720px] w-full rounded-xl bg-white"
+                className="w-full rounded-xl"
+                style={{ height: '420px', display: 'block' }}
               />
             ) : (
-              <div className="px-6 py-16 text-center text-sm" style={{ color: '#6b7f78' }}>
+              <div className="px-6 py-12 text-center text-sm" style={{ color: '#6b7f78' }}>
                 Không có dữ liệu preview.
               </div>
             )}

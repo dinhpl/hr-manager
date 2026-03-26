@@ -55,9 +55,6 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-function getBrandLogoUrl() {
-  return 'https://hr.onetech.vn/assets/logo_1.png';
-}
 
 function normalizeMailTemplateSettings(value: unknown): Record<MailTemplateType, boolean> {
   const fallback: Record<MailTemplateType, boolean> = {
@@ -113,143 +110,103 @@ function buildMailShell(params: {
   ctaLabel?: string | null;
   ctaUrl?: string | null;
 }) {
-  const toneMap = {
-    warning: {
-      pillBg: '#FFF3DB',
-      pillFg: '#B54708',
-      pillBorder: '#F7D9A3',
-    },
-    success: {
-      pillBg: '#E8F7F0',
-      pillFg: '#0E7A58',
-      pillBorder: '#BDE3D1',
-    },
-    danger: {
-      pillBg: '#FEF2F2',
-      pillFg: '#B42318',
-      pillBorder: '#FECDCA',
-    },
-  } as const;
+  // Card header: first section (person name) • second-to-last section (leave type)
+  // Show remaining sections as simple lines
+  const cardHeaderSection = params.sections.find((s) =>
+    ['Người gửi', 'Nhân viên'].includes(s.label),
+  );
+  const leaveTypeSection = params.sections.find((s) => s.label === 'Loại nghỉ');
+  const cardHeader =
+    cardHeaderSection && leaveTypeSection
+      ? `${escapeHtml(cardHeaderSection.value)} • ${escapeHtml(leaveTypeSection.value)}`
+      : escapeHtml(params.sections[0]?.value ?? '');
 
-  const tone = toneMap[params.statusTone];
-  const sectionsHtml = params.sections
-    .map(
-      (section, index, array) => `
-        <tr>
-          <td style="padding: 9px 0; vertical-align: top; ${index < array.length - 1 ? 'border-bottom: 1px dashed #E2EDE9;' : ''}">
-            <div style="font-size: 11px; line-height: 16px; color: #6B7F78; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px;">
-              ${escapeHtml(section.label)}
-            </div>
-            <div style="font-size: 14px; line-height: 22px; color: #203430; font-weight: 600;">
-              ${escapeHtml(section.value)}
-            </div>
-          </td>
-        </tr>`,
-    )
+  const detailSections = params.sections.filter(
+    (s) => !['Người gửi', 'Nhân viên', 'Loại nghỉ'].includes(s.label),
+  );
+
+  const approverLabels = ['Người duyệt', 'Người xử lý'];
+  const detailLinesHtml = detailSections
+    .map((s, i) => {
+      const content = approverLabels.includes(s.label)
+        ? `${escapeHtml(s.label)}: ${escapeHtml(s.value)}`
+        : escapeHtml(s.value);
+      return `<div style="margin-top:${i === 0 ? '6' : '4'}px;font-size:13px;color:#6b7280;">${content}</div>`;
+    })
     .join('');
 
-  const noteHtml = params.note
-    ? `
-      <div style="margin-top: 14px; padding: 14px 16px; border-radius: 14px; background: #F8FBFA; border: 1px solid #E2EDE9;">
-        <div style="font-size: 11px; line-height: 16px; color: #6B7F78; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;">
-          Ghi chú
-        </div>
-        <div style="font-size: 13px; line-height: 21px; color: #203430;">
-          ${escapeHtml(params.note)}
-        </div>
-      </div>`
+  const noteLineHtml = params.note
+    ? `<div style="margin-top:8px;font-size:13px;color:#374151;">${escapeHtml(params.note)}</div>`
     : '';
 
   const ctaHtml =
     params.ctaLabel && params.ctaUrl
       ? `
-        <div style="margin-top: 18px; text-align: center;">
-          <a href="${escapeHtml(params.ctaUrl)}" style="display: inline-block; min-width: 200px; padding: 12px 20px; border-radius: 12px; background: linear-gradient(135deg, #1DB87A 0%, #0E474E 100%); color: #FFFFFF; text-decoration: none; font-size: 13px; line-height: 18px; font-weight: 700; box-shadow: 0 8px 18px rgba(14, 71, 78, 0.18);">
+        <div style="text-align:center;margin-top:20px;">
+          <a href="${escapeHtml(params.ctaUrl)}"
+            style="display:inline-block;background:#1db87a;color:#fff;
+                   padding:10px 20px;border-radius:8px;
+                   text-decoration:none;font-weight:bold;font-size:14px;">
             ${escapeHtml(params.ctaLabel)}
           </a>
         </div>`
       : '';
 
-  return `
-    <!DOCTYPE html>
-    <html lang="vi">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>${escapeHtml(params.title)}</title>
-      </head>
-      <body style="margin: 0; padding: 0; background: #F7F7F7; font-family: Arial, Helvetica, sans-serif; color: #203430;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #F7F7F7;">
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+</head>
+<body style="margin:0;padding:0;background:#f5f7f6;font-family:Arial,sans-serif;">
+
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:20px 0;">
+    <tr>
+      <td align="center">
+
+        <table width="400" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;">
+
           <tr>
-            <td style="padding: 32px 12px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 640px; margin: 0 auto; background: #FFFFFF; border: 1px solid #E2EDE9; border-radius: 24px; overflow: hidden; box-shadow: 0 10px 30px rgba(32, 52, 48, 0.08);">
-                <tr>
-                  <td style="padding: 0;">
-                    <div style="padding: 12px 22px; background: #FFFFFF; border-bottom: 1px solid #E2EDE9;">
-                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                          <td style="width: 48px; vertical-align: middle;">
-                            <img
-                              src="${escapeHtml(getBrandLogoUrl())}"
-                              alt="Leave Management HR Workspace"
-                              width="48"
-                              height="48"
-                              style="display: block; width: 48px; height: 48px; object-fit: contain;"
-                            />
-                          </td>
-                          <td style="padding-left: 8px; vertical-align: middle;">
-                            <div style="font-size: 18px; line-height: 22px; font-weight: 700; color: #203430;">
-                              Leave Management
-                            </div>
-                            <div style="margin-top: 3px; font-size: 10px; line-height: 14px; letter-spacing: 0.18em; text-transform: uppercase; color: #6B7F78;">
-                              HR WORKSPACE
-                            </div>
-                          </td>
-                          <td style="width: 1%; white-space: nowrap; text-align: right; vertical-align: middle;">
-                            <div style="display: inline-block; padding: 7px 12px; border-radius: 999px; background: ${tone.pillBg}; border: 1px solid ${tone.pillBorder}; color: ${tone.pillFg}; font-size: 12px; line-height: 18px; font-weight: 700;">
-                              ${escapeHtml(params.statusLabel)}
-                            </div>
-                          </td>
-                        </tr>
-                      </table>
-                    </div>
-
-                    <div style="padding: 20px 22px 8px; background: #FFFFFF;">
-                      <div style="font-size: 24px; line-height: 30px; font-weight: 700; color: #203430;">
-                        ${escapeHtml(params.title)}
-                      </div>
-
-                      <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #6B7F78;">
-                        ${escapeHtml(params.intro)}
-                      </div>
-
-                    </div>
-
-                    <div style="padding: 8px 22px 20px;">
-                      <div style="background: #F9FBFA; border: 1px solid #E2EDE9; border-radius: 18px; padding: 16px 16px 6px;">
-                        <div style="font-size: 15px; line-height: 22px; font-weight: 700; color: #203430; margin-bottom: 2px;">
-                          Thông tin chi tiết
-                        </div>
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                          ${sectionsHtml}
-                        </table>
-                      </div>
-
-                      ${noteHtml}
-                      ${ctaHtml}
-
-                      <div style="margin-top: 16px; text-align: center; font-size: 11px; line-height: 18px; color: #6B7F78;">
-                        Email được gửi từ hệ thống OTA HR. Vui lòng không trả lời trực tiếp email này.
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              </table>
+            <td style="padding:16px 20px;border-bottom:1px solid #eee;">
+              <div style="font-size:14px;font-weight:bold;color:#1db87a;">Leave Management</div>
+              <div style="font-size:11px;color:#9ca3af;margin-top:2px;">HR WORKSPACE</div>
             </td>
           </tr>
+
+          <tr>
+            <td style="padding:20px;">
+
+              <div style="font-size:18px;font-weight:bold;color:#111;">${escapeHtml(params.title)}</div>
+
+              <div style="margin-top:16px;background:#f9fafb;border-radius:10px;padding:14px;">
+
+                <div style="font-size:14px;font-weight:600;color:#111;">${cardHeader}</div>
+
+                ${detailLinesHtml}
+                ${noteLineHtml}
+
+              </div>
+
+              ${ctaHtml}
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:16px 20px;border-top:1px solid #eee;background:#fafafa;">
+              <div style="font-size:12px;color:#9ca3af;text-align:center;">
+                Đây là email tự động, vui lòng không trả lời.
+              </div>
+            </td>
+          </tr>
+
         </table>
-      </body>
-    </html>`;
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>`;
 }
 
 function buildRangeLabel(fromDateLabel: string, toDateLabel: string) {
@@ -373,9 +330,6 @@ export async function sendLeaveRequestCreatedEmail(
         sections: [
           { label: 'Người gửi', value: params.requesterName },
           { label: 'Người duyệt', value: params.approverName || 'Cập nhật sau' },
-          ...(params.handoverName
-            ? [{ label: 'Bàn giao/hỗ trợ', value: params.handoverName }]
-            : []),
           { label: 'Loại nghỉ', value: params.leaveTypeName },
           { label: 'Thời gian', value: rangeLabel },
           { label: 'Số ngày', value: params.totalDaysLabel },
@@ -411,9 +365,6 @@ export async function sendLeaveRequestApprovedEmail(
         sections: [
           { label: 'Nhân viên', value: params.requesterName },
           { label: 'Người duyệt', value: params.approverName },
-          ...(params.handoverName
-            ? [{ label: 'Bàn giao/hỗ trợ', value: params.handoverName }]
-            : []),
           { label: 'Loại nghỉ', value: params.leaveTypeName },
           { label: 'Thời gian', value: rangeLabel },
           { label: 'Số ngày', value: params.totalDaysLabel },
@@ -449,9 +400,6 @@ export async function sendLeaveRequestRejectedEmail(
         sections: [
           { label: 'Nhân viên', value: params.requesterName },
           { label: 'Người xử lý', value: params.approverName },
-          ...(params.handoverName
-            ? [{ label: 'Bàn giao/hỗ trợ', value: params.handoverName }]
-            : []),
           { label: 'Loại nghỉ', value: params.leaveTypeName },
           { label: 'Thời gian', value: rangeLabel },
           { label: 'Số ngày', value: params.totalDaysLabel },
@@ -469,7 +417,6 @@ export function renderMailTemplatePreview(template: MailTemplateType) {
   const sample = {
     requesterName: 'Nguyen Van A',
     approverName: 'Tran Thi B',
-    handoverName: 'Le Thi C',
     leaveTypeName: 'Nghi phep nam',
     fromDateLabel: '25/03/2026 08:00',
     toDateLabel: '25/03/2026 17:15',
@@ -489,7 +436,6 @@ export function renderMailTemplatePreview(template: MailTemplateType) {
       sections: [
         { label: 'Người gửi', value: sample.requesterName },
         { label: 'Người duyệt', value: sample.approverName },
-        { label: 'Bàn giao/hỗ trợ', value: sample.handoverName },
         { label: 'Loại nghỉ', value: sample.leaveTypeName },
         { label: 'Thời gian', value: rangeLabel },
         { label: 'Số ngày', value: sample.totalDaysLabel },
@@ -510,7 +456,6 @@ export function renderMailTemplatePreview(template: MailTemplateType) {
       sections: [
         { label: 'Nhân viên', value: sample.requesterName },
         { label: 'Người duyệt', value: sample.approverName },
-        { label: 'Bàn giao/hỗ trợ', value: sample.handoverName },
         { label: 'Loại nghỉ', value: sample.leaveTypeName },
         { label: 'Thời gian', value: rangeLabel },
         { label: 'Số ngày', value: sample.totalDaysLabel },
@@ -530,7 +475,6 @@ export function renderMailTemplatePreview(template: MailTemplateType) {
     sections: [
       { label: 'Nhân viên', value: sample.requesterName },
       { label: 'Người xử lý', value: sample.approverName },
-      { label: 'Bàn giao/hỗ trợ', value: sample.handoverName },
       { label: 'Loại nghỉ', value: sample.leaveTypeName },
       { label: 'Thời gian', value: rangeLabel },
       { label: 'Số ngày', value: sample.totalDaysLabel },
@@ -549,7 +493,6 @@ export async function sendMailTemplateTest(
   const sample = {
     requesterName: 'Nguyen Van A',
     approverName: 'Tran Thi B',
-    handoverName: 'Le Thi C',
     leaveTypeName: 'Nghi phep nam',
     fromDateLabel: '25/03/2026 08:00',
     toDateLabel: '25/03/2026 17:15',
@@ -565,7 +508,6 @@ export async function sendMailTemplateTest(
       {
         approverEmail: recipientEmail,
         approverName: sample.approverName,
-        handoverName: sample.handoverName,
         requesterName: sample.requesterName,
         leaveTypeName: sample.leaveTypeName,
         fromDateLabel: sample.fromDateLabel,
@@ -585,7 +527,6 @@ export async function sendMailTemplateTest(
         requesterEmail: recipientEmail,
         requesterName: sample.requesterName,
         approverName: sample.approverName,
-        handoverName: sample.handoverName,
         leaveTypeName: sample.leaveTypeName,
         fromDateLabel: sample.fromDateLabel,
         toDateLabel: sample.toDateLabel,
@@ -603,7 +544,6 @@ export async function sendMailTemplateTest(
       requesterEmail: recipientEmail,
       requesterName: sample.requesterName,
       approverName: sample.approverName,
-      handoverName: sample.handoverName,
       leaveTypeName: sample.leaveTypeName,
       fromDateLabel: sample.fromDateLabel,
       toDateLabel: sample.toDateLabel,
