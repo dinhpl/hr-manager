@@ -35,13 +35,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { api, apiClient, getApiBaseUrl, getStoredToken } from '@/lib/api-client';
+import { api, apiClient, getApiBaseUrl, getStoredToken, getStoredUser } from '@/lib/api-client';
 import {
   buildQuery,
   formatDate,
   formatDateVN,
   getFullName,
   getRoleLabel,
+  toFrontendRole,
   toIsoDateTime,
 } from '@/lib/hr-utils';
 
@@ -259,6 +260,11 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
 }
 
 export default function EmployeesPage() {
+  const storedUser = getStoredUser<{ role?: string }>();
+  const currentRole = toFrontendRole(storedUser?.role);
+  const isReadOnly = currentRole === 'employee';
+  const canExport = currentRole === 'hr' || currentRole === 'admin';
+
   const [employees, setEmployees] = useState<EmployeeRow[]>([]);
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [managerOptions, setManagerOptions] = useState<UserDropdownItem[]>([]);
@@ -636,38 +642,44 @@ export default function EmployeesPage() {
             </h1>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
-              style={{ background: '#1DB87A' }}
-              disabled={isMutating}
-            >
-              <UserPlus size={14} /> Thêm nhân viên
-            </button>
-            <label
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
-              style={{ borderColor: '#e2ede9', color: '#203430' }}
-              title="Import nhân viên từ file Excel"
-            >
-              <Upload size={14} />
-              {isImporting ? 'Đang import...' : 'Import Excel'}
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                disabled={isImporting}
-                onChange={(e) => void handleImport(e)}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
-              style={{ borderColor: '#e2ede9', color: '#203430' }}
-              title="Xuất danh sách nhân viên ra Excel"
-            >
-              <FileDown size={14} /> Export
-            </button>
+            {!isReadOnly && (
+              <>
+                <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  style={{ background: '#1DB87A' }}
+                  disabled={isMutating}
+                >
+                  <UserPlus size={14} /> Thêm nhân viên
+                </button>
+                <label
+                  className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+                  style={{ borderColor: '#e2ede9', color: '#203430' }}
+                  title="Import nhân viên từ file Excel"
+                >
+                  <Upload size={14} />
+                  {isImporting ? 'Đang import...' : 'Import Excel'}
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    disabled={isImporting}
+                    onChange={(e) => void handleImport(e)}
+                  />
+                </label>
+              </>
+            )}
+            {canExport && (
+              <button
+                type="button"
+                onClick={() => void handleExport()}
+                className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
+                style={{ borderColor: '#e2ede9', color: '#203430' }}
+                title="Xuất danh sách nhân viên ra Excel"
+              >
+                <FileDown size={14} /> Export
+              </button>
+            )}
           </div>
         </div>
 
@@ -808,24 +820,26 @@ export default function EmployeesPage() {
             <table className="w-full text-xs">
               <thead className="sticky top-0 z-10">
                 <tr style={{ background: '#203430' }}>
-                  <th className="px-3 py-3 w-10">
-                    <Checkbox
-                      checked={selectedIds.length === employees.length && employees.length > 0}
-                      onCheckedChange={toggleAll}
-                      aria-label="Chọn tất cả nhân viên"
-                    />
-                  </th>
+                  {!isReadOnly && (
+                    <th className="px-3 py-3 w-10">
+                      <Checkbox
+                        checked={selectedIds.length === employees.length && employees.length > 0}
+                        onCheckedChange={toggleAll}
+                        aria-label="Chọn tất cả nhân viên"
+                      />
+                    </th>
+                  )}
                   {[
                     'Avatar',
                     'Họ tên',
-                    'Mã NV',
                     'Email',
+                    'Số điện thoại',
                     'Phòng ban',
                     'Vai trò',
                     'Ngày tham gia',
                     'Sinh nhật',
                     'Trạng thái',
-                    'Thao tác',
+                    ...(!isReadOnly ? ['Thao tác'] : []),
                   ].map((heading) => (
                     <th
                       key={heading}
@@ -840,7 +854,7 @@ export default function EmployeesPage() {
                 {isLoading ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={isReadOnly ? 9 : 11}
                       className="px-3 py-8 text-center text-sm"
                       style={{ color: '#6b7f78' }}
                     >
@@ -850,7 +864,7 @@ export default function EmployeesPage() {
                 ) : employees.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={isReadOnly ? 9 : 11}
                       className="px-3 py-8 text-center text-sm"
                       style={{ color: '#6b7f78' }}
                     >
@@ -860,6 +874,7 @@ export default function EmployeesPage() {
                 ) : (
                   employees.map((employee) => {
                     const isSelected = selectedIds.includes(employee.id);
+                    const isSelf = String(employee.id) === String(storedUser?.id);
                     const initials =
                       `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
                         .trim()
@@ -873,13 +888,14 @@ export default function EmployeesPage() {
                     return (
                       <tr
                         key={employee.id}
-                        className="border-b last:border-0 hover:bg-gray-50 transition-all cursor-pointer"
+                        className={`border-b last:border-0 hover:bg-gray-50 transition-all${!isReadOnly ? ' cursor-pointer' : ''}`}
                         style={{
-                          background: isSelected ? '#f0fdf9' : undefined,
+                          background: isSelected ? '#f0fdf9' : isSelf ? '#f0fdf9' : undefined,
                           opacity: employee.status === 'inactive' ? 0.75 : 1,
                         }}
-                        onClick={() => toggleSelect(employee.id)}
+                        onClick={!isReadOnly ? () => toggleSelect(employee.id) : undefined}
                       >
+                        {!isReadOnly && (
                         <td className="px-3 py-3 w-10">
                           <Checkbox
                             checked={isSelected}
@@ -888,6 +904,7 @@ export default function EmployeesPage() {
                             aria-label={`Chọn nhân viên ${employee.fullName}`}
                           />
                         </td>
+                        )}
                         <td className="px-3 py-3">
                           {getAvatarUrl(employee.profileImageUrl) ? (
                             <img
@@ -922,51 +939,14 @@ export default function EmployeesPage() {
                             </p>
                           )}
                         </td>
-                        <td className="px-3 py-3 min-w-[120px]">
-                          {editingCellId === employee.id && editingField === 'employeeCode' ? (
-                            <div onClick={(event) => event.stopPropagation()}>
-                              <Input
-                                autoFocus
-                                value={editingValue}
-                                onChange={(event) => setEditingValue(event.target.value)}
-                                onBlur={() => {
-                                  void handleCellEdit(employee.id, 'employeeCode', editingValue);
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    void handleCellEdit(employee.id, 'employeeCode', editingValue);
-                                  }
-                                }}
-                                placeholder="Nhập mã nhân viên"
-                                className="h-8"
-                              />
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setEditingCellId(employee.id);
-                                setEditingField('employeeCode');
-                                setEditingValue(employee.employeeCode);
-                              }}
-                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold hover:bg-amber-50"
-                              style={{
-                                color: employee.employeeCode ? '#203430' : '#b45309',
-                                background: employee.employeeCode ? '#f8faf9' : '#fff7ed',
-                              }}
-                            >
-                              {employee.employeeCode || 'Chưa có mã'}
-                              <Pencil size={10} style={{ color: '#f59e0b' }} />
-                            </button>
-                          )}
-                        </td>
                         <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
                           {employee.email}
                         </td>
+                        <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
+                          {employee.phone || '—'}
+                        </td>
                         <td className="px-3 py-3 min-w-[160px]">
-                          {editingCellId === employee.id && editingField === 'department' ? (
+                          {!isReadOnly && editingCellId === employee.id && editingField === 'department' ? (
                             <div onClick={(event) => event.stopPropagation()}>
                               <select
                                 autoFocus
@@ -992,13 +972,13 @@ export default function EmployeesPage() {
                             </div>
                           ) : (
                             <div
-                              onClick={(event) => {
+                              onClick={!isReadOnly ? (event) => {
                                 event.stopPropagation();
                                 setEditingCellId(employee.id);
                                 setEditingField('department');
                                 setEditingValue(employee.department);
-                              }}
-                              className="px-2 py-1 rounded cursor-pointer hover:bg-gray-100 inline-flex items-center gap-1"
+                              } : undefined}
+                              className={`px-2 py-1 rounded inline-flex items-center gap-1${!isReadOnly ? ' cursor-pointer hover:bg-gray-100' : ''}`}
                               style={{ background: departmentColor.bg }}
                             >
                               <span
@@ -1007,12 +987,12 @@ export default function EmployeesPage() {
                               >
                                 {employee.department}
                               </span>
-                              <Pencil size={10} style={{ color: departmentColor.color }} />
+                              {!isReadOnly && <Pencil size={10} style={{ color: departmentColor.color }} />}
                             </div>
                           )}
                         </td>
                         <td className="px-3 py-3 min-w-[140px]">
-                          {editingCellId === employee.id && editingField === 'role' ? (
+                          {!isReadOnly && editingCellId === employee.id && editingField === 'role' ? (
                             <div onClick={(event) => event.stopPropagation()}>
                               <select
                                 autoFocus
@@ -1034,17 +1014,17 @@ export default function EmployeesPage() {
                             </div>
                           ) : (
                             <div
-                              onClick={(event) => {
+                              onClick={!isReadOnly ? (event) => {
                                 event.stopPropagation();
                                 setEditingCellId(employee.id);
                                 setEditingField('role');
                                 setEditingValue(employee.role);
-                              }}
-                              className="px-2 py-1 rounded cursor-pointer hover:bg-blue-50 text-xs inline-flex items-center gap-1"
+                              } : undefined}
+                              className={`px-2 py-1 rounded text-xs inline-flex items-center gap-1${!isReadOnly ? ' cursor-pointer hover:bg-blue-50' : ''}`}
                               style={{ color: '#203430' }}
                             >
                               {getRoleLabel(employee.role)}
-                              <Pencil size={10} style={{ color: '#3b82f6' }} />
+                              {!isReadOnly && <Pencil size={10} style={{ color: '#3b82f6' }} />}
                             </div>
                           )}
                         </td>
@@ -1067,31 +1047,33 @@ export default function EmployeesPage() {
                             {STATUS_CONFIG[employee.status].label}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
-                          <div
-                            className="flex items-center gap-1"
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setEditingEmployee(employee)}
-                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
-                              title="Chỉnh sửa nhân viên"
+                        {!isReadOnly && (
+                          <td className="px-3 py-3">
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(event) => event.stopPropagation()}
                             >
-                              <Pencil size={13} style={{ color: '#f59e0b' }} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleDeleteEmployee(employee.id, employee.fullName)
-                              }
-                              className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
-                              title="Xóa"
-                            >
-                              <Trash2 size={13} style={{ color: '#ef4444' }} />
-                            </button>
-                          </div>
-                        </td>
+                              <button
+                                type="button"
+                                onClick={() => setEditingEmployee(employee)}
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-amber-50"
+                                title="Chỉnh sửa nhân viên"
+                              >
+                                <Pencil size={13} style={{ color: '#f59e0b' }} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDeleteEmployee(employee.id, employee.fullName)
+                                }
+                                className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50"
+                                title="Xóa"
+                              >
+                                <Trash2 size={13} style={{ color: '#ef4444' }} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })

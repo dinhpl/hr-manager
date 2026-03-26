@@ -1225,7 +1225,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canViewDashboardBirthdays =
-    userInfo?.role === 'HR' || userInfo?.role === 'ADMIN' || userInfo?.systemRole?.toUpperCase() === 'ADMIN';
+    userInfo?.role === 'HR' || userInfo?.role === 'ADMIN' || userInfo?.role === 'MANAGER' || userInfo?.role === 'EMPLOYEE' || userInfo?.systemRole?.toUpperCase() === 'ADMIN';
 
   const loadCurrentUser = useCallback(async () => {
     setLoadingUser(true);
@@ -1534,10 +1534,14 @@ export default function DashboardPage() {
         defaultDate={leaveDefaultDate}
         editData={editLeaveData}
         onClose={() => { setIsLeaveRequestModalOpen(false); setLeaveDefaultDate(undefined); setEditLeaveData(null); }}
-        onSubmitSuccess={() => {
+        onSubmitSuccess={(newId) => {
           setEditLeaveData(null);
-          void loadDashboardData();
-          void loadLeaveBalance();
+          if (newId) {
+            router.push(`/dashboard/leave-detail/${newId}`);
+          } else {
+            void loadDashboardData();
+            void loadLeaveBalance();
+          }
         }}
       />
     </>

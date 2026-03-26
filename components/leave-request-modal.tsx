@@ -106,7 +106,7 @@ export interface LeaveRequestData {
 interface LeaveRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitSuccess?: () => void;
+  onSubmitSuccess?: (newId?: string) => void;
   editData?: LeaveRequestData | null;
   defaultDate?: string;
 }
@@ -442,7 +442,7 @@ export default function LeaveRequestModal({
     setSubmitState('submitting');
 
     try {
-      await apiRequest({
+      const response = await apiRequest<{ id?: string | number }>({
         url: isEditMode ? `/api/leave-requests/${editData.id}` : '/api/leave-requests',
         method: isEditMode ? 'PATCH' : 'POST',
         data: formData,
@@ -460,9 +460,10 @@ export default function LeaveRequestModal({
             : 'Yêu cầu nghỉ phép đã được gửi thành công! Đang chờ phê duyệt.',
       );
 
+      const newId = !isEditMode && response?.data?.id ? String(response.data.id) : undefined;
       resetForm();
       onClose();
-      onSubmitSuccess?.();
+      onSubmitSuccess?.(newId);
     } catch (err) {
       setSubmitState('idle');
       toast.error(err instanceof Error ? err.message : 'Không thể gửi yêu cầu nghỉ phép.');

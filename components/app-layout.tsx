@@ -192,8 +192,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // if (item.key === 'attendance') {
     //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     // }
+    if (item.key === 'employees') {
+      return currentRole === 'hr' || currentRole === 'admin' || currentRole === 'manager' || currentRole === 'employee' || isSystemAdmin;
+    }
     if (
-      item.key === 'employees' ||
       item.key === 'settings' ||
       item.key === 'devices' ||
       item.key === 'skills'

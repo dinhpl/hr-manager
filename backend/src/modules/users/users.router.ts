@@ -10,10 +10,10 @@ export const usersRouter: IRouter = Router();
 usersRouter.use(authMiddleware);
 
 usersRouter.get('/dropdown', ctrl.getUsersDropdown); // ALL roles — handover dropdown in leave form
-usersRouter.get('/birthdays', requireRoles('HR', 'ADMIN'), ctrl.getBirthdaysByMonth);
+usersRouter.get('/birthdays', requireRoles('HR', 'ADMIN', 'MANAGER', 'EMPLOYEE'), ctrl.getBirthdaysByMonth);
 usersRouter.get('/export', requireRoles('HR', 'ADMIN'), ctrl.exportUsers);
 usersRouter.post('/import', requireRoles('HR', 'ADMIN'), uploadUsersExcel.single('file'), ctrl.importUsers);
-usersRouter.get('/', requireRoles('HR', 'ADMIN', 'MANAGER'), ctrl.getUsers);
+usersRouter.get('/', requireRoles('HR', 'ADMIN', 'MANAGER', 'EMPLOYEE'), ctrl.getUsers);
 usersRouter.get('/:id', ctrl.getUserById);
 usersRouter.post('/', requireRoles('HR', 'ADMIN'), ctrl.createUser);
 usersRouter.patch('/:id', requireRoles('HR', 'ADMIN'), ctrl.updateUser);

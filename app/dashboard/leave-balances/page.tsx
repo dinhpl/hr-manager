@@ -625,6 +625,7 @@ export default function LeaveBalancesPage() {
                 </tr>
               ) : (
                 filteredLeaveBalances.map((row) => {
+                  const isSelf = String(row.user.id) === String(currentUser?.id);
                   const today = new Date();
                   const isCurrentBalanceYear = balanceYear === today.getFullYear();
                   const currentMonth = today.getMonth() + 1;
@@ -662,7 +663,7 @@ export default function LeaveBalancesPage() {
                     <tr
                       key={row.id}
                       className="cursor-pointer border-b last:border-0 transition-colors hover:bg-emerald-50"
-                      style={{ borderColor: '#e2ede9' }}
+                      style={{ borderColor: '#e2ede9', background: isSelf ? '#f0fdf9' : undefined }}
                       onClick={() =>
                         canManageLeaveBalances ? openInfoDialog(row) : openHistoryDialog(row)
                       }
