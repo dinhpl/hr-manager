@@ -28,6 +28,7 @@ const USER_SELECT = {
   avatar: true,
   teamId: true,
   isCountable: true,
+  isAttendance: true,
   companyJoinDate: true,
   birthday: true,
   gender: true,
@@ -128,6 +129,7 @@ export async function createUser(data: CreateUserDto) {
     department,
     position,
     isCountable,
+    isAttendance,
     gender,
     phone,
   } = data;
@@ -159,6 +161,7 @@ export async function createUser(data: CreateUserDto) {
       ...(department && { department }),
       ...(position && { position }),
       ...(isCountable !== undefined && { isCountable }),
+      ...(isAttendance !== undefined && { isAttendance }),
       ...(managerId && { manager: { connect: { id: managerId } } }),
       ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
       ...(birthday && { birthday: new Date(birthday) }),

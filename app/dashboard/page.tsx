@@ -26,12 +26,7 @@ import CalendarDayDetailModal, {
 } from '@/components/calendar-day-detail-modal';
 import LeaveRequestModal, { LeaveRequestData } from '@/components/leave-request-modal';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
-import {
-  formatDateTimeVN,
-  formatDateVN,
-  numberValue,
-  toFrontendRole,
-} from '@/lib/hr-utils';
+import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
 
 type UserRole = FrontendRole;
@@ -346,9 +341,7 @@ function CalendarGrid({
               <div
                 key={`${cell.dateStr}-${index}`}
                 className={`flex min-h-[88px] flex-col gap-0.5 border-b border-r border-gray-100 p-1.5 transition-colors ${
-                  isCurrentMonth
-                    ? 'cursor-pointer hover:bg-orange-50/70'
-                    : 'hover:bg-gray-50/50'
+                  isCurrentMonth ? 'cursor-pointer hover:bg-orange-50/70' : 'hover:bg-gray-50/50'
                 }`}
                 style={{
                   background: hasHolidays && isCurrentMonth ? '#fffaf5' : undefined,
@@ -473,7 +466,10 @@ function LeaveBalanceCards({
     0,
     proratedAllocation + (todayVN < resetDate ? remainingCarryOver : 0) + seniorityDays - usedDays,
   );
-  const remainingFullYear = Math.max(0, annualDays + seniorityDays + (todayVN < resetDate ? remainingCarryOver : 0) - usedDays);
+  const remainingFullYear = Math.max(
+    0,
+    annualDays + seniorityDays + (todayVN < resetDate ? remainingCarryOver : 0) - usedDays,
+  );
 
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
@@ -488,143 +484,149 @@ function LeaveBalanceCards({
         >
           <span>⚠</span>
           <span>
-            Phép năm {prevYear} còn{' '}
-            <strong>{fmt(remainingCarryOver)} ngày</strong> sẽ hết hạn vào {resetDateLabel}
+            Phép năm {prevYear} còn <strong>{fmt(remainingCarryOver)} ngày</strong> sẽ hết hạn vào{' '}
+            {resetDateLabel}
           </span>
         </div>
       )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #a78bfa' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Phép Chuyển {prevYear}</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#ede9fe' }}
-          >
-            <ArrowRightLeft size={15} style={{ color: '#7c3aed' }} />
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #a78bfa' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Phép Chuyển {prevYear}</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#ede9fe' }}
+            >
+              <ArrowRightLeft size={15} style={{ color: '#7c3aed' }} />
+            </div>
           </div>
-        </div>
-        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-          {fmt(carryOverDays)}
-        </p>
-        <p className="text-xs text-muted-foreground">ngày</p>
-      </div>
-
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #1DB87A' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Phép Năm {thisYear}</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#D3F2E7' }}
-          >
-            <CalendarCheck size={15} style={{ color: '#1DB87A' }} />
-          </div>
-        </div>
-        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-          {fmt(annualDays)}
-        </p>
-        {seniorityDays > 0 ? (
-          <p className="text-xs font-medium" style={{ color: '#1DB87A' }}>
-            + {fmt(seniorityDays)} thâm niên
+          <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+            {fmt(carryOverDays)}
           </p>
-        ) : (
           <p className="text-xs text-muted-foreground">ngày</p>
-        )}
-      </div>
-
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #f59e0b' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Đã Nghỉ</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#fef3c7' }}
-          >
-            <Hourglass size={15} style={{ color: '#f59e0b' }} />
-          </div>
         </div>
-        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-          {fmt(usedDays + usedCarryOverDays)}
-        </p>
-        {usedCarryOverDays > 0 ? (
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="rounded-full px-1.5 py-0.5" style={{ background: '#fef3c7', color: '#b45309' }}>
-              {fmt(usedCarryOverDays)}d năm trước
-            </span>
-            <span className="rounded-full px-1.5 py-0.5" style={{ background: '#e0f2fe', color: '#0369a1' }}>
-              {fmt(usedDays)}d năm nay
-            </span>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">ngày đã dùng</p>
-        )}
-      </div>
 
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #0ea5e9' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Số Ngày WFH</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#e0f2fe' }}
-          >
-            <Home size={15} style={{ color: '#0ea5e9' }} />
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #1DB87A' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Phép Năm {thisYear}</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#D3F2E7' }}
+            >
+              <CalendarCheck size={15} style={{ color: '#1DB87A' }} />
+            </div>
           </div>
+          <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+            {fmt(annualDays)}
+          </p>
+          {seniorityDays > 0 ? (
+            <p className="text-xs font-medium" style={{ color: '#1DB87A' }}>
+              + {fmt(seniorityDays)} thâm niên
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">ngày</p>
+          )}
         </div>
-        <p className="text-2xl font-bold" style={{ color: '#203430' }}>
-          {fmt(wfhDays)}
-        </p>
-        <p className="text-xs text-muted-foreground">ngày WFH</p>
-      </div>
 
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #3b82f6' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Còn lại đến tháng hiện tại</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#dbeafe' }}
-          >
-            <CheckCircle2 size={15} style={{ color: '#3b82f6' }} />
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #f59e0b' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Đã Nghỉ</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#fef3c7' }}
+            >
+              <Hourglass size={15} style={{ color: '#f59e0b' }} />
+            </div>
           </div>
+          <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+            {fmt(usedDays + usedCarryOverDays)}
+          </p>
+          {usedCarryOverDays > 0 ? (
+            <div className="flex items-center gap-1.5 text-xs">
+              <span
+                className="rounded-full px-1.5 py-0.5"
+                style={{ background: '#fef3c7', color: '#b45309' }}
+              >
+                {fmt(usedCarryOverDays)}d năm trước
+              </span>
+              <span
+                className="rounded-full px-1.5 py-0.5"
+                style={{ background: '#e0f2fe', color: '#0369a1' }}
+              >
+                {fmt(usedDays)}d năm nay
+              </span>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">ngày đã dùng</p>
+          )}
         </div>
-        <p className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
-          {fmt(remainingToMonth)}
-        </p>
-        <p className="text-xs text-muted-foreground">ngày còn lại</p>
-      </div>
 
-      <div
-        className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
-        style={{ border: '1px solid #e2ede9', borderTop: '3px solid #059669' }}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Tạm tính cả năm</p>
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ background: '#d1fae5' }}
-          >
-            <TrendingUp size={15} style={{ color: '#059669' }} />
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #0ea5e9' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Số Ngày WFH</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#e0f2fe' }}
+            >
+              <Home size={15} style={{ color: '#0ea5e9' }} />
+            </div>
           </div>
+          <p className="text-2xl font-bold" style={{ color: '#203430' }}>
+            {fmt(wfhDays)}
+          </p>
+          <p className="text-xs text-muted-foreground">ngày WFH</p>
         </div>
-        <p className="text-2xl font-bold" style={{ color: '#059669' }}>
-          {fmt(remainingFullYear)}
-        </p>
-        <p className="text-xs text-muted-foreground">ngày còn lại</p>
+
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #3b82f6' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Còn lại đến tháng hiện tại</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#dbeafe' }}
+            >
+              <CheckCircle2 size={15} style={{ color: '#3b82f6' }} />
+            </div>
+          </div>
+          <p className="text-2xl font-bold" style={{ color: '#3b82f6' }}>
+            {fmt(remainingToMonth)}
+          </p>
+          <p className="text-xs text-muted-foreground">ngày còn lại</p>
+        </div>
+
+        <div
+          className="flex flex-col gap-2 rounded-xl bg-white p-4 shadow-sm"
+          style={{ border: '1px solid #e2ede9', borderTop: '3px solid #059669' }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">Tạm tính cả năm</p>
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg"
+              style={{ background: '#d1fae5' }}
+            >
+              <TrendingUp size={15} style={{ color: '#059669' }} />
+            </div>
+          </div>
+          <p className="text-2xl font-bold" style={{ color: '#059669' }}>
+            {fmt(remainingFullYear)}
+          </p>
+          <p className="text-xs text-muted-foreground">ngày còn lại</p>
+        </div>
       </div>
-    </div>
     </div>
   );
 }
@@ -766,7 +768,8 @@ function EmployeeDashboard({
                   const statusKey = normalizeStatus(request.status);
                   const status = STATUS_CONFIG[statusKey];
                   const isLast = idx === Math.min(recentRequests.length, 6) - 1;
-                  const userName = request.user?.fullName?.trim() || request.user?.username?.trim() || '';
+                  const userName =
+                    request.user?.fullName?.trim() || request.user?.username?.trim() || '';
                   const avatarSrc = getAvatarUrl(request.user?.avatar);
                   return (
                     <div
@@ -781,23 +784,35 @@ function EmployeeDashboard({
                           style={{ background: status.color }}
                         />
                         {!isLast && (
-                          <div className="w-px flex-1 min-h-[32px]" style={{ background: '#e2ede9' }} />
+                          <div
+                            className="w-px flex-1 min-h-[32px]"
+                            style={{ background: '#e2ede9' }}
+                          />
                         )}
                       </div>
                       {/* Content */}
                       <div className={`pb-4 min-w-0 flex-1 ${isLast ? 'pb-0' : ''}`}>
                         <div className="flex items-center gap-2">
                           {avatarSrc ? (
-                            <img src={avatarSrc} alt={userName} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                            <img
+                              src={avatarSrc}
+                              alt={userName}
+                              className="h-5 w-5 shrink-0 rounded-full object-cover"
+                            />
                           ) : userName ? (
                             <div
                               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                              style={{
+                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                              }}
                             >
                               {getInitials(userName)}
                             </div>
                           ) : null}
-                          <span className="text-xs font-semibold truncate" style={{ color: '#203430' }}>
+                          <span
+                            className="text-xs font-semibold truncate"
+                            style={{ color: '#203430' }}
+                          >
                             {userName || 'Nhân viên'}
                           </span>
                           <span
@@ -808,7 +823,10 @@ function EmployeeDashboard({
                           </span>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-medium truncate" style={{ color: '#203430' }}>
+                          <span
+                            className="text-[11px] font-medium truncate"
+                            style={{ color: '#203430' }}
+                          >
                             {request.leaveType?.name || request.leaveType?.code || 'Nghỉ phép'}
                           </span>
                           <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -1025,7 +1043,7 @@ function AdminHRDashboard({
         </div>
 
         <div className="space-y-4">
-          <div
+          {/* <div
             className="rounded-xl bg-white p-5 shadow-sm sm:p-6"
             style={{ border: '1px solid #e2ede9' }}
           >
@@ -1046,7 +1064,7 @@ function AdminHRDashboard({
             >
               Xem chi tiết →
             </Link>
-          </div>
+          </div> */}
 
           {/* Birthday this month card */}
           {birthdayData && Object.values(birthdayData).flat().length > 0 && (
@@ -1115,7 +1133,8 @@ function AdminHRDashboard({
                   const statusKey = normalizeStatus(request.status);
                   const status = STATUS_CONFIG[statusKey];
                   const isLast = idx === Math.min(recentRequests.length, 6) - 1;
-                  const userName = request.user?.fullName?.trim() || request.user?.username?.trim() || '';
+                  const userName =
+                    request.user?.fullName?.trim() || request.user?.username?.trim() || '';
                   const avatarSrc = getAvatarUrl(request.user?.avatar);
                   return (
                     <div
@@ -1129,22 +1148,34 @@ function AdminHRDashboard({
                           style={{ background: status.color }}
                         />
                         {!isLast && (
-                          <div className="w-px flex-1 min-h-[32px]" style={{ background: '#e2ede9' }} />
+                          <div
+                            className="w-px flex-1 min-h-[32px]"
+                            style={{ background: '#e2ede9' }}
+                          />
                         )}
                       </div>
                       <div className={`pb-4 min-w-0 flex-1 ${isLast ? 'pb-0' : ''}`}>
                         <div className="flex items-center gap-2">
                           {avatarSrc ? (
-                            <img src={avatarSrc} alt={userName} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                            <img
+                              src={avatarSrc}
+                              alt={userName}
+                              className="h-5 w-5 shrink-0 rounded-full object-cover"
+                            />
                           ) : userName ? (
                             <div
                               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                              style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                              style={{
+                                background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)',
+                              }}
                             >
                               {getInitials(userName)}
                             </div>
                           ) : null}
-                          <span className="text-xs font-semibold truncate" style={{ color: '#203430' }}>
+                          <span
+                            className="text-xs font-semibold truncate"
+                            style={{ color: '#203430' }}
+                          >
                             {userName || 'Nhân viên'}
                           </span>
                           <span
@@ -1155,7 +1186,10 @@ function AdminHRDashboard({
                           </span>
                         </div>
                         <div className="mt-1 flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-medium truncate" style={{ color: '#203430' }}>
+                          <span
+                            className="text-[11px] font-medium truncate"
+                            style={{ color: '#203430' }}
+                          >
                             {request.leaveType?.name || request.leaveType?.code || 'Nghỉ phép'}
                           </span>
                           <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -1225,7 +1259,11 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canViewDashboardBirthdays =
-    userInfo?.role === 'HR' || userInfo?.role === 'ADMIN' || userInfo?.role === 'MANAGER' || userInfo?.role === 'EMPLOYEE' || userInfo?.systemRole?.toUpperCase() === 'ADMIN';
+    userInfo?.role === 'HR' ||
+    userInfo?.role === 'ADMIN' ||
+    userInfo?.role === 'MANAGER' ||
+    userInfo?.role === 'EMPLOYEE' ||
+    userInfo?.systemRole?.toUpperCase() === 'ADMIN';
 
   const loadCurrentUser = useCallback(async () => {
     setLoadingUser(true);
@@ -1300,23 +1338,20 @@ export default function DashboardPage() {
     }
   }, [currentMonth, currentYear]);
 
-  const loadBirthdayData = useCallback(
-    async () => {
-      if (showBirthdaysOnDashboard !== true || !canViewDashboardBirthdays) {
-        setBirthdayData({});
-        return;
-      }
-      try {
-        const response = await apiClient.get<BirthdayData>(
-          `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
-        );
-        setBirthdayData(response.data || {});
-      } catch {
-        setBirthdayData({});
-      }
-    },
-    [canViewDashboardBirthdays, currentMonth, currentYear, showBirthdaysOnDashboard],
-  );
+  const loadBirthdayData = useCallback(async () => {
+    if (showBirthdaysOnDashboard !== true || !canViewDashboardBirthdays) {
+      setBirthdayData({});
+      return;
+    }
+    try {
+      const response = await apiClient.get<BirthdayData>(
+        `/api/users/birthdays?year=${currentYear}&month=${currentMonth}`,
+      );
+      setBirthdayData(response.data || {});
+    } catch {
+      setBirthdayData({});
+    }
+  }, [canViewDashboardBirthdays, currentMonth, currentYear, showBirthdaysOnDashboard]);
 
   useEffect(() => {
     void loadCurrentUser();
@@ -1394,7 +1429,8 @@ export default function DashboardPage() {
         typeCode: data.leaveType?.code || '',
         fromDate: data.fromDate?.slice(0, 10) || '',
         toDate: data.toDate?.slice(0, 10) || '',
-        durationMode: (data.durationMode as import('@/lib/hr-utils').LeaveRequestMode) || 'FULL_DAY',
+        durationMode:
+          (data.durationMode as import('@/lib/hr-utils').LeaveRequestMode) || 'FULL_DAY',
         reason: data.reason || '',
         handoverPersonId: data.handoverPerson?.id ? String(data.handoverPerson.id) : '',
         approverId: data.approver?.id ? String(data.approver.id) : '',
@@ -1457,7 +1493,10 @@ export default function DashboardPage() {
           leaveBalance={leaveBalance}
           resetCarryOverDate={resetCarryOverDate}
           onNextMonth={handleNextMonth}
-          onOpenDetail={(request) => { setSelectedRawRequest(request); setSelectedDetail(toDetailData(request)); }}
+          onOpenDetail={(request) => {
+            setSelectedRawRequest(request);
+            setSelectedDetail(toDetailData(request));
+          }}
           onOpenDayDetail={(date, users, holidays, birthdays) => {
             if (users.length === 0) {
               setLeaveDefaultDate(date);
@@ -1466,7 +1505,10 @@ export default function DashboardPage() {
               setSelectedDayDetail({ date, users, holidays, birthdays });
             }
           }}
-          onOpenRequestModal={() => { setLeaveDefaultDate(undefined); setIsLeaveRequestModalOpen(true); }}
+          onOpenRequestModal={() => {
+            setLeaveDefaultDate(undefined);
+            setIsLeaveRequestModalOpen(true);
+          }}
           onPrevMonth={handlePrevMonth}
         />
       ) : (
@@ -1491,7 +1533,10 @@ export default function DashboardPage() {
           }
           userRole={currentRole === 'employee' ? 'manager' : currentRole}
           onNextMonth={handleNextMonth}
-          onOpenDetail={(request) => { setSelectedRawRequest(request); setSelectedDetail(toDetailData(request)); }}
+          onOpenDetail={(request) => {
+            setSelectedRawRequest(request);
+            setSelectedDetail(toDetailData(request));
+          }}
           onOpenDayDetail={(date, users, holidays, birthdays) => {
             if (users.length === 0) {
               setLeaveDefaultDate(date);
@@ -1500,14 +1545,20 @@ export default function DashboardPage() {
               setSelectedDayDetail({ date, users, holidays, birthdays });
             }
           }}
-          onOpenRequestModal={() => { setLeaveDefaultDate(undefined); setIsLeaveRequestModalOpen(true); }}
+          onOpenRequestModal={() => {
+            setLeaveDefaultDate(undefined);
+            setIsLeaveRequestModalOpen(true);
+          }}
           onPrevMonth={handlePrevMonth}
         />
       )}
 
       <LeaveDetailModal
         data={selectedDetail}
-        onClose={() => { setSelectedDetail(null); setSelectedRawRequest(null); }}
+        onClose={() => {
+          setSelectedDetail(null);
+          setSelectedRawRequest(null);
+        }}
         onEdit={
           selectedRawRequest?.user?.id === userInfo?.id &&
           normalizeStatus(selectedRawRequest?.status) === 'pending'
@@ -1533,7 +1584,11 @@ export default function DashboardPage() {
         isOpen={isLeaveRequestModalOpen}
         defaultDate={leaveDefaultDate}
         editData={editLeaveData}
-        onClose={() => { setIsLeaveRequestModalOpen(false); setLeaveDefaultDate(undefined); setEditLeaveData(null); }}
+        onClose={() => {
+          setIsLeaveRequestModalOpen(false);
+          setLeaveDefaultDate(undefined);
+          setEditLeaveData(null);
+        }}
         onSubmitSuccess={(newId) => {
           setEditLeaveData(null);
           if (newId) {

@@ -63,6 +63,7 @@ interface EmployeeApiItem {
   avatar?: string | null;
   teamId?: number | null;
   isCountable?: boolean;
+  isAttendance?: boolean;
   companyJoinDate?: string | null;
   manager?: {
     id: string | number;
@@ -100,6 +101,7 @@ interface EmployeeRow {
   managerId: string;
   managerName: string;
   isCountable: boolean;
+  isAttendance: boolean;
   status: EmployeeStatus;
   companyJoinDate: string | null;
   birthday: string | null;
@@ -119,6 +121,7 @@ interface EmployeeFormData {
   position: string;
   managerId: string;
   isCountable: boolean;
+  isAttendance: boolean;
   companyJoinDate: string;
   birthday: string;
   status: EmployeeStatus;
@@ -217,6 +220,7 @@ function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeForm
     position: '',
     managerId: '',
     isCountable: true,
+    isAttendance: true,
     companyJoinDate: '',
     birthday: '',
     status: 'active',
@@ -251,6 +255,7 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
     managerId: item.manager ? String(item.manager.id) : '',
     managerName: item.manager?.fullName?.trim() || '',
     isCountable: item.isCountable ?? true,
+    isAttendance: item.isAttendance ?? true,
     status: item.isActive ? 'active' : 'inactive',
     companyJoinDate: item.companyJoinDate ?? null,
     birthday: item.birthday ? item.birthday.slice(0, 10) : null,
@@ -485,6 +490,7 @@ export default function EmployeesPage() {
         position: formData.position.trim() || getRoleLabel(formData.role),
         managerId: formData.managerId ? formData.managerId : undefined,
         isCountable: formData.isCountable,
+        isAttendance: formData.isAttendance,
         companyJoinDate: formData.companyJoinDate
           ? toIsoDateTime(formData.companyJoinDate)
           : undefined,
@@ -526,6 +532,7 @@ export default function EmployeesPage() {
         position: formData.position.trim() || null,
         managerId: formData.managerId ? formData.managerId : null,
         isCountable: formData.isCountable,
+        isAttendance: formData.isAttendance,
         companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : null,
         birthday: formData.birthday ? toIsoDateTime(formData.birthday) : null,
         isActive: formData.status === 'active',
@@ -1371,6 +1378,7 @@ function EmployeeForm({
           position: initialData.position,
           managerId: initialData.managerId,
           isCountable: initialData.isCountable,
+          isAttendance: initialData.isAttendance,
           companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
           birthday: initialData.birthday?.slice(0, 10) ?? '',
           status: initialData.status,
@@ -1397,6 +1405,7 @@ function EmployeeForm({
             position: initialData.position,
             managerId: initialData.managerId,
             isCountable: initialData.isCountable,
+            isAttendance: initialData.isAttendance,
             companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
             birthday: initialData.birthday?.slice(0, 10) ?? '',
             status: initialData.status,
@@ -1443,7 +1452,7 @@ function EmployeeForm({
     if (submitError) setSubmitError('');
   };
 
-  const handleBooleanChange = (name: 'isCountable', value: boolean) => {
+  const handleBooleanChange = (name: 'isCountable' | 'isAttendance', value: boolean) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }));
@@ -1862,11 +1871,10 @@ function EmployeeForm({
               >
                 <div>
                   <p className="text-sm font-semibold" style={{ color: '#203430' }}>
-                    Cho phép hiển thị & tính toán Chấm công
+                    Tính vào nhân sự chính thức
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Tắt mục này nếu tài khoản là bot hoặc không cần thống kê lịch làm việc trên bảng
-                    chấm công.
+                    Tắt nếu tài khoản là bot hoặc không cần tính vào thống kê nhân sự, nghỉ phép.
                   </p>
                 </div>
                 <Checkbox
@@ -1875,6 +1883,28 @@ function EmployeeForm({
                     handleBooleanChange('isCountable', checked === true)
                   }
                   aria-label="Tính vào nhân sự chính thức"
+                />
+              </div>
+            </div>
+            <div className="sm:col-span-2">
+              <div
+                className="flex items-center justify-between rounded-xl border px-4 py-3"
+                style={{ borderColor: '#e2ede9', background: '#f8faf9' }}
+              >
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                    Hiển thị & tính toán trên bảng Chấm công
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Tắt nếu nhân viên không cần hiển thị hoặc tính toán trên bảng chấm công.
+                  </p>
+                </div>
+                <Checkbox
+                  checked={formData.isAttendance}
+                  onCheckedChange={(checked) =>
+                    handleBooleanChange('isAttendance', checked === true)
+                  }
+                  aria-label="Hiển thị trên bảng chấm công"
                 />
               </div>
             </div>

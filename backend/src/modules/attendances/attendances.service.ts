@@ -19,6 +19,7 @@ const USER_ATTENDANCE_SELECT = {
   position: true,
   avatar: true,
   isCountable: true,
+  isAttendance: true,
 } as const;
 
 const REQUIRED_HEADERS = [
@@ -201,6 +202,7 @@ function buildUserSearchWhere(search?: string) {
 async function getPagedUsers(query: GetMonthlyAttendancesQuery) {
   const baseWhere = {
     isActive: true,
+    isAttendance: true,
     ...buildUserSearchWhere(query.search),
   };
 
@@ -310,6 +312,7 @@ export async function getMonthlyAttendances(query: GetMonthlyAttendancesQuery) {
           position: user.position,
           avatar: user.avatar,
           isCountable: user.isCountable,
+          isAttendance: user.isAttendance,
           recordsByDate: Object.fromEntries(
             Array.from(records.entries()).map(([date, record]) => [
               date,

@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock3,
   Crown,
+  Flame,
   RefreshCw,
   Search,
   Settings2,
@@ -78,6 +79,7 @@ type AttendanceEmployee = {
   position?: string | null;
   avatar?: string | null;
   isCountable?: boolean;
+  isAttendance?: boolean;
   recordsByDate: Record<string, AttendanceRecord>;
 };
 
@@ -101,6 +103,7 @@ type AttendanceSettings = {
   fulfillmentCase: AttendanceFulfillmentCase;
   hoursDisplayCase: AttendanceHoursDisplayCase;
   showRanking?: boolean;
+  showLateRanking?: boolean;
 };
 
 type ViewerUser = {
@@ -137,6 +140,7 @@ const DEFAULT_ATTENDANCE_SETTINGS: AttendanceSettings = {
   fulfillmentCase: 'case_1',
   hoursDisplayCase: 'case_1',
   showRanking: true,
+  showLateRanking: true,
 };
 
 const STATUS_FILTERS: Array<{ value: AttendanceDisplayStatus; label: string }> = [
@@ -365,11 +369,7 @@ function shouldHideHolidayAbsentRecord(
   record: Pick<AttendanceRecord, 'status' | 'checkIn' | 'checkOut'> | undefined | null,
 ) {
   return Boolean(
-    day?.isHoliday &&
-      record &&
-      record.status === 'absent' &&
-      !record.checkIn &&
-      !record.checkOut,
+    day?.isHoliday && record && record.status === 'absent' && !record.checkIn && !record.checkOut,
   );
 }
 
@@ -594,8 +594,7 @@ export default function AttendancePage() {
   );
 
   const filteredEmployees = useMemo(() => {
-    // Only keep employees that are countable (true) or don't have this property defined
-    const employees = data?.employees?.filter((emp) => emp.isCountable !== false) ?? [];
+    const employees = data?.employees?.filter((emp) => emp.isAttendance !== false) ?? [];
     let filtered = employees;
 
     if (selectedDepartment !== 'all') {
@@ -649,7 +648,7 @@ export default function AttendancePage() {
   }, [attendanceDayMap, filteredEmployees, sortOrder, settings]);
 
   const topEmployees = useMemo(() => {
-    const employees = data?.employees?.filter((emp) => emp.isCountable !== false) ?? [];
+    const employees = data?.employees?.filter((emp) => emp.isAttendance !== false) ?? [];
     const mapped = employees.map((emp) => {
       const totalMonthHours = Object.values(emp.recordsByDate).reduce((sum, record) => {
         const day = attendanceDayMap[record.date];
@@ -665,6 +664,25 @@ export default function AttendancePage() {
       .sort((a, b) => b.totalMonthHours - a.totalMonthHours)
       .slice(0, 3);
   }, [attendanceDayMap, data, settings]);
+
+  const topLateEmployees = useMemo(() => {
+    const employees = data?.employees?.filter((emp) => emp.isAttendance !== false) ?? [];
+    const mapped = employees.map((emp) => {
+      const totalLateMinutes = Object.values(emp.recordsByDate).reduce((sum, record) => {
+        if (!record.checkIn) return sum;
+        const checkInMinutes = parseTimeToMinutes(record.checkIn);
+        if (checkInMinutes === null) return sum;
+        const lateMinutes = Math.max(0, checkInMinutes - FIXED_START_MINUTES);
+        return sum + lateMinutes;
+      }, 0);
+      return { ...emp, totalLateMinutes };
+    });
+
+    return mapped
+      .filter((emp) => emp.totalLateMinutes > 0)
+      .sort((a, b) => b.totalLateMinutes - a.totalLateMinutes)
+      .slice(0, 3);
+  }, [data]);
 
   const stats = useMemo(() => {
     let activeDays = 0;
@@ -912,6 +930,62 @@ export default function AttendancePage() {
             {topEmployees[1] && renderPodiumAvatar(topEmployees[1], 1)}
             {topEmployees[0] && renderPodiumAvatar(topEmployees[0], 0)}
             {topEmployees[2] && renderPodiumAvatar(topEmployees[2], 2)}
+          </div>
+        </div>
+      )}
+
+      {settings.showLateRanking !== false && topLateEmployees.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-red-100 bg-red-50">
+            <Flame size={14} className="text-red-500 fill-red-400 shrink-0" />
+            <p className="text-sm font-semibold text-red-700">Top đi trễ tháng này</p>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {[topLateEmployees[0], topLateEmployees[1], topLateEmployees[2]]
+              .filter(Boolean)
+              .map((employee, i) => {
+                const rank = i + 1;
+                const displayName = getFullName(employee);
+                const avatarUrl = getAvatarUrl(employee.avatar);
+                const totalMins: number = employee.totalLateMinutes;
+                const lateLabel =
+                  totalMins >= 60
+                    ? `${Math.floor(totalMins / 60)}g${totalMins % 60 > 0 ? ` ${totalMins % 60}p` : ''}`
+                    : `${totalMins} phút`;
+                const rankColor =
+                  rank === 1 ? 'text-red-500' : rank === 2 ? 'text-orange-400' : 'text-amber-400';
+                return (
+                  <div key={employee.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className={`w-5 shrink-0 text-sm font-bold text-center ${rankColor}`}>
+                      {rank}
+                    </span>
+                    <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 border border-gray-200">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={displayName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold bg-red-400">
+                          {displayName
+                            .split(' ')
+                            .slice(0, 2)
+                            .map((s: string) => s.charAt(0))
+                            .join('')
+                            .toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-gray-800 truncate">
+                      {displayName}
+                    </span>
+                    <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      {lateLabel}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -1205,12 +1279,17 @@ export default function AttendancePage() {
                       {day.isHoliday && day.holidayNames.length > 0 && (
                         <div className="space-y-0.5 pt-1">
                           {day.holidayNames.slice(0, 2).map((name) => (
-                            <p key={name} className="line-clamp-2 text-[10px] font-semibold leading-relaxed">
+                            <p
+                              key={name}
+                              className="line-clamp-2 text-[10px] font-semibold leading-relaxed"
+                            >
                               {name}
                             </p>
                           ))}
                           {day.holidayNames.length > 2 && (
-                            <p className="text-[10px] font-medium">+{day.holidayNames.length - 2}</p>
+                            <p className="text-[10px] font-medium">
+                              +{day.holidayNames.length - 2}
+                            </p>
                           )}
                         </div>
                       )}
@@ -1324,7 +1403,9 @@ export default function AttendancePage() {
                         const record = employee.recordsByDate[day.date];
                         const hiddenHolidayAbsent = shouldHideHolidayAbsentRecord(day, record);
                         const view =
-                          record && !hiddenHolidayAbsent ? computeAttendanceView(record, settings) : null;
+                          record && !hiddenHolidayAbsent
+                            ? computeAttendanceView(record, settings)
+                            : null;
                         const statusStyle = view ? getStatusStyle(view.status) : null;
 
                         return (
@@ -1369,8 +1450,14 @@ export default function AttendancePage() {
                                 {record ? (
                                   <button
                                     type="button"
-                                    onClick={() => canEdit && setSelectedRecord({ employee, record })}
-                                    className={cn("w-full rounded-xl border px-2 py-2 text-left", canEdit && "transition-transform hover:-translate-y-0.5", !canEdit && "cursor-default")}
+                                    onClick={() =>
+                                      canEdit && setSelectedRecord({ employee, record })
+                                    }
+                                    className={cn(
+                                      'w-full rounded-xl border px-2 py-2 text-left',
+                                      canEdit && 'transition-transform hover:-translate-y-0.5',
+                                      !canEdit && 'cursor-default',
+                                    )}
                                     style={{
                                       borderColor: statusStyle?.border,
                                       background: statusStyle?.background,
@@ -1566,6 +1653,36 @@ export default function AttendancePage() {
                     <Switch checked={settings.showRanking !== false} />
                   </div>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canEditSettings) {
+                      setSettings((prev) => ({ ...prev, showLateRanking: !prev.showLateRanking }));
+                    }
+                  }}
+                  disabled={!canEditSettings}
+                  className="rounded-xl border p-4 text-left transition-colors flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    borderColor: settings.showLateRanking !== false ? '#dc2626' : '#e2ede9',
+                    background: settings.showLateRanking !== false ? '#fff5f5' : '#fff',
+                  }}
+                >
+                  <div className="pr-4">
+                    <p className="text-sm font-bold" style={{ color: '#203430' }}>
+                      Top đi trễ
+                    </p>
+                    <p className="mt-2 text-xs leading-5" style={{ color: '#6b7f78' }}>
+                      Hiển thị 3 nhân viên có tổng phút đi trễ cao nhất (sau 8:00, chỉ tính ngày có
+                      chấm công).
+                    </p>
+                  </div>
+                  <div>
+                    <Switch
+                      checked={settings.showLateRanking !== false}
+                      className={settings.showLateRanking !== false ? '[&>span]:bg-red-500' : ''}
+                    />
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -1604,121 +1721,121 @@ export default function AttendancePage() {
           </DialogHeader>
 
           {selectedRecord && canEdit && (
-              <div className="space-y-4">
-                <div
-                  className="rounded-xl border px-4 py-3"
-                  style={{ borderColor: '#d1fae5', background: '#f0fdf4' }}
-                >
-                  <p className="text-sm font-semibold" style={{ color: '#166534' }}>
-                    Trạng thái hiển thị: {previewRecord?.label ?? '--'}
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: '#15803d' }}>
-                    Tổng giờ hiển thị: {formatHours(previewRecord?.displayHours ?? 0)} | Tổng giờ
-                    thực tế sau nghỉ trưa: {formatHours(previewRecord?.actualHours ?? 0)}
-                  </p>
-                </div>
+            <div className="space-y-4">
+              <div
+                className="rounded-xl border px-4 py-3"
+                style={{ borderColor: '#d1fae5', background: '#f0fdf4' }}
+              >
+                <p className="text-sm font-semibold" style={{ color: '#166534' }}>
+                  Trạng thái hiển thị: {previewRecord?.label ?? '--'}
+                </p>
+                <p className="mt-1 text-xs" style={{ color: '#15803d' }}>
+                  Tổng giờ hiển thị: {formatHours(previewRecord?.displayHours ?? 0)} | Tổng giờ thực
+                  tế sau nghỉ trưa: {formatHours(previewRecord?.actualHours ?? 0)}
+                </p>
+              </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                      Trạng thái gốc
-                    </label>
-                    <Select
-                      value={editorState.status}
-                      onValueChange={(value) =>
-                        setEditorState((prev) => ({
-                          ...prev,
-                          status: value as RawAttendanceStatus,
-                        }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="present">Present</SelectItem>
-                        <SelectItem value="late">Late</SelectItem>
-                        <SelectItem value="absent">Absent</SelectItem>
-                        <SelectItem value="leave">Leave</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                      Mã nhân viên
-                    </label>
-                    <Input
-                      value={
-                        selectedRecord.employee.employeeCode ||
-                        selectedRecord.employee.username ||
-                        '-'
-                      }
-                      readOnly
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                      Giờ vào
-                    </label>
-                    <Input
-                      type="time"
-                      value={editorState.checkIn}
-                      onChange={(event) =>
-                        setEditorState((prev) => ({ ...prev, checkIn: event.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                      Giờ ra
-                    </label>
-                    <Input
-                      type="time"
-                      value={editorState.checkOut}
-                      onChange={(event) =>
-                        setEditorState((prev) => ({ ...prev, checkOut: event.target.value }))
-                      }
-                    />
-                  </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                    Trạng thái gốc
+                  </label>
+                  <Select
+                    value={editorState.status}
+                    onValueChange={(value) =>
+                      setEditorState((prev) => ({
+                        ...prev,
+                        status: value as RawAttendanceStatus,
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="present">Present</SelectItem>
+                      <SelectItem value="late">Late</SelectItem>
+                      <SelectItem value="absent">Absent</SelectItem>
+                      <SelectItem value="leave">Leave</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                    Ghi chú
+                    Mã nhân viên
                   </label>
-                  <Textarea
-                    value={editorState.note}
-                    onChange={(event) =>
-                      setEditorState((prev) => ({ ...prev, note: event.target.value }))
+                  <Input
+                    value={
+                      selectedRecord.employee.employeeCode ||
+                      selectedRecord.employee.username ||
+                      '-'
                     }
-                    rows={4}
-                    placeholder="Thêm ghi chú attendance..."
+                    readOnly
                   />
                 </div>
 
-                <DialogFooter>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSelectedRecord(null)}
-                    disabled={isSavingAttendance}
-                  >
-                    Đóng
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => void handleSaveAttendance()}
-                    disabled={isSavingAttendance}
-                    className="text-white"
-                    style={{ background: '#1DB87A' }}
-                  >
-                    {isSavingAttendance ? 'Đang lưu...' : 'Lưu attendance'}
-                  </Button>
-                </DialogFooter>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                    Giờ vào
+                  </label>
+                  <Input
+                    type="time"
+                    value={editorState.checkIn}
+                    onChange={(event) =>
+                      setEditorState((prev) => ({ ...prev, checkIn: event.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                    Giờ ra
+                  </label>
+                  <Input
+                    type="time"
+                    value={editorState.checkOut}
+                    onChange={(event) =>
+                      setEditorState((prev) => ({ ...prev, checkOut: event.target.value }))
+                    }
+                  />
+                </div>
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                  Ghi chú
+                </label>
+                <Textarea
+                  value={editorState.note}
+                  onChange={(event) =>
+                    setEditorState((prev) => ({ ...prev, note: event.target.value }))
+                  }
+                  rows={4}
+                  placeholder="Thêm ghi chú attendance..."
+                />
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedRecord(null)}
+                  disabled={isSavingAttendance}
+                >
+                  Đóng
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void handleSaveAttendance()}
+                  disabled={isSavingAttendance}
+                  className="text-white"
+                  style={{ background: '#1DB87A' }}
+                >
+                  {isSavingAttendance ? 'Đang lưu...' : 'Lưu attendance'}
+                </Button>
+              </DialogFooter>
+            </div>
           )}
         </DialogContent>
       </Dialog>
