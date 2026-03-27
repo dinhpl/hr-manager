@@ -13,6 +13,7 @@ export const updateProfileSchema = z.object({
   position: z.string().optional(),
   avatar: z.string().optional().nullable(),
   hideBirthday: z.boolean().optional(),
+  phone: z.string().trim().max(20).nullable().optional(),
 });
 
 export const changePasswordSchema = z.object({

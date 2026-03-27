@@ -607,3 +607,22 @@ export async function updateAttendance(id: bigint, data: UpdateAttendanceDto) {
     note: updated.note,
   };
 }
+
+export async function getMyHeatmap(userId: bigint, year: number) {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const end = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+
+  const records = await prisma.attendance.findMany({
+    where: { userId, date: { gte: start, lte: end } },
+    select: { date: true, status: true, workHours: true, checkIn: true, checkOut: true },
+    orderBy: { date: 'asc' },
+  });
+
+  return records.map((r) => ({
+    date: toIsoDate(r.date),
+    status: r.status,
+    workHours: Number(r.workHours),
+    checkIn: r.checkIn?.toISOString() ?? null,
+    checkOut: r.checkOut?.toISOString() ?? null,
+  }));
+}

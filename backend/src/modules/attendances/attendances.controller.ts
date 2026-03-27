@@ -39,6 +39,16 @@ export async function importAttendanceExcel(req: Request, res: Response, next: N
   }
 }
 
+export async function getMyHeatmap(req: Request, res: Response, next: NextFunction) {
+  try {
+    const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+    const result = await attendancesService.getMyHeatmap(req.user!.id, year);
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateAttendance(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = updateAttendanceParamsSchema.parse(req.params);

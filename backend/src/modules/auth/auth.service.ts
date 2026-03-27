@@ -79,6 +79,7 @@ export async function getMe(userId: bigint) {
       companyJoinDate: true,
       birthday: true,
       hideBirthday: true,
+      phone: true,
       manager: { select: { id: true, fullName: true } },
     },
   });
@@ -115,6 +116,7 @@ export async function updateProfile(userId: bigint, data: UpdateProfileDto) {
       companyJoinDate: true,
       birthday: true,
       hideBirthday: true,
+      phone: true,
       manager: { select: { id: true, fullName: true } },
     },
   });
