@@ -157,6 +157,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
   const notifications = useNotifications(Boolean(userInfo));
 
   useEffect(() => {
@@ -183,6 +184,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const displayName = userInfo?.fullName || userInfo?.username || 'Người dùng';
   const roleTitle = userInfo ? getRoleLabel(userInfo.role) : '';
   const currentRole = toFrontendRole(userInfo?.role);
+
+  useEffect(() => {
+    if (!userInfo || currentRole === 'employee') return;
+    apiClient
+      .get<unknown>('/api/leave-requests?status=PENDING&limit=1')
+      .then((res) => {
+        const total = (res as { meta?: { total?: number } }).meta?.total ?? 0;
+        setPendingApprovalCount(total);
+      })
+      .catch(() => {});
+  }, [userInfo, currentRole, pathname]);
   const isSystemAdmin = userInfo?.systemRole?.toUpperCase() === 'ADMIN';
   const canViewActivityLog = currentRole === 'hr' || isSystemAdmin;
   const visibleNavItems = NAV_ITEMS.filter((item) => {
@@ -328,7 +340,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                           >
                             <item.icon size={14} className="shrink-0" />
                           </span>
-                          <span className="truncate">{item.label}</span>
+                          <span className="truncate flex-1">{item.label}</span>
+                          {item.key === 'approval' && pendingApprovalCount > 0 && (
+                            <span
+                              className="shrink-0 min-w-4 h-4 rounded-full px-1 text-[10px] flex items-center justify-center font-bold"
+                              style={{
+                                background: isActive ? 'rgba(255,255,255,0.25)' : '#ef4444',
+                                color: '#fff',
+                              }}
+                            >
+                              {pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}
+                            </span>
+                          )}
                         </Link>
                       </li>
                     );
