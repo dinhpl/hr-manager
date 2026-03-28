@@ -20,8 +20,6 @@ const USER_SELECT = {
   username: true,
   employeeCode: true,
   fullName: true,
-  firstName: true,
-  lastName: true,
   role: true,
   department: true,
   position: true,
@@ -123,8 +121,6 @@ export async function createUser(data: CreateUserDto) {
     username,
     employeeCode,
     fullName,
-    firstName,
-    lastName,
     role,
     department,
     position,
@@ -155,8 +151,6 @@ export async function createUser(data: CreateUserDto) {
       ...(employeeCode && { employeeCode }),
       password: hashedPassword,
       fullName,
-      ...(firstName && { firstName }),
-      ...(lastName && { lastName }),
       ...(role && { role }),
       ...(department && { department }),
       ...(position && { position }),
@@ -359,8 +353,6 @@ type UserImportRow = {
   email?: string;
   username?: string;
   full_name?: string;
-  first_name?: string;
-  last_name?: string;
   gender?: string;
   birthday?: string | Date;
   phone?: string;
@@ -384,8 +376,6 @@ const USER_COLUMNS: UserColumnDefinition[] = [
   { key: 'email', label: 'Email', aliases: ['email'] },
   { key: 'username', label: 'Tên đăng nhập', aliases: ['username', 'user name'] },
   { key: 'full_name', label: 'Họ và tên', aliases: ['full_name', 'full name', 'họ tên'] },
-  { key: 'first_name', label: 'Tên', aliases: ['first_name', 'first name'] },
-  { key: 'last_name', label: 'Họ', aliases: ['last_name', 'last name'] },
   { key: 'gender', label: 'Giới tính', aliases: ['gender'] },
   { key: 'birthday', label: 'Ngày sinh', aliases: ['birthday', 'date of birth'] },
   { key: 'phone', label: 'Số điện thoại', aliases: ['phone', 'phone number'] },
@@ -456,8 +446,6 @@ export async function exportUsersExcel(): Promise<Buffer> {
       email: true,
       username: true,
       fullName: true,
-      firstName: true,
-      lastName: true,
       department: true,
       position: true,
       isCountable: true,
@@ -478,8 +466,6 @@ export async function exportUsersExcel(): Promise<Buffer> {
     Email: u.email,
     'Tên đăng nhập': u.username,
     'Họ và tên': u.fullName,
-    Tên: u.firstName ?? '',
-    Họ: u.lastName ?? '',
     'Giới tính': u.gender ?? '',
     'Ngày sinh': u.birthday ? formatDDMMYYYY(u.birthday) : '',
     'Số điện thoại': u.phone ?? '',
@@ -564,8 +550,6 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
 
       const payload = {
         fullName: String(row.full_name || ''),
-        firstName: row.first_name ? String(row.first_name) : null,
-        lastName: row.last_name ? String(row.last_name) : null,
         username: row.username ? String(row.username) : undefined,
         employeeCode: row.employee_code ? String(row.employee_code) : null,
         department: row.department ? String(row.department) : null,
@@ -607,8 +591,6 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
             username,
             password: hashedPassword,
             fullName: payload.fullName || username,
-            firstName: payload.firstName ?? undefined,
-            lastName: payload.lastName ?? undefined,
             employeeCode: payload.employeeCode ?? undefined,
             department: payload.department ?? undefined,
             position: payload.position ?? undefined,

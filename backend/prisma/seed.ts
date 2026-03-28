@@ -138,8 +138,7 @@ async function main() {
     {
       email: 'kawamoto@onetech.jp',
       password: '$2y$10$947UOf8w1Y3KI9j39PcJ0egBqt7bXNP3xb/0.d7xBNLH3n0fpSCrS',
-      firstName: 'Naoki',
-      lastName: 'Kawamoto',
+      fullName: 'Naoki Kawamoto',
       systemRole: 'member',
       teamId: null,
       isCountable: false,
@@ -148,8 +147,7 @@ async function main() {
     {
       email: 'thanglb@onetech.vn',
       password: '$2b$10$EjN7bEXZOtIbtonF1lnWtOc44N8vVqctosHuWbIWIm4gdJhvZE15W',
-      firstName: 'Thang',
-      lastName: 'Lam Bao',
+      fullName: 'Thang Lam Bao',
       systemRole: 'admin',
       teamId: null,
       isCountable: false,
@@ -158,8 +156,7 @@ async function main() {
     {
       email: 'vietnt@onetech.vn',
       password: '$2b$10$H/s6oQu1tK8wM/fYRS6KYOFHLlogi.pnKKlrXN3g00aKW87fY302m',
-      firstName: 'Viet',
-      lastName: 'Nguyen Tung',
+      fullName: 'Viet Nguyen Tung',
       systemRole: 'admin',
       teamId: 2,
       isCountable: true,
@@ -168,8 +165,7 @@ async function main() {
     {
       email: 'wada@onetech.jp',
       password: '$2y$10$bk45VKY.fFpVZSvNJ3MiNOzdzUdqztY6WsM5ZGRZayqB7F19FVKgG',
-      firstName: 'Shou',
-      lastName: 'Wada',
+      fullName: 'Shou Wada',
       systemRole: 'member',
       teamId: null,
       isCountable: false,
@@ -178,8 +174,7 @@ async function main() {
     {
       email: 'thao@onetech.vn',
       password: '$2y$10$RQmlwQSfFOrsBENWkGgHM.4B5s8u24iSE5Hol2mDeCM0jkIhtxtVO',
-      firstName: 'Thao',
-      lastName: 'Nguyen Lam',
+      fullName: 'Thao Nguyen Lam',
       systemRole: 'admin',
       teamId: 3,
       isCountable: false,
@@ -188,8 +183,7 @@ async function main() {
     {
       email: 'dinhpl@onetech.vn',
       password: '$2b$10$HGAL.U0rG.CLUQeDoTAxBew8FV1aM4G1nqAlfMMFhHUdrVUlhuOFS',
-      firstName: 'Dinh',
-      lastName: 'PL',
+      fullName: 'Dinh PL',
       systemRole: 'admin',
       teamId: 3,
       isCountable: true,
@@ -198,8 +192,7 @@ async function main() {
     {
       email: 'shimojima@onetech.jp',
       password: '$2y$10$YioFzEP4dkszEGlTd6GU0eMVlmeWOHcpu24yF4hHE99gGhd0mjSSu',
-      firstName: 'Tuan',
-      lastName: 'Nguyen Hong Anh',
+      fullName: 'Tuan Nguyen Hong Anh',
       systemRole: 'member',
       teamId: 1,
       isCountable: false,
@@ -208,8 +201,7 @@ async function main() {
     {
       email: 'hungnv@onetech.vn',
       password: '$2y$10$HmkFirlnXp38ZHw5UHq5pOCV.zs/SQNDuxK.o5uLmalMGMWwHpsbG',
-      firstName: 'Hung',
-      lastName: 'Nguyen Viet',
+      fullName: 'Hung Nguyen Viet',
       systemRole: 'admin',
       teamId: 1,
       isCountable: true,
@@ -218,8 +210,7 @@ async function main() {
     {
       email: 'duy@onetech.vn',
       password: '$2a$12$1wHlHSnVf3b9pG01c/GT0.3CTaA6DkF9oUYMyyPAQIj4gcRfiaaHO',
-      firstName: 'Duy',
-      lastName: 'Le Ba Phuoc',
+      fullName: 'Duy Le Ba Phuoc',
       systemRole: 'member',
       teamId: 1,
       isCountable: true,
@@ -228,8 +219,7 @@ async function main() {
     {
       email: 'khanhnb@onetech.vn',
       password: '$2y$10$RVmEJAtkZ5FnVkATgoKsUOYLc2EXM7EkuxaVDNm5N454S.a/LJ/Gi',
-      firstName: 'Khanh',
-      lastName: 'Nguyen Bao',
+      fullName: 'Khanh Nguyen Bao',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -238,8 +228,7 @@ async function main() {
     {
       email: 'uyennp@onetech.vn',
       password: null,
-      firstName: 'Nguyen Phuong',
-      lastName: 'Uyen',
+      fullName: 'Nguyen Phuong Uyen',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -248,8 +237,7 @@ async function main() {
     {
       email: 'trint@onetech.vn',
       password: '$2y$10$bU0YGA16DBfm.I3Fy88RluPFdgqEg6g/s86Fdlc4G/7Awc1LUmL82',
-      firstName: 'Tri',
-      lastName: 'Nguyen Thanh',
+      fullName: 'Tri Nguyen Thanh',
       systemRole: 'member',
       teamId: null,
       isCountable: false,
@@ -258,8 +246,7 @@ async function main() {
     {
       email: 'thang@onetech.vn',
       password: '$2y$10$69Th0azsDM01YE22LNuBZ.gglYbwV6yokS6nWMM8xbxQIh4MhGIvG',
-      firstName: 'Thang',
-      lastName: 'Lam Bao',
+      fullName: 'Thang Lam Bao',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -268,8 +255,7 @@ async function main() {
     {
       email: 'nguyendh@onetech.vn',
       password: '$2b$10$h/gZK1n2Y.QnrpIn3lHsl.CiuPO7sKv8MLffEXaYql2/FxrwJ94A2',
-      firstName: 'Nguyen',
-      lastName: 'Duong Hong',
+      fullName: 'Nguyen Duong Hong',
       systemRole: 'member',
       teamId: 2,
       isCountable: false,
@@ -278,8 +264,7 @@ async function main() {
     {
       email: 'duy@onetech.jp',
       password: null,
-      firstName: 'Duy',
-      lastName: 'Le',
+      fullName: 'Duy Le',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -288,8 +273,7 @@ async function main() {
     {
       email: 'tamnt@onetech.vn',
       password: '$2a$12$tm3KDgu9SwHDkVdXxAAOV.vCAqBzrH1H10vyWLQUSVsJ6zkWYVH8W',
-      firstName: 'Tam',
-      lastName: 'Nguyen Thien',
+      fullName: 'Tam Nguyen Thien',
       systemRole: 'admin',
       teamId: null,
       isCountable: true,
@@ -298,8 +282,7 @@ async function main() {
     {
       email: 'minhlq@onetech.vn',
       password: '$2y$10$mkjqeGZ.m4CDDvAMh91lJuptTi1s.L/Nxl6HDSOVwR/QbRK7sKMy2',
-      firstName: 'Minh',
-      lastName: 'Le Quang',
+      fullName: 'Minh Le Quang',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -308,8 +291,7 @@ async function main() {
     {
       email: 'dienpt@onetech.vn',
       password: '$2y$10$UfxBZjjeWkkLTpZQWMum9eVACISTtcAB/yLW7nT/SBSzyq.vR1Mnm',
-      firstName: 'Dien',
-      lastName: 'Pham Thi',
+      fullName: 'Dien Pham Thi',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -318,8 +300,7 @@ async function main() {
     {
       email: 'lanhvc_freelancer@onetech.vn',
       password: '$2a$12$4L74gGHAWkGRap0LTbcabOZd9Hj9S/Ek3VDjMc2xiILzgxTn.Zu2W',
-      firstName: 'Lanh',
-      lastName: 'Van Cong',
+      fullName: 'Lanh Van Cong',
       systemRole: 'member',
       teamId: null,
       isCountable: false,
@@ -328,8 +309,7 @@ async function main() {
     {
       email: 'ptp285@gmail.com',
       password: '$2y$10$4VyENKupovyf.P.dNCT7g.CAbPSZ3mWVBSpLSFmFeM/qjYV5LR1fS',
-      firstName: 'Phan Truong',
-      lastName: 'Phuc',
+      fullName: 'Phan Truong Phuc',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -338,8 +318,7 @@ async function main() {
     {
       email: 'thuyntt@onetech.vn',
       password: '$2y$10$EjebqRblr4v9IQJyw4FSheTXvFQOHON7Rt44Bk4RFLJYKDiwf2/hK',
-      firstName: 'Nguyen Thi Thanh',
-      lastName: 'Thuy',
+      fullName: 'Nguyen Thi Thanh Thuy',
       systemRole: 'admin',
       teamId: null,
       isCountable: false,
@@ -348,8 +327,7 @@ async function main() {
     {
       email: 'trangln@onetech.vn',
       password: '$2y$10$F0e2wCizWEgk2T.hKAisLe69VUliB.tNsM38HjlhDzWoOUJmCm/zq',
-      firstName: 'Le Nguyen',
-      lastName: 'Trang',
+      fullName: 'Le Nguyen Trang',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -358,8 +336,7 @@ async function main() {
     {
       email: 'quochuy91.np@onetech.vn',
       password: '$2y$10$8wH.0cd.zeinVLWus4odweQAH4QXg3E4.AvWUZ7ANwYCd8XGE0WRS',
-      firstName: 'Tran Quoc',
-      lastName: 'Huy',
+      fullName: 'Tran Quoc Huy',
       systemRole: 'member',
       teamId: null,
       isCountable: true,
@@ -368,8 +345,7 @@ async function main() {
     {
       email: 'linhldx@onetech.vn',
       password: '$2y$10$vvRP0.DzM46tyZJ9QDu5quBJtx6q25Az/7G3cIPojyd6FW4WoZAuy',
-      firstName: 'La Duong Xuan',
-      lastName: 'Linh',
+      fullName: 'La Duong Xuan Linh',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -378,8 +354,7 @@ async function main() {
     {
       email: 'sutv@onetech.vn',
       password: '$2y$10$bmkzNt1r.WiXpHDJ6E8hBOlwZRd8jiLbpfRBmVAPo4kaHPz6PSCfO',
-      firstName: 'Tran Van',
-      lastName: 'Su',
+      fullName: 'Tran Van Su',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -388,8 +363,7 @@ async function main() {
     {
       email: 'datth@onetech.vn',
       password: '$2y$10$tnjAu3kWkBiTKwZLuCzdGuMB9u3.Qg5VWKy3Y14r9a1K9a4.D6OTm',
-      firstName: 'Dat',
-      lastName: 'Truong Huu',
+      fullName: 'Dat Truong Huu',
       systemRole: 'admin',
       teamId: 3,
       isCountable: true,
@@ -398,8 +372,7 @@ async function main() {
     {
       email: 'hangnt@onetech.vn',
       password: '$2y$10$hk8Bz4h8wGYzlFOJo5vpb.jWEBdWh3Hd3tSMOYgLYA2AF/XURaKHu',
-      firstName: 'Hang',
-      lastName: 'Nguyen Thuy',
+      fullName: 'Hang Nguyen Thuy',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -408,8 +381,7 @@ async function main() {
     {
       email: 'longht@onetech.vn',
       password: '$2y$10$u2EQm3SkmlosqEtYnYnMCO3BIw.h471HUwi44WbncgsSccRXzQmYi',
-      firstName: 'Long',
-      lastName: 'Ha Thanh',
+      fullName: 'Long Ha Thanh',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -418,8 +390,7 @@ async function main() {
     {
       email: 'emkvt@onetech.vn',
       password: '$2b$10$4vpwTJAL/kvr.Hazb6r2cuV18Cq7gI1ubJzM9/OAwNZWMkguOwFDS',
-      firstName: 'Khuu Van',
-      lastName: 'Thao Em',
+      fullName: 'Khuu Van Thao Em',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -428,8 +399,7 @@ async function main() {
     {
       email: 'phuckh@onetech.vn',
       password: '$2y$10$k/fGu/f5y69CLK.szccIw.5/nHudAFbf8VpfGswuJm.JTiBPKXWlC',
-      firstName: 'Phuc',
-      lastName: 'Kieu Hoang',
+      fullName: 'Phuc Kieu Hoang',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -438,8 +408,7 @@ async function main() {
     {
       email: 'uyenth@onetech.vn',
       password: '$2y$10$VmBUWIFzkn/OHoCoqPwfZup31K6421khCKpzi5srHZ/USeKypKQt6',
-      firstName: 'Uyen',
-      lastName: 'Tran Hong',
+      fullName: 'Uyen Tran Hong',
       systemRole: 'member',
       teamId: 1,
       isCountable: true,
@@ -448,8 +417,7 @@ async function main() {
     {
       email: 'thanhdc@onetech.vn',
       password: '$2y$10$e9rb63yrJODAGHoJDw8R.OOT3FxeLL5fWvCSDuNPg50YhxVMcp6im',
-      firstName: 'Thanh',
-      lastName: 'Din Chi',
+      fullName: 'Thanh Din Chi',
       systemRole: 'admin',
       teamId: null,
       isCountable: true,
@@ -458,8 +426,7 @@ async function main() {
     {
       email: 'thuongpa@onetech.vn',
       password: '$2b$10$HGAL.U0rG.CLUQeDoTAxBew8FV1aM4G1nqAlfMMFhHUdrVUlhuOFS',
-      firstName: 'Thuong',
-      lastName: 'Pham Anh',
+      fullName: 'Thuong Pham Anh',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -468,8 +435,7 @@ async function main() {
     {
       email: 'ductv@onetech.vn',
       password: '$2y$10$OrMwXeamCP7bsbFq19lVnuS5huCQGxnHu4j2EIRpEorNz3VXVhyTG',
-      firstName: 'Tran Viet',
-      lastName: 'Duc',
+      fullName: 'Tran Viet Duc',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -478,8 +444,7 @@ async function main() {
     {
       email: 'dangtv@onetech.vn',
       password: '$2y$10$dwM0KMU8vGvgPqzEViGKheDMiZMfuXe3bLwjjsYPdSEpKJLKgWmbe',
-      firstName: 'Tran Van',
-      lastName: 'Dang',
+      fullName: 'Tran Van Dang',
       systemRole: 'member',
       teamId: 1,
       isCountable: true,
@@ -488,8 +453,7 @@ async function main() {
     {
       email: 'thytnt@onetech.vn',
       password: '$2y$10$hl.P2kXmu7mvB0VR4fhJrubF05TuElEbWPSc3847.5zpbXs.FD71S',
-      firstName: 'Truong Ngoc Thy',
-      lastName: 'Thy',
+      fullName: 'Truong Ngoc Thy',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -498,8 +462,7 @@ async function main() {
     {
       email: 'hoaitm@onetech.vn',
       password: '$2y$10$tSuGjRcWrd7fh58WuPTk5embjCeoNMbkVErIgr3TuuP3ZBN2Y3LeK',
-      firstName: 'Hoai',
-      lastName: 'Tran Minh',
+      fullName: 'Hoai Tran Minh',
       systemRole: 'member',
       teamId: 2,
       isCountable: true,
@@ -508,8 +471,7 @@ async function main() {
     {
       email: 'minhlq.ot@gmail.com',
       password: '$2y$10$63Qwx/X/dWntq0hNAogRfe8zLlz4TMHnhhiRepEll/toB/VD0B/UG',
-      firstName: 'Minh',
-      lastName: 'Le Quang',
+      fullName: 'Minh Le Quang',
       systemRole: 'member',
       teamId: 3,
       isCountable: true,
@@ -526,9 +488,7 @@ async function main() {
       // username = part before '@', replace dots/special chars to ensure uniqueness
       username: u.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_'),
       password: u.password ?? NO_PASSWORD_HASH,
-      fullName: `${u.firstName} ${u.lastName}`.trim(),
-      firstName: u.firstName,
-      lastName: u.lastName,
+      fullName: u.fullName,
       role,
       // role and systemRole must match (same value, per plan.txt)
       systemRole: role as string,

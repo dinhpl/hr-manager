@@ -29,8 +29,6 @@ export const createUserSchema = z.object({
   employeeCode: employeeCodeSchema.optional().transform((value) => value || undefined),
   password: z.string().min(6),
   fullName: z.string().trim().min(1),
-  firstName: z.string().trim().min(1).optional(),
-  lastName: z.string().trim().min(1).optional(),
   role: z.nativeEnum(UserRole).default('EMPLOYEE'),
   department: departmentSchema.optional(),
   position: positionSchema.optional(),
@@ -51,8 +49,6 @@ export const updateUserSchema = z.object({
     .transform((value) => (value === '' ? null : value)),
   password: z.string().min(6).optional(),
   fullName: z.string().trim().min(1).optional(),
-  firstName: z.string().trim().min(1).optional(),
-  lastName: z.string().trim().min(1).optional(),
   role: z.nativeEnum(UserRole).optional(),
   department: nullableDepartmentSchema
     .optional()

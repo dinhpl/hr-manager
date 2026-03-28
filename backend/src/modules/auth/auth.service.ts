@@ -106,8 +106,6 @@ export async function updateProfile(userId: bigint, data: UpdateProfileDto) {
       username: true,
       email: true,
       fullName: true,
-      firstName: true,
-      lastName: true,
       role: true,
       systemRole: true,
       department: true,

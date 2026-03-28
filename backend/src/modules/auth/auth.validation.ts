@@ -8,8 +8,6 @@ export const loginSchema = z.object({
 
 export const updateProfileSchema = z.object({
   fullName: z.string().min(1).optional(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
   position: z.string().optional(),
   avatar: z.string().optional().nullable(),
   hideBirthday: z.boolean().optional(),

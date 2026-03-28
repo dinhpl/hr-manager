@@ -397,16 +397,9 @@ export function numberValue(value: unknown) {
 
 export function getFullName(user: {
   fullName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
   username?: string | null;
 }) {
-  return (
-    user.fullName ??
-    [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ??
-    user.username ??
-    'Người dùng'
-  );
+  return user.fullName?.trim() || user.username || 'Người dùng';
 }
 
 export function buildQuery(params: Record<string, string | number | undefined | null>) {

@@ -73,8 +73,6 @@ type AttendanceEmployee = {
   username?: string | null;
   employeeCode?: string | null;
   fullName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
   department?: string | null;
   position?: string | null;
   avatar?: string | null;

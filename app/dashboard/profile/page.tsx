@@ -29,8 +29,6 @@ interface UserProfile {
   username: string;
   email: string;
   fullName: string;
-  firstName?: string;
-  lastName?: string;
   role: string;
   department?: string;
   position?: string;

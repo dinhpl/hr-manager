@@ -55,8 +55,6 @@ interface EmployeeApiItem {
   username?: string | null;
   employeeCode?: string | null;
   fullName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
   role?: UserRole | null;
   department?: string | null;
   position?: string | null;
@@ -92,8 +90,6 @@ interface EmployeeRow {
   username: string;
   employeeCode: string;
   fullName: string;
-  firstName: string;
-  lastName: string;
   profileImageUrl: string | null;
   role: UserRole;
   department: string;
@@ -110,8 +106,7 @@ interface EmployeeRow {
 }
 
 interface EmployeeFormData {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
   username: string;
   employeeCode: string;
@@ -192,25 +187,9 @@ function buildUsernameFromEmail(email: string) {
   );
 }
 
-function splitFullName(fullName: string) {
-  const normalized = fullName.trim().replace(/\s+/g, ' ');
-  if (!normalized) return { firstName: '', lastName: '' };
-
-  const parts = normalized.split(' ');
-  if (parts.length === 1) {
-    return { firstName: parts[0], lastName: '' };
-  }
-
-  return {
-    firstName: parts.slice(0, -1).join(' '),
-    lastName: parts.at(-1) ?? '',
-  };
-}
-
 function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeFormData {
   return {
-    firstName: '',
-    lastName: '',
+    fullName: '',
     email: '',
     username: '',
     employeeCode: '',
@@ -232,13 +211,8 @@ function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeForm
 function mapEmployee(item: EmployeeApiItem): EmployeeRow {
   const fullName = getFullName({
     fullName: item.fullName,
-    firstName: item.firstName,
-    lastName: item.lastName,
     username: item.username,
   });
-  const { firstName, lastName } = splitFullName(
-    [item.firstName, item.lastName].filter(Boolean).join(' ').trim() || fullName,
-  );
 
   return {
     id: String(item.id),
@@ -246,8 +220,6 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
     username: item.username?.trim() || buildUsernameFromEmail(item.email),
     employeeCode: item.employeeCode?.trim() || '',
     fullName,
-    firstName,
-    lastName,
     profileImageUrl: item.avatar ?? null,
     role: item.role ?? 'EMPLOYEE',
     department: item.department?.trim() || 'Chưa phân bổ',
@@ -476,15 +448,12 @@ export default function EmployeesPage() {
   const handleCreateEmployee = async (formData: EmployeeFormData) => {
     setIsMutating(true);
     try {
-      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       const created = await apiClient.post<EmployeeApiItem>('/api/users', {
         email: formData.email.trim(),
         username: formData.username.trim() || buildUsernameFromEmail(formData.email),
         employeeCode: formData.employeeCode.trim() || undefined,
         password: formData.password,
-        fullName,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        fullName: formData.fullName.trim(),
         role: formData.role,
         department: formData.department || undefined,
         position: formData.position.trim() || getRoleLabel(formData.role),
@@ -518,15 +487,12 @@ export default function EmployeesPage() {
   const handleUpdateEmployee = async (employeeId: string, formData: EmployeeFormData) => {
     setIsMutating(true);
     try {
-      const fullName = `${formData.firstName} ${formData.lastName}`.trim();
       await apiClient.patch(`/api/users/${employeeId}`, {
         email: formData.email.trim(),
         username: formData.username.trim() || buildUsernameFromEmail(formData.email),
         employeeCode: formData.employeeCode.trim() || null,
         password: formData.password.trim() || undefined,
-        fullName,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        fullName: formData.fullName.trim(),
         role: formData.role,
         department: formData.department || null,
         position: formData.position.trim() || null,
@@ -882,10 +848,7 @@ export default function EmployeesPage() {
                   employees.map((employee) => {
                     const isSelected = selectedIds.includes(employee.id);
                     const isSelf = String(employee.id) === String(storedUser?.id);
-                    const initials =
-                      `${employee.firstName.charAt(0)}${employee.lastName.charAt(0)}`
-                        .trim()
-                        .toUpperCase() || employee.fullName.slice(0, 2).toUpperCase();
+                    const initials = employee.fullName.slice(0, 2).toUpperCase();
                     const deptIndex = departments.findIndex((d) => d.name === employee.department);
                     const departmentColor = getDeptColor(
                       employee.department,
@@ -1367,8 +1330,7 @@ function EmployeeForm({
   const [formData, setFormData] = useState<EmployeeFormData>(() =>
     initialData
       ? {
-          firstName: initialData.firstName,
-          lastName: initialData.lastName,
+          fullName: initialData.fullName,
           email: initialData.email,
           username: initialData.username,
           employeeCode: initialData.employeeCode,
@@ -1394,8 +1356,7 @@ function EmployeeForm({
     setFormData(
       initialData
         ? {
-            firstName: initialData.firstName,
-            lastName: initialData.lastName,
+            fullName: initialData.fullName,
             email: initialData.email,
             username: initialData.username,
             employeeCode: initialData.employeeCode,
@@ -1463,8 +1424,7 @@ function EmployeeForm({
   const validateForm = () => {
     const nextErrors: Record<string, string> = {};
 
-    if (!formData.firstName.trim()) nextErrors.firstName = 'Họ là bắt buộc';
-    if (!formData.lastName.trim()) nextErrors.lastName = 'Tên là bắt buộc';
+    if (!formData.fullName.trim()) nextErrors.fullName = 'Họ và tên là bắt buộc';
     if (!formData.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
       nextErrors.email = 'Email không hợp lệ';
     if (!formData.username.trim()) nextErrors.username = 'Username là bắt buộc';
@@ -1488,8 +1448,7 @@ function EmployeeForm({
     try {
       await onSubmit({
         ...formData,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         username: formData.username.trim(),
         employeeCode: formData.employeeCode.trim(),
@@ -1562,35 +1521,19 @@ function EmployeeForm({
               Thông tin cá nhân
             </h3>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                Họ
-              </label>
-              <Input
-                type="text"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                placeholder="Ví dụ: Phạm"
-                className={errors.firstName ? 'border-red-500' : undefined}
-              />
-              {errors.firstName && <p className="mt-1 text-xs text-red-500">{errors.firstName}</p>}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                Tên
-              </label>
-              <Input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                placeholder="Ví dụ: Long Đĩnh"
-                className={errors.lastName ? 'border-red-500' : undefined}
-              />
-              {errors.lastName && <p className="mt-1 text-xs text-red-500">{errors.lastName}</p>}
-            </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+              Họ và tên
+            </label>
+            <Input
+              type="text"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              placeholder="Ví dụ: Phạm Long Đĩnh"
+              className={errors.fullName ? 'border-red-500' : undefined}
+            />
+            {errors.fullName && <p className="mt-1 text-xs text-red-500">{errors.fullName}</p>}
           </div>
         </div>
 
