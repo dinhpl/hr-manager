@@ -58,7 +58,7 @@ export function createApp(): Application {
   );
 
   // Rate limiting: 200 requests per 1 minute per IP
-  app.use(rateLimit({ windowMs: 1 * 60 * 1000, max: 200 }));
+  app.use(rateLimit({ windowMs: 1 * 60 * 1000, max: 1000 }));
 
   // Body parsing
   app.use(express.json());
