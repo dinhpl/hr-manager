@@ -7,7 +7,7 @@ export const auditLogsController = {
   async getAll(req: Request, res: Response, next: NextFunction) {
     try {
       const query = auditLogQuerySchema.parse(req.query);
-      const { data, meta } = await getAuditLogs(query, req.user!);
+      const { data, meta } = await getAuditLogs(query);
       sendSuccess(res, data, meta);
     } catch (err) {
       next(err);

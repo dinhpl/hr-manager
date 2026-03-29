@@ -53,18 +53,12 @@ export async function createAuditLog(payload: CreateAuditLogPayload): Promise<vo
   }
 }
 
-export async function getAuditLogs(
-  query: AuditLogQueryParams,
-  requestingUser: { id: bigint; role: string },
-) {
+export async function getAuditLogs(query: AuditLogQueryParams) {
   const { page, limit, skip } = getPaginationParams(query);
 
   const where: Record<string, unknown> = {};
 
-  // EMPLOYEE can only see their own logs
-  if (requestingUser.role === 'EMPLOYEE') {
-    where.actorId = requestingUser.id;
-  } else if (query.actorId) {
+  if (query.actorId) {
     where.actorId = BigInt(query.actorId);
   }
 

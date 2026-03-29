@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { getStoredUser } from '@/lib/api-client';
 import { toFrontendRole } from '@/lib/hr-utils';
 import { type AuditLogFilters, type AuditLogItem, fetchAuditLogs } from '@/lib/audit-logs-api';
+import { useRouter } from 'next/navigation';
 
 const MODULE_LABELS: Record<string, string> = {
   LEAVE_REQUEST: 'Nghỉ phép',
@@ -407,22 +407,11 @@ export default function ActivityLogPage() {
   const [toDate, setToDate] = useState('');
   const [actorIdInput, setActorIdInput] = useState('');
 
-  const storedUser = getStoredUser<{ role?: string; systemRole?: string | null }>();
+  const storedUser = getStoredUser<{ role?: string }>();
   const currentRole = toFrontendRole(storedUser?.role);
-  const isSystemAdmin = storedUser?.systemRole?.toUpperCase() === 'ADMIN';
-  const canViewActivityLog = currentRole === 'hr' || isSystemAdmin;
   const isHrOrAdmin = currentRole === 'hr' || currentRole === 'admin';
 
-  useEffect(() => {
-    if (!canViewActivityLog) {
-      router.replace('/dashboard');
-    }
-  }, [canViewActivityLog, router]);
-
   const loadLogs = useCallback(async () => {
-    if (!canViewActivityLog) {
-      return;
-    }
     setIsLoading(true);
     setError(null);
     try {
@@ -440,7 +429,7 @@ export default function ActivityLogPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [canViewActivityLog, filters]);
+  }, [filters]);
 
   useEffect(() => {
     void loadLogs();
@@ -471,10 +460,6 @@ export default function ActivityLogPage() {
 
   function goToPage(page: number) {
     setFilters((prev) => ({ ...prev, page }));
-  }
-
-  if (!canViewActivityLog) {
-    return null;
   }
 
   const visiblePages = getVisiblePages(meta.page, meta.totalPages);
