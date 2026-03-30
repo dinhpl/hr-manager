@@ -134,15 +134,27 @@ export async function getOvertimeById(id: bigint, user: { id: bigint; role: User
   return { ...record, ...enrichRecord(record) };
 }
 
+function calcHours(startTime: string, endTime: string): number {
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins <= 0) throw Object.assign(new Error('endTime must be after startTime'), { status: 400 });
+  return Math.round((mins / 60) * 10) / 10;
+}
+
 export async function createOvertime(userId: bigint, data: CreateOvertimeDto) {
-  const approverId = await resolveApproverIdForUser(userId);
+  const hours = calcHours(data.startTime, data.endTime);
+  const approverId = data.approverId ?? await resolveApproverIdForUser(userId);
   const record = await prisma.overtimeRecord.create({
     data: {
       userId,
-      date: new Date(data.date),
-      hours: data.hours,
+      date: new Date(`${data.date}T00:00:00`),
+      startTime: data.startTime,
+      endTime: data.endTime,
+      hours,
       reason: data.reason,
       status: 'PENDING',
+      compensationType: data.compensationType,
       approverId,
     },
     include: {
@@ -182,8 +194,7 @@ export async function approveOvertime(id: bigint, approver: AuthUser) {
   }
 
   const otType = detectOtType(record.date);
-  const compOffHours = Number(record.hours) * COMP_OFF_RATE[otType];
-  const compOffDays = compOffHours / 8;
+  const isCompOff = record.compensationType === 'COMP_OFF';
 
   const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.overtimeRecord.update({
@@ -191,18 +202,23 @@ export async function approveOvertime(id: bigint, approver: AuthUser) {
       data: { status: 'APPROVED', approverId: approver.id, approvedAt: new Date() },
     });
 
-    await tx.compOffRecord.create({
-      data: {
-        userId: record.userId,
-        overtimeId: record.id,
-        fromDate: new Date(),
-        toDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
-        totalDays: compOffDays,
-        reason: `Comp-off từ OT ngày ${record.date.toLocaleDateString('vi-VN')}`,
-        status: 'APPROVED',
-      },
-    });
+    if (isCompOff) {
+      const compOffHours = Number(record.hours) * COMP_OFF_RATE[otType];
+      const compOffDays = compOffHours / 8;
+      await tx.compOffRecord.create({
+        data: {
+          userId: record.userId,
+          overtimeId: record.id,
+          fromDate: new Date(),
+          toDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
+          totalDays: compOffDays,
+          reason: `Comp-off từ OT ngày ${record.date.toLocaleDateString('vi-VN')}`,
+          status: 'APPROVED',
+        },
+      });
+    }
 
+    const compOffHours = isCompOff ? Number(record.hours) * COMP_OFF_RATE[otType] : 0;
     return { ...updated, otType, compOffHours };
   });
 
@@ -219,6 +235,40 @@ export async function approveOvertime(id: bigint, approver: AuthUser) {
   );
 
   return updated;
+}
+
+export async function updateOvertime(id: bigint, userId: bigint, data: import('./overtime.validation').UpdateOvertimeDto) {
+  const record = await prisma.overtimeRecord.findUnique({ where: { id } });
+  if (!record) throw Object.assign(new Error('Overtime record not found'), { status: 404 });
+  if (record.userId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 });
+  if (record.status !== 'PENDING') throw Object.assign(new Error('Can only edit PENDING records'), { status: 400 });
+
+  const startTime = data.startTime ?? record.startTime ?? '';
+  const endTime = data.endTime ?? record.endTime ?? '';
+  const hours = startTime && endTime ? calcHours(startTime, endTime) : Number(record.hours);
+
+  return prisma.overtimeRecord.update({
+    where: { id },
+    data: {
+      ...(data.date && { date: new Date(`${data.date}T00:00:00`) }),
+      startTime,
+      endTime,
+      hours,
+      ...(data.reason && { reason: data.reason }),
+      ...(data.compensationType && { compensationType: data.compensationType }),
+      ...(data.approverId && { approverId: data.approverId }),
+    },
+    include: OVERTIME_INCLUDE,
+  });
+}
+
+export async function deleteOvertime(id: bigint, userId: bigint) {
+  const record = await prisma.overtimeRecord.findUnique({ where: { id } });
+  if (!record) throw Object.assign(new Error('Overtime record not found'), { status: 404 });
+  if (record.userId !== userId) throw Object.assign(new Error('Forbidden'), { status: 403 });
+  if (record.status !== 'PENDING') throw Object.assign(new Error('Can only delete PENDING records'), { status: 400 });
+
+  return prisma.overtimeRecord.delete({ where: { id } });
 }
 
 export async function rejectOvertime(id: bigint, approver: AuthUser) {

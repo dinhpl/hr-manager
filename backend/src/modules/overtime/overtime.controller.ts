@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import * as service from './overtime.service';
-import { createOvertimeSchema, getOvertimeQuerySchema } from './overtime.validation';
+import { createOvertimeSchema, getOvertimeQuerySchema, updateOvertimeSchema } from './overtime.validation';
 import { sendSuccess } from '../../utils/response';
 import { createAuditLog, getClientIp } from '../audit-logs/audit-logs.service';
 
@@ -38,6 +38,47 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       ipAddress: getClientIp(req),
     });
     sendSuccess(res, record, undefined, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = BigInt(String(req.params.id));
+    const data = updateOvertimeSchema.parse(req.body);
+    const record = await service.updateOvertime(id, req.user!.id, data);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'UPDATE',
+      module: 'OVERTIME',
+      entityId: id.toString(),
+      entityName: 'Overtime #' + id,
+      ipAddress: getClientIp(req),
+    });
+    sendSuccess(res, record);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function remove(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = BigInt(String(req.params.id));
+    await service.deleteOvertime(id, req.user!.id);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'DELETE',
+      module: 'OVERTIME',
+      entityId: id.toString(),
+      entityName: 'Overtime #' + id,
+      ipAddress: getClientIp(req),
+    });
+    sendSuccess(res, null);
   } catch (err) {
     next(err);
   }

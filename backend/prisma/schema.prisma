@@ -33,6 +33,11 @@ enum OvertimeStatus {
   REJECTED
 }
 
+enum CompensationType {
+  COMP_OFF
+  PAYMENT
+}
+
 enum NotificationType {
   LEAVE_REQUEST_CREATED
   LEAVE_REQUEST_APPROVED
@@ -217,10 +222,13 @@ model LeaveRequest {
 model OvertimeRecord {
   id         BigInt         @id @default(autoincrement())
   userId     BigInt         @map("user_id")
-  date       DateTime
-  hours      Decimal        @db.Decimal(10, 2)
-  reason     String
-  status     OvertimeStatus @default(PENDING)
+  date               DateTime
+  startTime          String?           @map("start_time") @db.VarChar(5)
+  endTime            String?           @map("end_time") @db.VarChar(5)
+  hours              Decimal           @db.Decimal(10, 2)
+  reason             String
+  status             OvertimeStatus    @default(PENDING)
+  compensationType   CompensationType  @default(COMP_OFF) @map("compensation_type")
   approverId BigInt?        @map("approver_id")
   approvedAt DateTime?      @map("approved_at")
   createdAt  DateTime       @default(now()) @map("created_at")

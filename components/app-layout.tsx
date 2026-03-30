@@ -20,6 +20,7 @@ import {
   Monitor,
   BookOpen,
   ClipboardList,
+  Clock,
 } from 'lucide-react';
 import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
@@ -53,7 +54,7 @@ const NAV_ITEMS = [
     icon: History,
     key: 'leave-history',
   },
-  // [MVP-HIDDEN] Quản lý Overtime - not in MVP scope
+  // [MVP-HIDDEN] Quản lý Overtime - tạm ẩn
   // { href: '/dashboard/overtime', label: 'Quản lý Overtime', icon: Clock, key: 'overtime' },
   // [MVP-HIDDEN] Nghỉ bù (Comp-off) - not in MVP scope
   // { href: '/dashboard/compoff', label: 'Nghỉ bù (Comp-off)', icon: BedDouble, key: 'compoff' },
@@ -113,7 +114,7 @@ const NAV_GROUPS = [
   {
     key: 'attendance-leave-group',
     label: 'Chấm công & Nghỉ phép',
-    items: ['attendance', 'leave-history', 'approval'],
+    items: ['attendance', 'leave-history', 'overtime', 'approval'],
   },
   {
     key: 'hr-group',

@@ -12,3 +12,5 @@ overtimeRouter.get('/:id', ctrl.getOne);
 overtimeRouter.post('/', ctrl.create);
 overtimeRouter.patch('/:id/approve', requireRoles('MANAGER', 'HR', 'ADMIN'), ctrl.approve);
 overtimeRouter.patch('/:id/reject', requireRoles('MANAGER', 'HR', 'ADMIN'), ctrl.reject);
+overtimeRouter.patch('/:id', ctrl.update);
+overtimeRouter.delete('/:id', ctrl.remove);

@@ -132,6 +132,22 @@ Use the `/browse` skill (gstack) for all web browsing tasks — navigating pages
 cd .claude/skills/gstack && ./setup
 ```
 
+## UI Component Rules
+
+**ALWAYS use existing components from `components/ui/` instead of raw HTML elements.**
+
+| Need | Use | Never use |
+|------|-----|-----------|
+| Dropdown / select | `Select, SelectTrigger, SelectContent, SelectItem` from `components/ui/select` | `<select>` |
+| Text input | `Input` from `components/ui/input` | `<input>` |
+| Text area | `Textarea` from `components/ui/textarea` | `<textarea>` |
+| Modal / dialog | `Dialog, DialogContent, DialogHeader, DialogTitle` from `components/ui/dialog` | custom modal div |
+| Checkbox | `Checkbox` from `components/ui/checkbox` | `<input type="checkbox">` |
+| Radio | `RadioGroup, RadioGroupItem` from `components/ui/radio-group` | `<input type="radio">` |
+| Badge / tag | `Badge` from `components/ui/badge` | custom span |
+
+Before writing any UI element manually, run `ls components/ui/` to check if a component already exists.
+
 ## Key Conventions
 
 - **Shared Prettier config:** Root `.prettierrc` is used by both frontend and backend (`pnpm build` runs format first)

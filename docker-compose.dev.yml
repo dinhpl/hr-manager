@@ -61,6 +61,7 @@ services:
       CHOKIDAR_USEPOLLING: 'true'
     volumes:
       - ./backend:/app
+      - /app/node_modules
       - ./backend/uploads:/app/uploads
     networks:
       - backend
@@ -91,6 +92,7 @@ services:
       WATCHPACK_POLLING: 'true'
     volumes:
       - ./:/app
+      - /app/node_modules
     networks:
       - backend
 
