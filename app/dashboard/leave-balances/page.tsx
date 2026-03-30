@@ -1,17 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import {
-  CalendarDays,
-  Eye,
-  FileDown,
-  History,
-  Pencil,
-  RefreshCw,
-  Save,
-  Upload,
-  X,
-} from 'lucide-react';
+import { CalendarDays, Eye, FileDown, History, Pencil, Save, Upload, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -50,6 +40,7 @@ interface LeaveBalanceApiRow {
     fullName: string;
     employeeCode?: string | null;
     department?: string | null;
+    companyJoinDate?: string | null;
   };
   leaveType: {
     code: string;
@@ -185,7 +176,6 @@ export default function LeaveBalancesPage() {
   const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
   const [isImportingBalances, setIsImportingBalances] = useState(false);
-  const [isRecalculating, setIsRecalculating] = useState(false);
   const [currentUser, setCurrentUser] = useState<CurrentUserInfo | null>(null);
   const [isLoadingCurrentUser, setIsLoadingCurrentUser] = useState(true);
   const [historyBalance, setHistoryBalance] = useState<LeaveBalanceApiRow | null>(null);
@@ -326,34 +316,6 @@ export default function LeaveBalancesPage() {
     }
   };
 
-  const handleRecalculateLeave = async () => {
-    if (!canManageLeaveBalances) return;
-    if (
-      !window.confirm(
-        `Tính toán lại phép năm ${new Date().getFullYear()} cho tất cả nhân viên?\n` +
-          'Số ngày đã dùng (used_days) sẽ được giữ nguyên.',
-      )
-    ) {
-      return;
-    }
-
-    setIsRecalculating(true);
-    try {
-      const result = await apiClient.post<{
-        year: number;
-        usersProcessed: number;
-        leaveTypesProcessed: number;
-      }>('/api/leave-balances/recalculate', { year: new Date().getFullYear() });
-      toast.success(
-        `Đã tính toán lại phép năm ${result.data.year} cho ${result.data.usersProcessed} nhân viên.`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Không thể tính toán lại phép năm.');
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
-
   const openInfoDialog = (row: LeaveBalanceApiRow) => {
     setEditingBalance(row);
     setBalanceForm({
@@ -466,17 +428,6 @@ export default function LeaveBalancesPage() {
         </div>
         {canManageLeaveBalances && (
           <div className="flex gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => void handleRecalculateLeave()}
-              disabled={isRecalculating}
-              title="Tính toán lại tổng ngày phép năm cho tất cả nhân viên dựa theo ngày vào công ty"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-70"
-              style={{ borderColor: '#1DB87A', color: '#1DB87A', background: '#f0fdf9' }}
-            >
-              <RefreshCw size={14} className={isRecalculating ? 'animate-spin' : ''} />
-              {isRecalculating ? 'Đang tính...' : 'Tính toán lại phép năm'}
-            </button>
             <label
               className="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-semibold"
               style={{ borderColor: '#e2ede9', color: '#203430' }}
@@ -581,12 +532,13 @@ export default function LeaveBalancesPage() {
                   'Nhân viên',
                   'MãNV',
                   'Phòng ban',
+                  'Ngày gia nhập',
                   `Phép năm ${balanceYear}`,
                   'Thâm niên',
                   `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
                   'Comp-Off',
                   'WFH',
-                  'Đã dùng phép chuyển',
+                  `Đã dùng phép ${balanceYear - 1}`,
                   'Đã dùng phép',
                   'Đã dùng Comp-Off',
                   'Số ngày nghỉ còn lại tính ĐẾN tháng hiện tại',
@@ -606,7 +558,7 @@ export default function LeaveBalancesPage() {
               {isLoadingBalances ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -616,7 +568,7 @@ export default function LeaveBalancesPage() {
               ) : filteredLeaveBalances.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={14}
+                    colSpan={15}
                     className="px-3 py-8 text-center text-sm"
                     style={{ color: '#6b7f78' }}
                   >
@@ -681,6 +633,12 @@ export default function LeaveBalancesPage() {
                         {row.user.department || '—'}
                       </td>
                       <td
+                        className="px-3 py-2.5 text-xs whitespace-nowrap"
+                        style={{ color: '#6b7f78' }}
+                      >
+                        {formatDate(row.user.companyJoinDate)}
+                      </td>
+                      <td
                         className="px-3 py-2.5 text-center font-semibold"
                         style={{ color: Number(row.annualDays) < 0 ? '#ef4444' : '#203430' }}
                       >
@@ -738,7 +696,25 @@ export default function LeaveBalancesPage() {
                       >
                         <HoverCard openDelay={100} closeDelay={100}>
                           <HoverCardTrigger asChild>
-                            <span className="cursor-help">{currentMonthRemaining}</span>
+                            <span className="inline-flex cursor-help items-center justify-center gap-1">
+                              <span>{currentMonthRemaining}</span>
+                              <span
+                                className="inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none"
+                                style={{
+                                  borderColor:
+                                    currentMonthRemaining < 0
+                                      ? '#ef4444'
+                                      : 'rgba(29, 184, 122, 0.35)',
+                                  color: currentMonthRemaining < 0 ? '#ef4444' : '#1DB87A',
+                                  background:
+                                    currentMonthRemaining < 0
+                                      ? 'rgba(239, 68, 68, 0.08)'
+                                      : 'rgba(29, 184, 122, 0.1)',
+                                }}
+                              >
+                                !
+                              </span>
+                            </span>
                           </HoverCardTrigger>
                           <HoverCardContent
                             className="w-72 p-0 overflow-hidden"
@@ -830,7 +806,106 @@ export default function LeaveBalancesPage() {
                           color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
                         }}
                       >
-                        {yearlyRemaining}
+                        <HoverCard openDelay={100} closeDelay={100}>
+                          <HoverCardTrigger asChild>
+                            <span className="inline-flex cursor-help items-center justify-center gap-1">
+                              <span>{yearlyRemaining}</span>
+                              <span
+                                className="inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none"
+                                style={{
+                                  borderColor:
+                                    yearlyRemaining < 0 ? '#ef4444' : 'rgba(29, 184, 122, 0.35)',
+                                  color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
+                                  background:
+                                    yearlyRemaining < 0
+                                      ? 'rgba(239, 68, 68, 0.08)'
+                                      : 'rgba(29, 184, 122, 0.1)',
+                                }}
+                              >
+                                !
+                              </span>
+                            </span>
+                          </HoverCardTrigger>
+                          <HoverCardContent
+                            className="w-72 overflow-hidden p-0"
+                            style={{ borderColor: '#e2ede9' }}
+                          >
+                            <div
+                              className="border-b px-4 py-3 text-xs font-bold"
+                              style={{
+                                borderColor: '#e2ede9',
+                                color: '#203430',
+                                background: '#f8fdfb',
+                              }}
+                            >
+                              Cách tính — TẠM tính cả năm {balanceYear}
+                            </div>
+                            <div className="space-y-1.5 px-4 py-3 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: '#6b7f78' }}>Phép năm {balanceYear}</span>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#203430' }}
+                                >
+                                  {Number(row.annualDays)}
+                                </span>
+                              </div>
+                              {Number(row.seniorityDays) !== 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span style={{ color: '#6b7f78' }}>+ Thâm niên</span>
+                                  <span
+                                    className="font-semibold tabular-nums"
+                                    style={{ color: '#203430' }}
+                                  >
+                                    {Number(row.seniorityDays)}
+                                  </span>
+                                </div>
+                              )}
+                              {Number(row.compOffDays) !== 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span style={{ color: '#6b7f78' }}>+ Comp-Off</span>
+                                  <span
+                                    className="font-semibold tabular-nums"
+                                    style={{ color: '#203430' }}
+                                  >
+                                    {Number(row.compOffDays)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: '#6b7f78' }}>− Đã dùng phép</span>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#f59e0b' }}
+                                >
+                                  {Number(row.usedDays)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: '#6b7f78' }}>− Đã dùng Comp-Off</span>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#f59e0b' }}
+                                >
+                                  {Number(row.usedCompOffDays)}
+                                </span>
+                              </div>
+                              <div
+                                className="mt-1 flex items-center justify-between border-t pt-2 text-sm font-bold"
+                                style={{ borderColor: '#e2ede9' }}
+                              >
+                                <span style={{ color: '#203430' }}>=</span>
+                                <span
+                                  style={{
+                                    color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
+                                  }}
+                                >
+                                  {yearlyRemaining} ngày
+                                </span>
+                              </div>
+                            </div>
+                          </HoverCardContent>
+                        </HoverCard>
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center justify-center gap-1.5">

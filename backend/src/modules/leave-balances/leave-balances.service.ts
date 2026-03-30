@@ -178,7 +178,15 @@ export async function getAllBalances(year?: number) {
     where: { year: targetYear, user: { isCountable: true } },
     include: {
       leaveType: { select: { code: true, name: true, color: true } },
-      user: { select: { id: true, fullName: true, employeeCode: true, department: true } },
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          department: true,
+          companyJoinDate: true,
+        },
+      },
     },
     orderBy: [{ user: { fullName: 'asc' } }, { leaveType: { code: 'asc' } }],
   });
