@@ -170,7 +170,7 @@ const STATUS_CONFIG: Record<EmployeeStatus, { label: string; badge: string }> = 
     badge: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
   },
   inactive: {
-    label: 'Tạm nghỉ',
+    label: 'Đã nghỉ',
     badge: 'bg-gray-100 text-gray-600 border border-gray-200',
   },
 };
@@ -866,14 +866,14 @@ export default function EmployeesPage() {
                         onClick={!isReadOnly ? () => toggleSelect(employee.id) : undefined}
                       >
                         {!isReadOnly && (
-                        <td className="px-3 py-3 w-10">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleSelect(employee.id)}
-                            onClick={(event) => event.stopPropagation()}
-                            aria-label={`Chọn nhân viên ${employee.fullName}`}
-                          />
-                        </td>
+                          <td className="px-3 py-3 w-10">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => toggleSelect(employee.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label={`Chọn nhân viên ${employee.fullName}`}
+                            />
+                          </td>
                         )}
                         <td className="px-3 py-3">
                           {getAvatarUrl(employee.profileImageUrl) ? (
@@ -916,7 +916,9 @@ export default function EmployeesPage() {
                           {employee.phone || '—'}
                         </td>
                         <td className="px-3 py-3 min-w-[160px]">
-                          {!isReadOnly && editingCellId === employee.id && editingField === 'department' ? (
+                          {!isReadOnly &&
+                          editingCellId === employee.id &&
+                          editingField === 'department' ? (
                             <div onClick={(event) => event.stopPropagation()}>
                               <select
                                 autoFocus
@@ -942,12 +944,16 @@ export default function EmployeesPage() {
                             </div>
                           ) : (
                             <div
-                              onClick={!isReadOnly ? (event) => {
-                                event.stopPropagation();
-                                setEditingCellId(employee.id);
-                                setEditingField('department');
-                                setEditingValue(employee.department);
-                              } : undefined}
+                              onClick={
+                                !isReadOnly
+                                  ? (event) => {
+                                      event.stopPropagation();
+                                      setEditingCellId(employee.id);
+                                      setEditingField('department');
+                                      setEditingValue(employee.department);
+                                    }
+                                  : undefined
+                              }
                               className={`px-2 py-1 rounded inline-flex items-center gap-1${!isReadOnly ? ' cursor-pointer hover:bg-gray-100' : ''}`}
                               style={{ background: departmentColor.bg }}
                             >
@@ -957,12 +963,16 @@ export default function EmployeesPage() {
                               >
                                 {employee.department}
                               </span>
-                              {!isReadOnly && <Pencil size={10} style={{ color: departmentColor.color }} />}
+                              {!isReadOnly && (
+                                <Pencil size={10} style={{ color: departmentColor.color }} />
+                              )}
                             </div>
                           )}
                         </td>
                         <td className="px-3 py-3 min-w-[140px]">
-                          {!isReadOnly && editingCellId === employee.id && editingField === 'role' ? (
+                          {!isReadOnly &&
+                          editingCellId === employee.id &&
+                          editingField === 'role' ? (
                             <div onClick={(event) => event.stopPropagation()}>
                               <select
                                 autoFocus
@@ -984,12 +994,16 @@ export default function EmployeesPage() {
                             </div>
                           ) : (
                             <div
-                              onClick={!isReadOnly ? (event) => {
-                                event.stopPropagation();
-                                setEditingCellId(employee.id);
-                                setEditingField('role');
-                                setEditingValue(employee.role);
-                              } : undefined}
+                              onClick={
+                                !isReadOnly
+                                  ? (event) => {
+                                      event.stopPropagation();
+                                      setEditingCellId(employee.id);
+                                      setEditingField('role');
+                                      setEditingValue(employee.role);
+                                    }
+                                  : undefined
+                              }
                               className={`px-2 py-1 rounded text-xs inline-flex items-center gap-1${!isReadOnly ? ' cursor-pointer hover:bg-blue-50' : ''}`}
                               style={{ color: '#203430' }}
                             >
