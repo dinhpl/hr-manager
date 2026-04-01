@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Calendar, Clock, User, FileText, CheckCircle2, AlertCircle, Info, Pencil } from 'lucide-react';
-import { getApiBaseUrl } from '@/lib/api-client';
+import { getLeaveAttachmentUrl } from '@/lib/api-client';
 
 /** Normalized shape accepted by the modal — adapters in each page convert to this */
 export interface LeaveDetailData {
@@ -64,6 +64,7 @@ export default function LeaveDetailModal({ data, onClose, onEdit }: LeaveDetailM
   const typeColor = data.typeColor ?? TYPE_COLORS[data.typeCode] ?? '#6b7280';
   const isApproved = data.status === 'approved' || data.status === 'hr_confirm';
   const isRejected = data.status === 'rejected';
+  const attachmentHref = getLeaveAttachmentUrl(data.fileAttachment);
 
   return (
     <div
@@ -217,14 +218,14 @@ export default function LeaveDetailModal({ data, onClose, onEdit }: LeaveDetailM
           )}
 
           {/* File attachment */}
-          {data.fileAttachment && (
+          {data.fileAttachment && attachmentHref && (
             <div className="flex items-center gap-2">
               <FileText size={15} style={{ color: '#1DB87A' }} />
               <span className="text-sm" style={{ color: '#6b7f78' }}>
                 File đính kèm:
               </span>
               <a
-                href={`${getApiBaseUrl()}/uploads/leave-attachments/${data.fileAttachment}`}
+                href={attachmentHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm font-semibold hover:underline"

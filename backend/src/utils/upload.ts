@@ -28,8 +28,17 @@ const ALLOWED_FILE_EXTENSIONS = [
   '.heic',
 ];
 
+const leaveAttachmentDir = path.isAbsolute(env.UPLOAD_DIR)
+  ? env.UPLOAD_DIR
+  : path.join(process.cwd(), env.UPLOAD_DIR);
+
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, env.UPLOAD_DIR),
+  destination: (_req, _file, cb) => {
+    if (!fs.existsSync(leaveAttachmentDir)) {
+      fs.mkdirSync(leaveAttachmentDir, { recursive: true });
+    }
+    cb(null, leaveAttachmentDir);
+  },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname);
     const uniqueName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;

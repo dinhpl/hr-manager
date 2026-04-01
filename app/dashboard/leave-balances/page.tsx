@@ -78,32 +78,50 @@ interface LeaveBalanceHistoryItem {
   } | null;
 }
 
-const BALANCE_FORM_SECTIONS = [
-  {
-    title: 'Quỹ phép',
-    description: 'Các ngày được cấp hoặc cộng dồn.',
-    fields: [
-      { key: 'annualDays', label: 'Phép năm được hưởng', hint: 'annualDays' },
-      { key: 'carryOverDays', label: 'Phép năm chuyển sang', hint: 'carryOverDays' },
-      { key: 'seniorityDays', label: 'Thâm niên', hint: 'seniorityDays' },
-      { key: 'compOffDays', label: 'Số ngày được nghỉ bù do OT', hint: 'compOffDays' },
-      { key: 'wfhDays', label: 'WFH', hint: 'wfhDays' },
-    ],
-  },
-  {
-    title: 'Đã sử dụng',
-    description: 'Theo dõi phần đã trừ khỏi quỹ phép.',
-    fields: [
-      {
-        key: 'usedCarryOverDays',
-        label: 'Số phép năm trước đã nghỉ đến 31/03',
-        hint: 'usedCarryOverDays',
-      },
-      { key: 'usedDays', label: 'Số phép năm đã sử dụng', hint: 'usedDays' },
-      { key: 'usedCompOffDays', label: 'Đã dùng Comp-Off', hint: 'usedCompOffDays' },
-    ],
-  },
-] as const;
+function getBalanceFormSections(balanceYear: number) {
+  return [
+    {
+      title: 'Quỹ phép',
+      description: 'Các ngày được cấp hoặc cộng dồn.',
+      fields: [
+        {
+          key: 'annualDays',
+          label: `Phép năm ${balanceYear} được hưởng`,
+          hint: 'annualDays',
+        },
+        {
+          key: 'carryOverDays',
+          label: `Phép năm ${balanceYear - 1} chuyển sang`,
+          hint: 'carryOverDays',
+        },
+        { key: 'seniorityDays', label: 'Thâm niên', hint: 'seniorityDays' },
+        { key: 'compOffDays', label: 'Số ngày được nghỉ bù do OT', hint: 'compOffDays' },
+        { key: 'wfhDays', label: 'WFH', hint: 'wfhDays' },
+      ],
+    },
+    {
+      title: 'Đã sử dụng',
+      description: 'Theo dõi phần đã trừ khỏi quỹ phép.',
+      fields: [
+        {
+          key: 'usedCarryOverDays',
+          label: `Số phép năm ${balanceYear - 1} đã nghỉ đến 31/03/${balanceYear}`,
+          hint: 'usedCarryOverDays',
+        },
+        {
+          key: 'usedDays',
+          label: `Số phép năm ${balanceYear} đã sử dụng`,
+          hint: 'usedDays',
+        },
+        {
+          key: 'usedCompOffDays',
+          label: 'Số ngày nghỉ bù đã dùng',
+          hint: 'usedCompOffDays',
+        },
+      ],
+    },
+  ] as const;
+}
 
 function sanitizeBalanceInput(value: string) {
   const normalized = value
@@ -871,7 +889,7 @@ export default function LeaveBalancesPage() {
         {editingBalance && (
           <DialogContent
             showCloseButton={false}
-            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-3xl"
+            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-4xl"
           >
             <DialogHeader className="sr-only">
               <DialogTitle>Thông Tin phép năm</DialogTitle>
@@ -994,7 +1012,7 @@ export default function LeaveBalancesPage() {
               </div>
               <div className="overflow-y-auto px-6 py-5">
                 <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                  {BALANCE_FORM_SECTIONS.map((section) => (
+                  {getBalanceFormSections(editingBalance.year).map((section) => (
                     <div
                       key={section.title}
                       className="rounded-2xl border p-4"
@@ -1085,7 +1103,7 @@ export default function LeaveBalancesPage() {
         {historyBalance && (
           <DialogContent
             showCloseButton={false}
-            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-3xl"
+            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-4xl"
           >
             <DialogHeader className="sr-only">
               <DialogTitle>Lịch Sử phép năm</DialogTitle>

@@ -201,3 +201,11 @@ export const apiClient = {
 export function getApiBaseUrl() {
   return API_URL;
 }
+
+export function getLeaveAttachmentUrl(attachmentUrl?: string | null) {
+  if (!attachmentUrl) return null;
+  if (attachmentUrl.startsWith('http')) return attachmentUrl;
+  if (attachmentUrl.startsWith('/uploads/')) return `${API_URL}${attachmentUrl}`;
+
+  return `${API_URL}/uploads/leave-attachments/${attachmentUrl}`;
+}

@@ -19,7 +19,12 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { apiClient, getApiBaseUrl, getStoredUser, clearAuthSession } from '@/lib/api-client';
+import {
+  apiClient,
+  getLeaveAttachmentUrl,
+  getStoredUser,
+  clearAuthSession,
+} from '@/lib/api-client';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
 import { formatDateTimeVN, formatDateVN, numberValue, toFrontendRole } from '@/lib/hr-utils';
 import type { FrontendRole } from '@/lib/hr-utils';
@@ -413,12 +418,12 @@ export default function LeaveDetailPage() {
                 <span className="text-sm font-semibold" style={{ color: '#203430' }}>{data.handoverPerson.fullName}</span>
               </div>
             )}
-            {data.attachmentUrl && (
+            {data.attachmentUrl && getLeaveAttachmentUrl(data.attachmentUrl) && (
               <div className="flex items-center gap-2">
                 <FileText size={15} style={{ color: '#1DB87A' }} />
                 <span className="text-sm" style={{ color: '#6b7f78' }}>File đính kèm:</span>
                 <a
-                  href={`${getApiBaseUrl()}/uploads/leave-attachments/${data.attachmentUrl}`}
+                  href={getLeaveAttachmentUrl(data.attachmentUrl) || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm font-semibold hover:underline"

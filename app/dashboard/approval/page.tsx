@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
-import { apiClient, getApiBaseUrl } from '@/lib/api-client';
+import { apiClient, getLeaveAttachmentUrl } from '@/lib/api-client';
 import {
   buildQuery,
   formatDateTimeVN,
@@ -869,7 +869,12 @@ export default function ApprovalPage() {
                     </button>
                     {request.attachmentUrl && (
                       <button
-                        onClick={() => window.open(`${getApiBaseUrl()}/uploads/${request.attachmentUrl}`, '_blank', 'noopener,noreferrer')}
+                        onClick={() => {
+                          const attachmentHref = getLeaveAttachmentUrl(request.attachmentUrl);
+                          if (attachmentHref) {
+                            window.open(attachmentHref, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
                         className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border transition-colors hover:bg-emerald-50"
                         style={{ borderColor: '#e2ede9' }}
                         title="Tải file đính kèm"
