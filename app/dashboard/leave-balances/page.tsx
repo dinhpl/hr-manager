@@ -83,10 +83,10 @@ const BALANCE_FORM_SECTIONS = [
     title: 'Quỹ phép',
     description: 'Các ngày được cấp hoặc cộng dồn.',
     fields: [
-      { key: 'annualDays', label: 'Phép năm', hint: 'annualDays' },
-      { key: 'carryOverDays', label: 'Chuyển tiếp', hint: 'carryOverDays' },
+      { key: 'annualDays', label: 'Phép năm được hưởng', hint: 'annualDays' },
+      { key: 'carryOverDays', label: 'Phép năm chuyển sang', hint: 'carryOverDays' },
       { key: 'seniorityDays', label: 'Thâm niên', hint: 'seniorityDays' },
-      { key: 'compOffDays', label: 'Comp-Off tích lũy', hint: 'compOffDays' },
+      { key: 'compOffDays', label: 'Số ngày được nghỉ bù do OT', hint: 'compOffDays' },
       { key: 'wfhDays', label: 'WFH', hint: 'wfhDays' },
     ],
   },
@@ -94,8 +94,12 @@ const BALANCE_FORM_SECTIONS = [
     title: 'Đã sử dụng',
     description: 'Theo dõi phần đã trừ khỏi quỹ phép.',
     fields: [
-      { key: 'usedCarryOverDays', label: 'Đã dùng carry-over', hint: 'usedCarryOverDays' },
-      { key: 'usedDays', label: 'Đã dùng phép', hint: 'usedDays' },
+      {
+        key: 'usedCarryOverDays',
+        label: 'Số phép năm trước đã nghỉ đến 31/03',
+        hint: 'usedCarryOverDays',
+      },
+      { key: 'usedDays', label: 'Số phép năm đã sử dụng', hint: 'usedDays' },
       { key: 'usedCompOffDays', label: 'Đã dùng Comp-Off', hint: 'usedCompOffDays' },
     ],
   },
@@ -122,6 +126,11 @@ function sanitizeBalanceInput(value: string) {
 
 function roundBalanceDisplay(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function getMonthsNotWorkedInYear() {
+  const currentMonth = new Date().getMonth() + 1;
+  return Math.max(12 - currentMonth, 0);
 }
 
 function getStatusBadge(status?: string | null) {
@@ -529,20 +538,20 @@ export default function LeaveBalancesPage() {
             <thead className="sticky top-0 z-10">
               <tr style={{ background: '#203430' }}>
                 {[
-                  'Nhân viên',
                   'MãNV',
+                  'Nhân viên',
                   'Phòng ban',
                   'Ngày gia nhập',
-                  `Phép năm ${balanceYear}`,
+                  `Phép năm ${balanceYear} được hưởng`,
                   'Thâm niên',
-                  `Phép ${balanceYear - 1}\nChưa Sử Dụng`,
-                  'Comp-Off',
+                  `Phép năm ${balanceYear - 1}\nchuyển sang`,
+                  `Số phép năm ${balanceYear - 1}\nđã nghỉ đến 31/03/${balanceYear}`,
+                  `Số phép năm ${balanceYear - 1}\ncòn lại đến 31/03/${balanceYear}`,
+                  'Số ngày được nghỉ bù do OT',
                   'WFH',
-                  `Đã dùng phép ${balanceYear - 1}`,
-                  'Đã dùng phép',
-                  'Đã dùng Comp-Off',
-                  'Số ngày nghỉ còn lại tính ĐẾN tháng hiện tại',
-                  'Số ngày nghỉ còn lại TẠM tính trong năm',
+                  `Số phép năm ${balanceYear} đã sử dụng`,
+                  'Số tháng chưa làm việc',
+                  'Số phép còn lại được dùng ngay',
                   'Action',
                 ].map((h) => (
                   <th
@@ -579,6 +588,7 @@ export default function LeaveBalancesPage() {
                 filteredLeaveBalances.map((row) => {
                   const isSelf = String(row.user.id) === String(currentUser?.id);
                   const today = new Date();
+                  const monthsNotWorked = getMonthsNotWorkedInYear();
                   const isCurrentBalanceYear = balanceYear === today.getFullYear();
                   const currentMonth = today.getMonth() + 1;
                   const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
@@ -592,6 +602,9 @@ export default function LeaveBalancesPage() {
                     today < resetDate
                       ? Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0)
                       : 0;
+                  const remainingCarryOverByDeadline = roundBalanceDisplay(
+                    Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0),
+                  );
                   // Còn lại TẠM tính cả năm: phép năm + thâm niên + comp-off (không gộp carry-over hết hạn Q1, không gộp WFH)
                   const yearlyRemaining = roundBalanceDisplay(
                     Number(row.annualDays) +
@@ -620,6 +633,9 @@ export default function LeaveBalancesPage() {
                         canManageLeaveBalances ? openInfoDialog(row) : openHistoryDialog(row)
                       }
                     >
+                      <td className="px-3 py-2.5 text-xs" style={{ color: '#6b7f78' }}>
+                        {row.user.employeeCode || '—'}
+                      </td>
                       <td
                         className="px-3 py-2.5 font-semibold whitespace-nowrap"
                         style={{ color: '#203430' }}
@@ -627,13 +643,10 @@ export default function LeaveBalancesPage() {
                         {row.user.fullName}
                       </td>
                       <td className="px-3 py-2.5 text-xs" style={{ color: '#6b7f78' }}>
-                        {row.user.employeeCode || '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-xs" style={{ color: '#6b7f78' }}>
                         {row.user.department || '—'}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-xs whitespace-nowrap"
+                        className="px-3 py-2.5 text-xs whitespace-nowrap tabular-nums"
                         style={{ color: '#6b7f78' }}
                       >
                         {formatDate(row.user.companyJoinDate)}
@@ -657,6 +670,22 @@ export default function LeaveBalancesPage() {
                         {Number(row.carryOverDays)}
                       </td>
                       <td
+                        className="px-3 py-2.5 text-center"
+                        style={{
+                          color: Number(row.usedCarryOverDays ?? 0) < 0 ? '#ef4444' : '#f59e0b',
+                        }}
+                      >
+                        {Number(row.usedCarryOverDays ?? 0)}
+                      </td>
+                      <td
+                        className="px-3 py-2.5 text-center font-semibold"
+                        style={{
+                          color: remainingCarryOverByDeadline < 0 ? '#ef4444' : '#203430',
+                        }}
+                      >
+                        {remainingCarryOverByDeadline}
+                      </td>
+                      <td
                         className="px-3 py-2.5 text-center font-semibold"
                         style={{ color: Number(row.compOffDays) < 0 ? '#ef4444' : '#203430' }}
                       >
@@ -670,23 +699,15 @@ export default function LeaveBalancesPage() {
                       </td>
                       <td
                         className="px-3 py-2.5 text-center"
-                        style={{
-                          color: Number(row.usedCarryOverDays ?? 0) < 0 ? '#ef4444' : '#f59e0b',
-                        }}
-                      >
-                        {Number(row.usedCarryOverDays ?? 0)}
-                      </td>
-                      <td
-                        className="px-3 py-2.5 text-center"
                         style={{ color: Number(row.usedDays) < 0 ? '#ef4444' : '#f59e0b' }}
                       >
                         {Number(row.usedDays)}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-center"
-                        style={{ color: Number(row.usedCompOffDays) < 0 ? '#ef4444' : '#f59e0b' }}
+                        className="px-3 py-2.5 text-center font-semibold"
+                        style={{ color: monthsNotWorked > 0 ? '#203430' : '#6b7f78' }}
                       >
-                        {Number(row.usedCompOffDays)}
+                        {monthsNotWorked}
                       </td>
                       <td
                         className="px-3 py-2.5 text-center font-bold"
@@ -734,7 +755,8 @@ export default function LeaveBalancesPage() {
                             <div className="px-4 py-3 space-y-1.5 text-xs">
                               <div className="flex justify-between items-center">
                                 <span style={{ color: '#6b7f78' }}>
-                                  Phép năm {balanceYear} ({new Date().getMonth() + 1}/12 tháng)
+                                  Phép năm {balanceYear} được hưởng ({new Date().getMonth() + 1}/12
+                                  tháng)
                                 </span>
                                 <span
                                   className="font-semibold tabular-nums"
@@ -757,8 +779,8 @@ export default function LeaveBalancesPage() {
                               <div className="flex justify-between items-center">
                                 <span style={{ color: '#6b7f78' }}>
                                   {today < resetDate
-                                    ? `+ Phép ${balanceYear - 1} chưa sử dụng (còn lại)`
-                                    : `± Phép ${balanceYear - 1} chưa sử dụng (đã hết hạn)`}
+                                    ? `+ Phép năm ${balanceYear - 1} chuyển sang (còn lại)`
+                                    : `± Phép năm ${balanceYear - 1} chuyển sang (đã hết hạn)`}
                                 </span>
                                 <span
                                   className="font-semibold tabular-nums"
@@ -775,7 +797,9 @@ export default function LeaveBalancesPage() {
                                 </span>
                               </div>
                               <div className="flex justify-between items-center">
-                                <span style={{ color: '#6b7f78' }}>− Đã dùng phép</span>
+                                <span style={{ color: '#6b7f78' }}>
+                                  − Số phép năm {balanceYear} đã sử dụng
+                                </span>
                                 <span
                                   className="font-semibold tabular-nums"
                                   style={{ color: '#f59e0b' }}
@@ -794,113 +818,6 @@ export default function LeaveBalancesPage() {
                                   }}
                                 >
                                   {currentMonthRemaining} ngày
-                                </span>
-                              </div>
-                            </div>
-                          </HoverCardContent>
-                        </HoverCard>
-                      </td>
-                      <td
-                        className="px-3 py-2.5 text-center font-bold"
-                        style={{
-                          color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
-                        }}
-                      >
-                        <HoverCard openDelay={100} closeDelay={100}>
-                          <HoverCardTrigger asChild>
-                            <span className="inline-flex cursor-help items-center justify-center gap-1">
-                              <span>{yearlyRemaining}</span>
-                              <span
-                                className="inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-bold leading-none"
-                                style={{
-                                  borderColor:
-                                    yearlyRemaining < 0 ? '#ef4444' : 'rgba(29, 184, 122, 0.35)',
-                                  color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
-                                  background:
-                                    yearlyRemaining < 0
-                                      ? 'rgba(239, 68, 68, 0.08)'
-                                      : 'rgba(29, 184, 122, 0.1)',
-                                }}
-                              >
-                                !
-                              </span>
-                            </span>
-                          </HoverCardTrigger>
-                          <HoverCardContent
-                            className="w-72 overflow-hidden p-0"
-                            style={{ borderColor: '#e2ede9' }}
-                          >
-                            <div
-                              className="border-b px-4 py-3 text-xs font-bold"
-                              style={{
-                                borderColor: '#e2ede9',
-                                color: '#203430',
-                                background: '#f8fdfb',
-                              }}
-                            >
-                              Cách tính — TẠM tính cả năm {balanceYear}
-                            </div>
-                            <div className="space-y-1.5 px-4 py-3 text-xs">
-                              <div className="flex items-center justify-between">
-                                <span style={{ color: '#6b7f78' }}>Phép năm {balanceYear}</span>
-                                <span
-                                  className="font-semibold tabular-nums"
-                                  style={{ color: '#203430' }}
-                                >
-                                  {Number(row.annualDays)}
-                                </span>
-                              </div>
-                              {Number(row.seniorityDays) !== 0 && (
-                                <div className="flex items-center justify-between">
-                                  <span style={{ color: '#6b7f78' }}>+ Thâm niên</span>
-                                  <span
-                                    className="font-semibold tabular-nums"
-                                    style={{ color: '#203430' }}
-                                  >
-                                    {Number(row.seniorityDays)}
-                                  </span>
-                                </div>
-                              )}
-                              {Number(row.compOffDays) !== 0 && (
-                                <div className="flex items-center justify-between">
-                                  <span style={{ color: '#6b7f78' }}>+ Comp-Off</span>
-                                  <span
-                                    className="font-semibold tabular-nums"
-                                    style={{ color: '#203430' }}
-                                  >
-                                    {Number(row.compOffDays)}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span style={{ color: '#6b7f78' }}>− Đã dùng phép</span>
-                                <span
-                                  className="font-semibold tabular-nums"
-                                  style={{ color: '#f59e0b' }}
-                                >
-                                  {Number(row.usedDays)}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span style={{ color: '#6b7f78' }}>− Đã dùng Comp-Off</span>
-                                <span
-                                  className="font-semibold tabular-nums"
-                                  style={{ color: '#f59e0b' }}
-                                >
-                                  {Number(row.usedCompOffDays)}
-                                </span>
-                              </div>
-                              <div
-                                className="mt-1 flex items-center justify-between border-t pt-2 text-sm font-bold"
-                                style={{ borderColor: '#e2ede9' }}
-                              >
-                                <span style={{ color: '#203430' }}>=</span>
-                                <span
-                                  style={{
-                                    color: yearlyRemaining < 0 ? '#ef4444' : '#1DB87A',
-                                  }}
-                                >
-                                  {yearlyRemaining} ngày
                                 </span>
                               </div>
                             </div>
@@ -1037,7 +954,7 @@ export default function LeaveBalancesPage() {
                               className="text-xs font-semibold uppercase tracking-[0.12em]"
                               style={{ color: '#1d4ed8' }}
                             >
-                              Số ngày nghỉ còn lại tính ĐẾN tháng hiện tại
+                              Số phép còn lại được dùng ngay
                             </p>
                             <p className="mt-1 text-lg font-bold" style={{ color: '#1e3a8a' }}>
                               {currentMonthRemaining.toFixed(1)}

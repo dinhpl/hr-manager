@@ -912,7 +912,10 @@ export default function EmployeesPage() {
                         <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
                           {employee.email}
                         </td>
-                        <td className="px-3 py-3 text-xs" style={{ color: '#6b7f78' }}>
+                        <td
+                          className="px-3 py-3 text-xs whitespace-nowrap tabular-nums"
+                          style={{ color: '#6b7f78' }}
+                        >
                           {employee.phone || '—'}
                         </td>
                         <td className="px-3 py-3 min-w-[160px]">
@@ -1013,7 +1016,7 @@ export default function EmployeesPage() {
                           )}
                         </td>
                         <td
-                          className="px-3 py-3 text-xs whitespace-nowrap"
+                          className="px-3 py-3 text-xs whitespace-nowrap tabular-nums"
                           style={{ color: '#6b7f78' }}
                         >
                           {formatDate(employee.companyJoinDate)}
@@ -1022,7 +1025,16 @@ export default function EmployeesPage() {
                           className="px-3 py-3 text-xs whitespace-nowrap"
                           style={{ color: employee.birthday ? '#db2777' : '#9ca3af' }}
                         >
-                          {employee.birthday ? `🎂 ${formatDate(employee.birthday)}` : '—'}
+                          {employee.birthday ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span aria-hidden="true">🎂</span>
+                              <span className="tabular-nums">
+                                {formatDate(employee.birthday)}
+                              </span>
+                            </span>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td className="px-3 py-3">
                           <span
