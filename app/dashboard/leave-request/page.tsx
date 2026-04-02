@@ -162,32 +162,28 @@ export default function LeaveRequestPage() {
   };
 
   const days = calcDays();
+  const monthsNotWorked = 12 - (new Date().getMonth() + 1);
   const selectedLeaveType = leaveTypes.find((item) => item.code === leaveType);
   const isSelectedTypeBalanceExempt = selectedLeaveType?.code === 'WFH';
   const annualBalance = balances.find((item) => item.leaveType.code === 'AL');
   const compOffBalance = balances.find((item) => item.leaveType.code === 'CO');
+  const annualDaysWithSeniority =
+    numberValue(annualBalance?.annualDays) + numberValue(annualBalance?.seniorityDays);
   const leaveBalanceSummary = {
-    granted:
-      numberValue(annualBalance?.annualDays) +
-      numberValue(annualBalance?.carryOverDays) +
-      numberValue(annualBalance?.seniorityDays),
+    granted: annualDaysWithSeniority,
     used: numberValue(annualBalance?.usedDays),
-    remaining:
-      numberValue(annualBalance?.annualDays) +
-      numberValue(annualBalance?.carryOverDays) +
-      numberValue(annualBalance?.seniorityDays) -
-      numberValue(annualBalance?.usedDays),
-    compOffHours:
-      (numberValue(compOffBalance?.compOffDays) - numberValue(compOffBalance?.usedCompOffDays)) * 8,
+    monthsNotWorked,
+    availableNow: annualDaysWithSeniority - numberValue(annualBalance?.usedDays) - monthsNotWorked,
+    compOff: numberValue(compOffBalance?.compOffDays),
   };
 
   const checkBalance = () => {
     if (!selectedLeaveType || days === 0) return null;
-    if (selectedLeaveType.code === 'AL' && days > leaveBalanceSummary.remaining) {
-      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.remaining} ngày phép năm. Yêu cầu ${days} ngày sẽ vượt quá số phép hiện có.`;
+    if (selectedLeaveType.code === 'AL' && days > leaveBalanceSummary.availableNow) {
+      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.availableNow} ngày được dùng ngay. Yêu cầu ${days} ngày sẽ vượt quá số phép hiện có.`;
     }
-    if (selectedLeaveType.code === 'CO' && days * 8 > leaveBalanceSummary.compOffHours) {
-      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.compOffHours} giờ comp-off. Yêu cầu ${days * 8} giờ sẽ vượt quá.`;
+    if (selectedLeaveType.code === 'CO' && days > leaveBalanceSummary.compOff) {
+      return `Cảnh báo: Bạn chỉ còn ${leaveBalanceSummary.compOff} ngày nghỉ bù OT. Yêu cầu ${days} ngày sẽ vượt quá.`;
     }
     return null;
   };
@@ -378,12 +374,13 @@ export default function LeaveRequestPage() {
             Các số liệu bên dưới là quỹ phép năm hiện tại để tham khảo.
           </p>
         ) : null}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           {[
-            { label: 'Phép năm được cấp', value: leaveBalanceSummary.granted },
+            { label: 'Phép năm được hưởng', value: leaveBalanceSummary.granted },
             { label: 'Đã sử dụng', value: leaveBalanceSummary.used },
-            { label: 'Còn lại', value: leaveBalanceSummary.remaining },
-            { label: 'Comp-off (giờ)', value: leaveBalanceSummary.compOffHours },
+            { label: 'Số tháng chưa làm việc', value: leaveBalanceSummary.monthsNotWorked },
+            { label: 'Được dùng ngay', value: leaveBalanceSummary.availableNow },
+            { label: 'Nghỉ bù OT', value: leaveBalanceSummary.compOff },
           ].map((item) => (
             <div key={item.label} className="text-center">
               <p className="text-2xl font-bold" style={{ color: '#1DB87A' }}>
