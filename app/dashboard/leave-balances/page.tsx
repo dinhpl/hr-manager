@@ -559,7 +559,7 @@ export default function LeaveBalancesPage() {
                   'MãNV',
                   'Nhân viên',
                   'Phòng ban',
-                  'Ngày gia nhập',
+                  'Ngày chính thức',
                   `Phép năm ${balanceYear} được hưởng`,
                   'Thâm niên',
                   `Phép năm ${balanceYear - 1}\nchuyển sang`,
@@ -605,21 +605,7 @@ export default function LeaveBalancesPage() {
               ) : (
                 filteredLeaveBalances.map((row) => {
                   const isSelf = String(row.user.id) === String(currentUser?.id);
-                  const today = new Date();
                   const monthsNotWorked = getMonthsNotWorkedInYear();
-                  const isCurrentBalanceYear = balanceYear === today.getFullYear();
-                  const currentMonth = today.getMonth() + 1;
-                  const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
-                  const resetDate = new Date(
-                    today.getFullYear(),
-                    (resetMM || 3) - 1,
-                    resetDD || 31,
-                  );
-                  // carry-over còn hiệu lực: dùng raw (không clamp 0) để giữ giá trị âm
-                  const effectiveCarryOver =
-                    today < resetDate
-                      ? Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0)
-                      : 0;
                   const remainingCarryOverByDeadline = roundBalanceDisplay(
                     Number(row.carryOverDays) - Number(row.usedCarryOverDays ?? 0),
                   );
@@ -631,15 +617,12 @@ export default function LeaveBalancesPage() {
                       Number(row.usedDays) -
                       Number(row.usedCompOffDays),
                   );
-                  const currentMonthAccruedAnnualDays = isCurrentBalanceYear
-                    ? roundBalanceDisplay((Number(row.annualDays) / 12) * currentMonth)
-                    : Number(row.annualDays);
-                  // Còn lại ĐẾN tháng hiện tại: phép tích lũy + thâm niên + carry-over hiệu lực - đã dùng phép
+                  const annualDaysWithSeniority = roundBalanceDisplay(
+                    Number(row.annualDays) + Number(row.seniorityDays),
+                  );
+                  // Còn lại được dùng ngay: phép năm được hưởng - đã sử dụng - số tháng chưa làm việc
                   const currentMonthRemaining = roundBalanceDisplay(
-                    currentMonthAccruedAnnualDays +
-                      Number(row.seniorityDays) +
-                      effectiveCarryOver -
-                      Number(row.usedDays),
+                    annualDaysWithSeniority - Number(row.usedDays) - monthsNotWorked,
                   );
 
                   return (
@@ -671,9 +654,9 @@ export default function LeaveBalancesPage() {
                       </td>
                       <td
                         className="px-3 py-2.5 text-center font-semibold"
-                        style={{ color: Number(row.annualDays) < 0 ? '#ef4444' : '#203430' }}
+                        style={{ color: annualDaysWithSeniority < 0 ? '#ef4444' : '#203430' }}
                       >
-                        {Number(row.annualDays)}
+                        {annualDaysWithSeniority}
                       </td>
                       <td
                         className="px-3 py-2.5 text-center font-semibold"
@@ -773,45 +756,13 @@ export default function LeaveBalancesPage() {
                             <div className="px-4 py-3 space-y-1.5 text-xs">
                               <div className="flex justify-between items-center">
                                 <span style={{ color: '#6b7f78' }}>
-                                  Phép năm {balanceYear} được hưởng ({new Date().getMonth() + 1}/12
-                                  tháng)
+                                  Phép năm {balanceYear} được hưởng
                                 </span>
                                 <span
                                   className="font-semibold tabular-nums"
                                   style={{ color: '#203430' }}
                                 >
-                                  {currentMonthAccruedAnnualDays}
-                                </span>
-                              </div>
-                              {Number(row.seniorityDays) !== 0 && (
-                                <div className="flex justify-between items-center">
-                                  <span style={{ color: '#6b7f78' }}>+ Thâm niên</span>
-                                  <span
-                                    className="font-semibold tabular-nums"
-                                    style={{ color: '#203430' }}
-                                  >
-                                    {Number(row.seniorityDays)}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="flex justify-between items-center">
-                                <span style={{ color: '#6b7f78' }}>
-                                  {today < resetDate
-                                    ? `+ Phép năm ${balanceYear - 1} chuyển sang (còn lại)`
-                                    : `± Phép năm ${balanceYear - 1} chuyển sang (đã hết hạn)`}
-                                </span>
-                                <span
-                                  className="font-semibold tabular-nums"
-                                  style={{
-                                    color:
-                                      today < resetDate
-                                        ? effectiveCarryOver < 0
-                                          ? '#ef4444'
-                                          : '#203430'
-                                        : '#9ca3af',
-                                  }}
-                                >
-                                  {today < resetDate ? effectiveCarryOver : 0}
+                                  {annualDaysWithSeniority}
                                 </span>
                               </div>
                               <div className="flex justify-between items-center">
@@ -823,6 +774,15 @@ export default function LeaveBalancesPage() {
                                   style={{ color: '#f59e0b' }}
                                 >
                                   {Number(row.usedDays)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span style={{ color: '#6b7f78' }}>− Số tháng chưa làm việc</span>
+                                <span
+                                  className="font-semibold tabular-nums"
+                                  style={{ color: '#203430' }}
+                                >
+                                  {monthsNotWorked}
                                 </span>
                               </div>
                               <div
@@ -906,36 +866,21 @@ export default function LeaveBalancesPage() {
                 <div className="space-y-3">
                   <div>
                     {(() => {
-                      const today = new Date();
-                      const isCurrentBalanceYear = editingBalance.year === today.getFullYear();
-                      const currentMonth = today.getMonth() + 1;
-                      const [resetMM, resetDD] = resetCarryOverDate.split('-').map(Number);
-                      const resetDate = new Date(
-                        today.getFullYear(),
-                        (resetMM || 3) - 1,
-                        resetDD || 31,
-                      );
                       const carryOverDays = parseFloat(balanceForm.carryOverDays) || 0;
                       const usedCarryOverDays = parseFloat(balanceForm.usedCarryOverDays) || 0;
-                      const effectiveCarryOver =
-                        today < resetDate ? carryOverDays - usedCarryOverDays : 0;
                       const annualDays = parseFloat(balanceForm.annualDays) || 0;
                       const seniorityDays = parseFloat(balanceForm.seniorityDays) || 0;
                       const compOffDays = parseFloat(balanceForm.compOffDays) || 0;
                       const wfhDays = parseFloat(balanceForm.wfhDays) || 0;
                       const usedDays = parseFloat(balanceForm.usedDays) || 0;
                       const usedCompOffDays = parseFloat(balanceForm.usedCompOffDays) || 0;
+                      const monthsNotWorked = getMonthsNotWorkedInYear();
+                      const annualDaysWithSeniority = annualDays + seniorityDays;
                       const totalAllocated =
                         annualDays + carryOverDays + seniorityDays + compOffDays + wfhDays;
                       const totalUsed = usedCarryOverDays + usedDays + usedCompOffDays;
-                      const currentMonthAccruedAnnualDays = isCurrentBalanceYear
-                        ? roundBalanceDisplay((annualDays / 12) * currentMonth)
-                        : annualDays;
                       const currentMonthRemaining = roundBalanceDisplay(
-                        currentMonthAccruedAnnualDays +
-                          seniorityDays +
-                          effectiveCarryOver -
-                          usedDays,
+                        annualDaysWithSeniority - usedDays - monthsNotWorked,
                       );
                       const yearlyRemaining = roundBalanceDisplay(
                         annualDays + seniorityDays + compOffDays - usedDays - usedCompOffDays,

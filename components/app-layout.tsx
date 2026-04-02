@@ -148,6 +148,7 @@ interface UserInfo {
   department?: string | null;
   position?: string | null;
   avatar?: string | null;
+  preJoinDate?: string | null;
   companyJoinDate?: string | null;
 }
 
@@ -363,25 +364,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </nav>
 
-        {/* User join date */}
-        {userInfo?.companyJoinDate && (
+        {/* User company dates */}
+        {(userInfo?.preJoinDate || userInfo?.companyJoinDate) && (
           <div
             className="px-4 py-3 mx-3 mb-1 rounded-lg"
             style={{ background: '#f0f9f5', border: '1px solid #D3F2E7' }}
           >
-            <p
-              className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
-              style={{ color: '#6b7f78' }}
-            >
-              Ngày gia nhập (Chính thức)
-            </p>
-            <p className="text-sm font-semibold" style={{ color: '#0E474E' }}>
-              {new Date(userInfo.companyJoinDate).toLocaleDateString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })}
-            </p>
+            {userInfo.preJoinDate ? (
+              <div>
+                <p
+                  className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
+                  style={{ color: '#6b7f78' }}
+                >
+                  Ngày gia nhập
+                </p>
+                <p className="text-sm font-semibold" style={{ color: '#0E474E' }}>
+                  {new Date(userInfo.preJoinDate).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })}
+                </p>
+              </div>
+            ) : null}
+            {userInfo.companyJoinDate ? (
+              <div className={userInfo.preJoinDate ? 'mt-2' : ''}>
+                <p
+                  className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
+                  style={{ color: '#6b7f78' }}
+                >
+                  Ngày chính thức
+                </p>
+                <p className="text-sm font-semibold" style={{ color: '#0E474E' }}>
+                  {new Date(userInfo.companyJoinDate).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  })}
+                </p>
+              </div>
+            ) : null}
           </div>
         )}
 

@@ -33,6 +33,7 @@ interface UserProfile {
   department?: string;
   position?: string;
   avatar?: string;
+  preJoinDate?: string;
   companyJoinDate?: string;
   birthday?: string;
   hideBirthday?: boolean;
@@ -443,10 +444,20 @@ export default function ProfilePage() {
                   {user.phone}
                 </span>
               )}
+              {user?.preJoinDate && (
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays size={14} className="shrink-0" />
+                  Gia nhập{' '}
+                  {new Date(user.preJoinDate).toLocaleDateString('vi-VN', {
+                    month: 'long',
+                    year: 'numeric',
+                  })}
+                </span>
+              )}
               {user?.companyJoinDate && (
                 <span className="flex items-center gap-1.5">
                   <CalendarDays size={14} className="shrink-0" />
-                  Vào công ty{' '}
+                  Chính thức{' '}
                   {new Date(user.companyJoinDate).toLocaleDateString('vi-VN', {
                     month: 'long',
                     year: 'numeric',
@@ -733,7 +744,15 @@ export default function ProfilePage() {
                   value={user?.birthday ? new Date(user.birthday).toLocaleDateString('vi-VN') : ''}
                 />
                 <InfoField
-                  label="Ngày vào công ty"
+                  label="Ngày gia nhập"
+                  value={
+                    user?.preJoinDate
+                      ? new Date(user.preJoinDate).toLocaleDateString('vi-VN')
+                      : ''
+                  }
+                />
+                <InfoField
+                  label="Ngày chính thức"
                   value={
                     user?.companyJoinDate
                       ? new Date(user.companyJoinDate).toLocaleDateString('vi-VN')

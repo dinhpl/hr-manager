@@ -42,6 +42,8 @@ export async function login(username: string, password: string, rememberMe = fal
       department: user.department,
       position: user.position,
       avatar: user.avatar,
+      preJoinDate: user.preJoinDate,
+      companyJoinDate: user.companyJoinDate,
     },
   };
 }
@@ -76,6 +78,7 @@ export async function getMe(userId: bigint) {
       department: true,
       position: true,
       avatar: true,
+      preJoinDate: true,
       companyJoinDate: true,
       birthday: true,
       hideBirthday: true,
@@ -111,6 +114,7 @@ export async function updateProfile(userId: bigint, data: UpdateProfileDto) {
       department: true,
       position: true,
       avatar: true,
+      preJoinDate: true,
       companyJoinDate: true,
       birthday: true,
       hideBirthday: true,
@@ -164,6 +168,7 @@ export async function uploadAvatar(userId: bigint, filename: string) {
       department: true,
       position: true,
       avatar: true,
+      preJoinDate: true,
       companyJoinDate: true,
       birthday: true,
       hideBirthday: true,

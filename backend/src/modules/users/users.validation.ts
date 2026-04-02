@@ -35,6 +35,7 @@ export const createUserSchema = z.object({
   managerId: z.coerce.bigint().optional(),
   isCountable: z.boolean().optional(),
   isAttendance: z.boolean().optional(),
+  preJoinDate: z.string().datetime().optional(),
   companyJoinDate: z.string().datetime().optional(),
   birthday: z.string().optional(),
   gender: z.enum(['male', 'female', 'other']).optional(),
@@ -57,6 +58,9 @@ export const updateUserSchema = z.object({
   managerId: z.union([z.coerce.bigint(), z.null()]).optional(),
   isCountable: z.boolean().optional(),
   isAttendance: z.boolean().optional(),
+  preJoinDate: nullableDateTimeSchema
+    .optional()
+    .transform((value) => (value === '' ? null : value)),
   companyJoinDate: nullableDateTimeSchema
     .optional()
     .transform((value) => (value === '' ? null : value)),

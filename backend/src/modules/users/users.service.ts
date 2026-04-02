@@ -27,6 +27,7 @@ const USER_SELECT = {
   teamId: true,
   isCountable: true,
   isAttendance: true,
+  preJoinDate: true,
   companyJoinDate: true,
   birthday: true,
   gender: true,
@@ -115,6 +116,7 @@ export async function createUser(data: CreateUserDto) {
   const {
     password,
     managerId,
+    preJoinDate,
     companyJoinDate,
     birthday,
     email,
@@ -157,6 +159,7 @@ export async function createUser(data: CreateUserDto) {
       ...(isCountable !== undefined && { isCountable }),
       ...(isAttendance !== undefined && { isAttendance }),
       ...(managerId && { manager: { connect: { id: managerId } } }),
+      ...(preJoinDate && { preJoinDate: new Date(preJoinDate) }),
       ...(companyJoinDate && { companyJoinDate: new Date(companyJoinDate) }),
       ...(birthday && { birthday: new Date(birthday) }),
       ...(gender && { gender }),
@@ -174,7 +177,7 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
   const exists = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!exists) throw Object.assign(new Error('User not found'), { status: 404 });
 
-  const { password, companyJoinDate, birthday, managerId, ...rest } = data;
+  const { password, preJoinDate, companyJoinDate, birthday, managerId, ...rest } = data;
 
   if (managerId === id) {
     throw Object.assign(new Error('User cannot be their own manager'), { status: 400 });
@@ -231,6 +234,9 @@ export async function updateUser(id: bigint, data: UpdateUserDto) {
       ...(hashedPassword && { password: hashedPassword }),
       ...(managerId !== undefined && {
         manager: managerId === null ? { disconnect: true } : { connect: { id: managerId } },
+      }),
+      ...(preJoinDate !== undefined && {
+        preJoinDate: preJoinDate ? new Date(preJoinDate) : null,
       }),
       ...(companyJoinDate !== undefined && {
         companyJoinDate: companyJoinDate ? new Date(companyJoinDate) : null,
@@ -358,6 +364,7 @@ type UserImportRow = {
   phone?: string;
   department?: string;
   position?: string;
+  pre_join_date?: string | Date;
   company_join_date?: string | Date;
   manager_username?: string;
   is_countable?: string | boolean;
@@ -382,9 +389,20 @@ const USER_COLUMNS: UserColumnDefinition[] = [
   { key: 'department', label: 'Phòng ban', aliases: ['department'] },
   { key: 'position', label: 'Chức vụ', aliases: ['position'] },
   {
+    key: 'pre_join_date',
+    label: 'Ngày gia nhập',
+    aliases: ['pre_join_date', 'pre join date', 'ngay gia nhap', 'ngày gia nhập'],
+  },
+  {
     key: 'company_join_date',
-    label: 'Ngày vào công ty',
-    aliases: ['company_join_date', 'company join date', 'join date'],
+    label: 'Ngày chính thức',
+    aliases: [
+      'company_join_date',
+      'company join date',
+      'join date',
+      'ngay chinh thuc',
+      'ngày chính thức',
+    ],
   },
   {
     key: 'manager_username',
@@ -449,6 +467,7 @@ export async function exportUsersExcel(): Promise<Buffer> {
       department: true,
       position: true,
       isCountable: true,
+      preJoinDate: true,
       companyJoinDate: true,
       manager: { select: { username: true } },
       isActive: true,
@@ -471,7 +490,8 @@ export async function exportUsersExcel(): Promise<Buffer> {
     'Số điện thoại': u.phone ?? '',
     'Phòng ban': u.department ?? '',
     'Chức vụ': u.position ?? '',
-    'Ngày vào công ty': u.companyJoinDate ? formatDDMMYYYY(u.companyJoinDate) : '',
+    'Ngày gia nhập': u.preJoinDate ? formatDDMMYYYY(u.preJoinDate) : '',
+    'Ngày chính thức': u.companyJoinDate ? formatDDMMYYYY(u.companyJoinDate) : '',
     'Tên đăng nhập quản lý': u.manager?.username ?? '',
     'Tính công': u.isCountable,
     'Đang hoạt động': u.isActive,
@@ -535,6 +555,7 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
           : row.is_active === true || String(row.is_active).trim().toLowerCase() === 'true';
 
       // Parse dates
+      const preJoinDate = row.pre_join_date ? parseDDMMYYYY(String(row.pre_join_date)) : null;
       const companyJoinDate = row.company_join_date
         ? parseDDMMYYYY(String(row.company_join_date))
         : null;
@@ -556,6 +577,7 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
         position: row.position ? String(row.position) : null,
         isCountable,
         isActive,
+        preJoinDate,
         companyJoinDate,
         birthday,
         gender,
@@ -596,6 +618,7 @@ export async function importUsersExcel(fileBuffer: Buffer): Promise<{
             position: payload.position ?? undefined,
             isCountable: payload.isCountable,
             isActive: payload.isActive,
+            preJoinDate: payload.preJoinDate ?? undefined,
             companyJoinDate: payload.companyJoinDate ?? undefined,
             birthday: payload.birthday ?? undefined,
             gender: payload.gender ?? undefined,

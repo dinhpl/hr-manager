@@ -27,6 +27,7 @@ CREATE TABLE users (
     profile_image_url TEXT,
     team_id INTEGER,
     is_countable BOOLEAN NOT NULL DEFAULT TRUE,
+    pre_join_date TIMESTAMP,
     company_join_date TIMESTAMP,
     manager_id BIGINT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -141,7 +142,7 @@ CREATE INDEX idx_leave_balances_leave_type_id ON leave_balances(leave_type_id);
 INSERT INTO users (
     id, email, username, password, full_name, first_name, last_name, role,
     system_role, source_role, role_id, department, position, avatar,
-    profile_image_url, team_id, is_countable, company_join_date, manager_id,
+    profile_image_url, team_id, is_countable, pre_join_date, company_join_date, manager_id,
     is_active, created_at, updated_at
 ) VALUES
     (

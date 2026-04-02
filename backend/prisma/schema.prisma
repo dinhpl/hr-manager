@@ -135,6 +135,7 @@ model User {
   teamId          Int?      @map("team_id")
   isCountable     Boolean   @default(true) @map("is_countable")
   isAttendance    Boolean   @default(true) @map("is_attendance")
+  preJoinDate     DateTime? @map("pre_join_date")
   companyJoinDate DateTime? @map("company_join_date")
   birthday        DateTime? @map("birthday")
   hideBirthday    Boolean   @default(false) @map("hide_birthday")

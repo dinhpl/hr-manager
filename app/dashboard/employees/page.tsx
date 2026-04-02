@@ -62,6 +62,7 @@ interface EmployeeApiItem {
   teamId?: number | null;
   isCountable?: boolean;
   isAttendance?: boolean;
+  preJoinDate?: string | null;
   companyJoinDate?: string | null;
   manager?: {
     id: string | number;
@@ -99,6 +100,7 @@ interface EmployeeRow {
   isCountable: boolean;
   isAttendance: boolean;
   status: EmployeeStatus;
+  preJoinDate: string | null;
   companyJoinDate: string | null;
   birthday: string | null;
   gender: string;
@@ -117,6 +119,7 @@ interface EmployeeFormData {
   managerId: string;
   isCountable: boolean;
   isAttendance: boolean;
+  preJoinDate: string;
   companyJoinDate: string;
   birthday: string;
   status: EmployeeStatus;
@@ -200,6 +203,7 @@ function getDefaultEmployeeFormData(departments: DepartmentItem[]): EmployeeForm
     managerId: '',
     isCountable: true,
     isAttendance: true,
+    preJoinDate: '',
     companyJoinDate: '',
     birthday: '',
     status: 'active',
@@ -229,6 +233,7 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
     isCountable: item.isCountable ?? true,
     isAttendance: item.isAttendance ?? true,
     status: item.isActive ? 'active' : 'inactive',
+    preJoinDate: item.preJoinDate ?? null,
     companyJoinDate: item.companyJoinDate ?? null,
     birthday: item.birthday ? item.birthday.slice(0, 10) : null,
     gender: item.gender ?? '',
@@ -237,7 +242,7 @@ function mapEmployee(item: EmployeeApiItem): EmployeeRow {
 }
 
 export default function EmployeesPage() {
-  const storedUser = getStoredUser<{ role?: string }>();
+  const storedUser = getStoredUser<{ id?: string | number; role?: string }>();
   const currentRole = toFrontendRole(storedUser?.role);
   const isReadOnly = currentRole === 'employee';
   const canExport = currentRole === 'hr' || currentRole === 'admin';
@@ -460,6 +465,7 @@ export default function EmployeesPage() {
         managerId: formData.managerId ? formData.managerId : undefined,
         isCountable: formData.isCountable,
         isAttendance: formData.isAttendance,
+        preJoinDate: formData.preJoinDate ? toIsoDateTime(formData.preJoinDate) : undefined,
         companyJoinDate: formData.companyJoinDate
           ? toIsoDateTime(formData.companyJoinDate)
           : undefined,
@@ -499,6 +505,7 @@ export default function EmployeesPage() {
         managerId: formData.managerId ? formData.managerId : null,
         isCountable: formData.isCountable,
         isAttendance: formData.isAttendance,
+        preJoinDate: formData.preJoinDate ? toIsoDateTime(formData.preJoinDate) : null,
         companyJoinDate: formData.companyJoinDate ? toIsoDateTime(formData.companyJoinDate) : null,
         birthday: formData.birthday ? toIsoDateTime(formData.birthday) : null,
         isActive: formData.status === 'active',
@@ -809,7 +816,8 @@ export default function EmployeesPage() {
                     'Số điện thoại',
                     'Phòng ban',
                     'Vai trò',
-                    'Ngày tham gia',
+                    'Ngày gia nhập',
+                    'Ngày chính thức',
                     'Sinh nhật',
                     'Trạng thái',
                     ...(!isReadOnly ? ['Thao tác'] : []),
@@ -827,7 +835,7 @@ export default function EmployeesPage() {
                 {isLoading ? (
                   <tr>
                     <td
-                      colSpan={isReadOnly ? 9 : 11}
+                      colSpan={isReadOnly ? 10 : 12}
                       className="px-3 py-8 text-center text-sm"
                       style={{ color: '#6b7f78' }}
                     >
@@ -837,7 +845,7 @@ export default function EmployeesPage() {
                 ) : employees.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={isReadOnly ? 9 : 11}
+                      colSpan={isReadOnly ? 10 : 12}
                       className="px-3 py-8 text-center text-sm"
                       style={{ color: '#6b7f78' }}
                     >
@@ -1014,6 +1022,12 @@ export default function EmployeesPage() {
                               {!isReadOnly && <Pencil size={10} style={{ color: '#3b82f6' }} />}
                             </div>
                           )}
+                        </td>
+                        <td
+                          className="px-3 py-3 text-xs whitespace-nowrap tabular-nums"
+                          style={{ color: '#6b7f78' }}
+                        >
+                          {formatDate(employee.preJoinDate)}
                         </td>
                         <td
                           className="px-3 py-3 text-xs whitespace-nowrap tabular-nums"
@@ -1367,6 +1381,7 @@ function EmployeeForm({
           managerId: initialData.managerId,
           isCountable: initialData.isCountable,
           isAttendance: initialData.isAttendance,
+          preJoinDate: initialData.preJoinDate?.slice(0, 10) ?? '',
           companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
           birthday: initialData.birthday?.slice(0, 10) ?? '',
           status: initialData.status,
@@ -1393,6 +1408,7 @@ function EmployeeForm({
             managerId: initialData.managerId,
             isCountable: initialData.isCountable,
             isAttendance: initialData.isAttendance,
+            preJoinDate: initialData.preJoinDate?.slice(0, 10) ?? '',
             companyJoinDate: initialData.companyJoinDate?.slice(0, 10) ?? '',
             birthday: initialData.birthday?.slice(0, 10) ?? '',
             status: initialData.status,
@@ -1743,7 +1759,27 @@ function EmployeeForm({
             </div>
             <div>
               <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
-                Ngày tham gia công ty
+                Ngày gia nhập
+              </label>
+              <DatePicker
+                value={formData.preJoinDate}
+                onChange={(value) => handleFieldChange('preJoinDate', value)}
+                captionLayout="dropdown"
+                fromYear={1970}
+                toYear={new Date().getFullYear()}
+              />
+              <button
+                type="button"
+                onClick={() => handleFieldChange('preJoinDate', '')}
+                className="mt-2 text-xs font-medium"
+                style={{ color: '#6b7f78' }}
+              >
+                Xóa ngày gia nhập
+              </button>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold" style={{ color: '#6b7f78' }}>
+                Ngày chính thức
               </label>
               <DatePicker
                 value={formData.companyJoinDate}
@@ -1758,7 +1794,7 @@ function EmployeeForm({
                 className="mt-2 text-xs font-medium"
                 style={{ color: '#6b7f78' }}
               >
-                Xóa ngày tham gia
+                Xóa ngày chính thức
               </button>
             </div>
             <div>
