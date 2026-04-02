@@ -40,6 +40,7 @@ interface LeaveBalanceApiRow {
     fullName: string;
     employeeCode?: string | null;
     department?: string | null;
+    isActive?: boolean | null;
     companyJoinDate?: string | null;
   };
   leaveType: {
@@ -629,7 +630,15 @@ export default function LeaveBalancesPage() {
                     <tr
                       key={row.id}
                       className="cursor-pointer border-b last:border-0 transition-colors hover:bg-emerald-50"
-                      style={{ borderColor: '#e2ede9', background: isSelf ? '#f0fdf9' : undefined }}
+                      style={{
+                        borderColor: '#e2ede9',
+                        background: isSelf
+                          ? '#f0fdf9'
+                          : row.user.isActive === false
+                            ? '#f3f4f6'
+                            : undefined,
+                        opacity: row.user.isActive === false ? 0.85 : 1,
+                      }}
                       onClick={() =>
                         canManageLeaveBalances ? openInfoDialog(row) : openHistoryDialog(row)
                       }

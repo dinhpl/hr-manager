@@ -733,7 +733,7 @@ export default function EmployeesPage() {
                 <SelectContent>
                   <SelectItem value="all-status">Tất cả trạng thái</SelectItem>
                   <SelectItem value="active">Đang làm việc</SelectItem>
-                  <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                  <SelectItem value="inactive">Đã nghỉ</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -864,15 +864,21 @@ export default function EmployeesPage() {
                     );
 
                     return (
-                      <tr
-                        key={employee.id}
-                        className={`border-b last:border-0 hover:bg-gray-50 transition-all${!isReadOnly ? ' cursor-pointer' : ''}`}
-                        style={{
-                          background: isSelected ? '#f0fdf9' : isSelf ? '#f0fdf9' : undefined,
-                          opacity: employee.status === 'inactive' ? 0.75 : 1,
-                        }}
-                        onClick={!isReadOnly ? () => toggleSelect(employee.id) : undefined}
-                      >
+                        <tr
+                          key={employee.id}
+                          className={`border-b last:border-0 hover:bg-gray-50 transition-all${!isReadOnly ? ' cursor-pointer' : ''}`}
+                          style={{
+                          background: isSelected
+                            ? '#f0fdf9'
+                            : isSelf
+                              ? '#f0fdf9'
+                              : employee.status === 'inactive'
+                                ? '#f3f4f6'
+                                : undefined,
+                          opacity: employee.status === 'inactive' ? 0.85 : 1,
+                          }}
+                          onClick={!isReadOnly ? () => toggleSelect(employee.id) : undefined}
+                        >
                         {!isReadOnly && (
                           <td className="px-3 py-3 w-10">
                             <Checkbox
@@ -1042,9 +1048,7 @@ export default function EmployeesPage() {
                           {employee.birthday ? (
                             <span className="inline-flex items-center gap-1.5">
                               <span aria-hidden="true">🎂</span>
-                              <span className="tabular-nums">
-                                {formatDate(employee.birthday)}
-                              </span>
+                              <span className="tabular-nums">{formatDate(employee.birthday)}</span>
                             </span>
                           ) : (
                             '—'
@@ -1510,7 +1514,7 @@ function EmployeeForm({
   const accountSummary = [
     {
       label: mode === 'create' ? 'Trạng thái khi tạo' : 'Trạng thái hiện tại',
-      value: formData.status === 'active' ? 'Đang làm việc' : 'Tạm nghỉ',
+      value: formData.status === 'active' ? 'Đang làm việc' : 'Đã nghỉ',
     },
     { label: 'Vai trò hệ thống', value: getRoleLabel(formData.role) },
     { label: 'Đăng nhập', value: formData.username.trim() || 'Username + email' },
@@ -1832,7 +1836,7 @@ function EmployeeForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">Đang làm việc</SelectItem>
-                  <SelectItem value="inactive">Tạm nghỉ</SelectItem>
+                  <SelectItem value="inactive">Đã nghỉ</SelectItem>
                 </SelectContent>
               </Select>
             </div>

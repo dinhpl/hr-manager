@@ -184,6 +184,7 @@ export async function getAllBalances(year?: number) {
           fullName: true,
           employeeCode: true,
           department: true,
+          isActive: true,
           companyJoinDate: true,
         },
       },
