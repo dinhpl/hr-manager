@@ -188,7 +188,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const currentRole = toFrontendRole(userInfo?.role);
 
   useEffect(() => {
-    if (!userInfo || currentRole === 'employee') return;
+    const isSystemAdminLocal = userInfo?.systemRole?.toUpperCase() === 'ADMIN';
+    if (!userInfo || (currentRole === 'employee' && !isSystemAdminLocal)) return;
     apiClient
       .get<unknown>('/api/leave-requests?status=PENDING&limit=1')
       .then((res) => {
@@ -200,7 +201,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isSystemAdmin = userInfo?.systemRole?.toUpperCase() === 'ADMIN';
   const canViewActivityLog = currentRole === 'hr' || isSystemAdmin;
   const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (item.key === 'approval') return currentRole !== 'employee';
+    if (item.key === 'approval') return currentRole !== 'employee' || isSystemAdmin;
     if (item.key === 'reports') return currentRole !== 'employee';
     if (item.key === 'activity-log') return canViewActivityLog;
     // if (item.key === 'attendance') {
