@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { CalendarDays, Eye, FileDown, History, Pencil, Save, Upload, X } from 'lucide-react';
+import { CalendarDays, Eye, FileDown, FileText, History, Pencil, Save, Upload, X } from 'lucide-react';
+import { TiptapNotionEditor } from '@/components/tiptap-notion-editor';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +36,7 @@ interface LeaveBalanceApiRow {
   usedDays: number | string;
   usedCarryOverDays: number | string;
   usedCompOffDays: number | string;
+  note?: string | null;
   user: {
     id: string;
     fullName: string;
@@ -201,6 +203,9 @@ export default function LeaveBalancesPage() {
     usedDays: '',
     usedCompOffDays: '',
   });
+  const [noteBalance, setNoteBalance] = useState<LeaveBalanceApiRow | null>(null);
+  const [noteEditorValue, setNoteEditorValue] = useState<string>('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
   const [resetCarryOverDate, setResetCarryOverDate] = useState<string>('03-31');
   const [isSavingBalance, setIsSavingBalance] = useState(false);
   const [isImportingBalances, setIsImportingBalances] = useState(false);
@@ -215,6 +220,11 @@ export default function LeaveBalancesPage() {
 
   const currentRole: FrontendRole | null = currentUser ? toFrontendRole(currentUser.role) : null;
   const canManageLeaveBalances =
+    currentRole === 'hr' ||
+    currentRole === 'admin' ||
+    currentUser?.systemRole?.toUpperCase() === 'ADMIN';
+
+  const canEditNote =
     currentRole === 'hr' ||
     currentRole === 'admin' ||
     currentUser?.systemRole?.toUpperCase() === 'ADMIN';
@@ -362,6 +372,32 @@ export default function LeaveBalancesPage() {
     setHistoryBalance(row);
     setBalanceHistory([]);
     setBalanceHistoryError(null);
+  };
+
+  const openNoteDialog = (row: LeaveBalanceApiRow) => {
+    setNoteBalance(row);
+    setNoteEditorValue(row.note ?? '');
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteBalance || !canEditNote) return;
+    setIsSavingNote(true);
+    try {
+      await apiClient.patch(`/api/leave-balances/${noteBalance.id}`, {
+        note: noteEditorValue || null,
+      });
+      setLeaveBalances((prev) =>
+        prev.map((b) =>
+          b.id === noteBalance.id ? { ...b, note: noteEditorValue || null } : b,
+        ),
+      );
+      setNoteBalance(null);
+      toast.success('Đã lưu ghi chú.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Không thể lưu ghi chú.');
+    } finally {
+      setIsSavingNote(false);
+    }
   };
 
   useEffect(() => {
@@ -831,6 +867,21 @@ export default function LeaveBalancesPage() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
+                              openNoteDialog(row);
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-amber-50"
+                            style={{
+                              borderColor: row.note ? '#fde68a' : '#e5e7eb',
+                              color: row.note ? '#d97706' : '#9ca3af',
+                            }}
+                            title={canEditNote ? 'Ghi chú' : 'Xem ghi chú'}
+                          >
+                            <FileText size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
                               openHistoryDialog(row);
                             }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-sky-50"
@@ -1019,6 +1070,7 @@ export default function LeaveBalancesPage() {
                     tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
                   </p>
                 </div>
+
               </div>
 
               <div
@@ -1194,6 +1246,102 @@ export default function LeaveBalancesPage() {
                 >
                   Đóng
                 </button>
+              </div>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
+
+      {/* Note modal */}
+      <Dialog open={Boolean(noteBalance)} onOpenChange={(open) => !open && setNoteBalance(null)}>
+        {noteBalance && (
+          <DialogContent
+            showCloseButton={false}
+            className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>Ghi chú phép năm</DialogTitle>
+              <DialogDescription>Ghi chú nội bộ về số dư phép của nhân viên.</DialogDescription>
+            </DialogHeader>
+
+            <div className="flex max-h-[min(88vh,640px)] flex-col overflow-hidden rounded-3xl bg-white">
+              {/* Header */}
+              <div
+                className="flex items-center justify-between gap-4 border-b px-6 py-5"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-9 w-9 items-center justify-center rounded-xl"
+                    style={{ background: '#fef3c7' }}
+                  >
+                    <FileText size={16} style={{ color: '#d97706' }} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold" style={{ color: '#203430' }}>
+                      Ghi chú
+                    </h2>
+                    <p className="text-xs" style={{ color: '#6b7f78' }}>
+                      {noteBalance.user.fullName} · {noteBalance.leaveType.name} · {noteBalance.year}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setNoteBalance(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl hover:bg-gray-100"
+                  style={{ color: '#6b7f78' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Editor */}
+              <div className="flex-1 overflow-y-auto px-6 py-5">
+                {!canEditNote && !noteEditorValue && (
+                  <p className="text-sm italic" style={{ color: '#b0c8bf' }}>
+                    Chưa có ghi chú nào.
+                  </p>
+                )}
+                <TiptapNotionEditor
+                  value={noteEditorValue}
+                  onChange={setNoteEditorValue}
+                  placeholder="Thêm ghi chú về số dư phép của nhân viên này..."
+                  readOnly={!canEditNote}
+                />
+              </div>
+
+              {/* Footer */}
+              <div
+                className="flex items-center justify-between gap-2 border-t px-6 py-4"
+                style={{ borderColor: '#e2ede9' }}
+              >
+                <p className="text-xs" style={{ color: '#94a3b8' }}>
+                  {canEditNote
+                    ? 'Hỗ trợ định dạng: in đậm, danh sách, checklist, trích dẫn…'
+                    : 'Bạn chỉ có quyền xem ghi chú này.'}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNoteBalance(null)}
+                    className="rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-gray-50"
+                    style={{ borderColor: '#e2ede9', color: '#6b7f78' }}
+                  >
+                    {canEditNote ? 'Hủy' : 'Đóng'}
+                  </button>
+                  {canEditNote && (
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveNote()}
+                      disabled={isSavingNote}
+                      className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ background: '#d97706' }}
+                    >
+                      <Save size={14} />
+                      {isSavingNote ? 'Đang lưu...' : 'Lưu ghi chú'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </DialogContent>

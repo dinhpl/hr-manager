@@ -154,6 +154,7 @@ export async function adjustBalance(req: Request, res: Response, next: NextFunct
         usedCarryOverDays: z.coerce.number().optional(),
         usedDays: z.coerce.number().optional(),
         usedCompOffDays: z.coerce.number().optional(),
+        note: z.string().nullable().optional(),
       })
       .parse(req.body);
     const before = await prisma.leaveBalance.findUnique({

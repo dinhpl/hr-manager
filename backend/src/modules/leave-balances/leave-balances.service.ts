@@ -243,6 +243,7 @@ export async function adjustBalance(
     usedCarryOverDays?: number;
     usedDays?: number;
     usedCompOffDays?: number;
+    note?: string | null;
   },
 ) {
   return prisma.leaveBalance.update({ where: { id }, data });
