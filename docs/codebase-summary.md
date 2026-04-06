@@ -5,173 +5,210 @@
 ```text
 .
 |- app/                    # Next.js App Router pages
-|- components/             # Shared layout, domain modals, UI primitives
-|- hooks/                  # Client hooks
-|- lib/                    # Frontend API and business helpers
+|- components/             # Shared UI shell, feature components, shadcn primitives
+|- hooks/                  # Client hooks such as notifications
+|- lib/                    # Frontend API/session/business helpers
 |- public/                 # Static assets
+|- styles/                 # Additional global styling assets
 |- backend/                # Express + Prisma backend app
-|- reports/                # Prior analysis notes
-|- plans/                  # Implementation plans / historical planning docs
-|- docs/                   # Persistent onboarding docs
+|- docs/                   # Maintained onboarding and runtime docs
+|- plans/                  # Historical planning artifacts, not source of truth
 ```
 
 ## 2. Frontend summary
 
-### 2.1 Frontend architecture
+### 2.1 Architecture
 
-- App Router is used for routing, but almost all real pages are client components.
-- There is no frontend state manager like Redux/Zustand/TanStack Query.
-- State is local to each page with `useState`, `useEffect`, `useMemo`, `useCallback`.
-- Data fetching is browser-side through Axios wrapper `lib/api-client.ts`.
-- Shared shell is `app/dashboard/layout.tsx` -> `components/app-layout.tsx`.
+- App Router is used for routing
+- many pages are client components and fetch after mount
+- there is no centralized store like Redux/Zustand/TanStack Query
+- session state is inferred from browser storage plus `/api/auth/me`
+- shared layout comes from `app/dashboard/layout.tsx` and `components/app-layout.tsx`
 
-### 2.2 Main routes
+### 2.2 Main routes in repo
 
-| Route                      | Purpose                                 | Main audience    |
-| -------------------------- | --------------------------------------- | ---------------- |
-| `/`                        | Login screen                            | all              |
-| `/dashboard`               | Dashboard summary and quick actions     | all              |
-| `/dashboard/leave-history` | Leave history and actions               | all              |
-| `/dashboard/approval`      | Approval inbox                          | manager/hr/admin |
-| `/dashboard/employees`     | Employee admin                          | hr/admin         |
-| `/dashboard/settings`      | Leave policy and approval flow settings | hr/admin         |
-| `/dashboard/profile`       | Personal profile/password/avatar        | all              |
-| `/dashboard/reports`       | Reports and export CSV                  | manager/hr/admin |
-| `/dashboard/attendance`    | Attendance check-in/check-out tracking  | all              |
-| `/dashboard/leave-balances`| Leave balance overview per user/year    | all              |
-| `/dashboard/leave-detail/[id]` | Leave request detail view           | all              |
-| `/dashboard/leave-request` | Legacy standalone leave form            | all              |
-| `/dashboard/overtime`      | Overtime request and review             | mixed            |
-| `/dashboard/compoff`       | Comp-off records                        | mixed            |
+| Route | Purpose | Audience |
+| --- | --- | --- |
+| `/` | Login screen | all |
+| `/dashboard` | Summary dashboard | all authenticated users |
+| `/dashboard/activity-log` | Audit log visibility | HR/admin-eligible |
+| `/dashboard/approval` | Leave approval inbox | manager/hr/admin |
+| `/dashboard/attendance` | Attendance actions and daily detail | all |
+| `/dashboard/compoff` | Comp-off records | mixed |
+| `/dashboard/devices` | Device inventory and lifecycle | privileged roles |
+| `/dashboard/employees` | Employee management | HR/admin |
+| `/dashboard/leave-balances` | Leave balance overview | all authenticated users with role-based scope |
+| `/dashboard/leave-detail/[id]` | Leave detail page | scoped |
+| `/dashboard/leave-history` | Leave history and actions | scoped |
+| `/dashboard/leave-request` | Legacy standalone leave request form | all |
+| `/dashboard/overtime` | Overtime request/review | mixed |
+| `/dashboard/profile` | Profile, avatar, password, widgets | all |
+| `/dashboard/reports` | Reports and export flows | manager/hr/admin |
+| `/dashboard/settings` | System settings and mail controls | HR/admin |
+| `/dashboard/skills` | Skills matrix and management | scoped/privileged |
+| `/dashboard/skills/settings` | Skills settings UI | privileged |
+| `/guild-ui` | UI/design-system sandbox | internal |
 
 ### 2.3 Important frontend files
 
-- `app/layout.tsx` - metadata, Google font, toaster, analytics.
-- `app/globals.css` - design tokens, palette, Tailwind theme bindings.
-- `app/page.tsx` - login flow and demo account UI.
-- `components/app-layout.tsx` - auth bootstrap, sidebar, header, notifications, logout.
-- `components/leave-request-modal.tsx` - main reusable leave request workflow.
-- `components/leave-detail-modal.tsx` - leave request detail display.
-- `components/calendar-day-detail-modal.tsx` - daily calendar detail modal.
-- `hooks/use-notifications.ts` - notification REST + SSE client logic.
-- `lib/api-client.ts` - token storage, refresh flow, API error normalization.
-- `lib/hr-utils.ts` - date parsing, role mapping, leave-mode payload helpers.
-- `lib/notification-utils.ts` - notification view model helpers and deep links.
+- `app/layout.tsx` - global HTML shell, Inter font, toaster, analytics
+- `app/globals.css` - design tokens and global utility classes
+- `app/page.tsx` - login page
+- `components/app-layout.tsx` - dashboard bootstrap, sidebar, topbar, notifications, logout
+- `components/leave-request-modal.tsx` - primary reusable leave request flow
+- `components/leave-detail-modal.tsx` - leave detail modal
+- `components/calendar-day-detail-modal.tsx` - attendance/calendar detail modal
+- `hooks/use-notifications.ts` - notification REST + SSE client logic
+- `lib/api-client.ts` - access token persistence, refresh flow, API error normalization
+- `lib/hr-utils.ts` - shared date/role/leave helper logic
+- `lib/notification-utils.ts` - notification formatting and deep-link helpers
 
-### 2.4 Frontend API/session pattern
+### 2.4 Session and API pattern
 
-- Base URL comes from `NEXT_PUBLIC_API_URL`, fallback `http://localhost:4000`.
-- Access token is stored in browser storage.
-- Refresh token is kept in cookie and used with `withCredentials: true`.
-- On expired access token, interceptor refreshes and retries once.
-- If refresh fails, frontend clears session and redirects to `/`.
+- base URL comes from `NEXT_PUBLIC_API_URL`, fallback `http://localhost:4000`
+- access token is stored in `localStorage`
+- refresh token is kept in cookie and sent with `withCredentials: true`
+- axios interceptor retries once after refresh
+- if refresh fails, frontend clears session and redirects to `/`
 
-### 2.5 Frontend UX/design system pattern
+### 2.5 UI system
 
-- Tailwind v4 + CSS variables in `app/globals.css`.
-- Public Sans via `next/font/google`.
-- Jade/green brand palette.
-- shadcn/Radix components in `components/ui/`.
-- Some pages use utility classes heavily; some also use inline styles for exact brand colors.
+- Tailwind v4 + CSS variables in `app/globals.css`
+- font is `Inter` from `next/font/google`
+- default palette is jade/green with light neutral backgrounds
+- reusable primitives live in `components/ui/*`
+- the app includes light animation helpers such as `animate-fade-in` and stagger classes
 
 ## 3. Backend summary
 
-### 3.1 Backend architecture
+### 3.1 Architecture
 
-- Express app with global middlewares in `backend/src/app.ts`.
-- Modules follow `router / controller / service / validation` split.
-- Services contain most business logic.
-- Prisma singleton in `backend/src/config/prisma.ts` talks to PostgreSQL.
-- BigInt values are serialized as strings globally before JSON responses.
+- Express app is composed in `backend/src/app.ts`
+- modules follow `router / controller / service / validation`
+- Zod validates request bodies, params, and queries in module-specific validation files
+- Prisma singleton in `backend/src/config/prisma.ts` talks to PostgreSQL
+- JSON responses serialize `BigInt` values as strings globally
 
-### 3.2 Backend route map
+### 3.2 API route map
 
-| Prefix                | Main responsibility                                   |
-| --------------------- | ----------------------------------------------------- |
-| `/api/auth`           | login, refresh, logout, me, profile, password, avatar |
-| `/api/users`          | employee directory and admin operations               |
-| `/api/leave-types`    | leave type catalog                                    |
-| `/api/leave-balances` | balance list/init/recalculate/adjust                  |
-| `/api/leave-requests` | leave request CRUD + approval actions                 |
-| `/api/overtime`       | overtime submit/approve/reject                        |
-| `/api/comp-off`       | comp-off list/summary/approval                        |
-| `/api/dashboard`      | summary, calendar, recent requests                    |
-| `/api/reports`        | leave, overtime, department, top users, CSV export    |
-| `/api/settings`       | leave policy and approval flow JSON settings          |
-| `/api/departments`    | department dropdown data                              |
-| `/api/notifications`  | list/read/read-all/stream                             |
+| Prefix | Responsibility |
+| --- | --- |
+| `/api/auth` | login, refresh, logout, me, profile, password, avatar |
+| `/api/users` | employee directory and admin operations |
+| `/api/leave-types` | leave type catalog |
+| `/api/leave-balances` | balance list, recalc, adjust |
+| `/api/leave-requests` | leave request CRUD and approvals |
+| `/api/overtime` | overtime submit/approve/reject |
+| `/api/comp-off` | comp-off list/summary/approval |
+| `/api/attendances` | attendance operations |
+| `/api/holidays` | holiday calendar |
+| `/api/dashboard` | dashboard aggregates |
+| `/api/reports` | reporting and exports |
+| `/api/settings` | system settings including mail-related settings |
+| `/api/departments` | department dropdown/master data |
+| `/api/notifications` | list/read/read-all/stream |
+| `/api/devices` | device inventory, assignment, maintenance |
+| `/api/skills` | skills and categories |
+| `/api/user-skills` | user skill mapping |
+| `/api/audit-logs` | audit log listing |
 
 ### 3.3 Important backend files
 
-- `backend/src/app.ts` - middleware and router mounting.
-- `backend/src/server.ts` - HTTP start and cron start.
-- `backend/src/config/env.ts` - env validation.
-- `backend/src/utils/jwt.ts` - access/refresh signing and verification.
-- `backend/src/modules/auth/auth.service.ts` - auth/session logic.
-- `backend/src/modules/leave-requests/leave-requests.service.ts` - core leave workflow.
-- `backend/src/modules/overtime/overtime.service.ts` - overtime rules and comp-off generation.
-- `backend/src/modules/notifications/notifications.stream.ts` - SSE connection registry.
-- `backend/src/jobs/expire-compoff.job.ts` - daily expiration cron.
-- `backend/prisma/schema.prisma` - full DB model.
-- `backend/prisma/seed.ts` - seed data and default settings/users.
+- `backend/src/app.ts` - middleware, CORS, rate limit, router mounting
+- `backend/src/server.ts` - HTTP bootstrap and cron startup
+- `backend/src/config/env.ts` - env loading and validation
+- `backend/src/config/swagger.ts` - Swagger setup for development
+- `backend/src/utils/jwt.ts` - access/refresh signing and verification
+- `backend/src/modules/auth/auth.service.ts` - auth/session logic
+- `backend/src/modules/leave-requests/leave-requests.service.ts` - main leave workflow
+- `backend/src/modules/leave-balances/leave-balances.service.ts` - balance calculations and adjustments
+- `backend/src/modules/overtime/overtime.service.ts` - overtime rules and comp-off generation
+- `backend/src/modules/notifications/notifications.stream.ts` - SSE registry
+- `backend/src/modules/mail/mail.service.ts` - outbound mail support
+- `backend/src/jobs/expire-compoff.job.ts` - scheduled expiration job
+- `backend/prisma/schema.prisma` - DB schema source of truth
+- `backend/prisma/seed.ts` - default seed data
 
-## 4. Database/domain model
+## 4. Database and domain model
 
-### Core entities
+### Core HR entities
 
-- `User` - identity, role, org info, manager relation, active flag.
-- `LeaveType` - leave catalog like AL, SL, WFH.
-- `LeaveBalance` - per user, leave type, year.
-- `LeaveRequest` - leave workflow records.
-- `OvertimeRecord` - overtime workflow records.
-- `CompOffRecord` - compensatory leave records.
-- `Attendance` - daily check-in/check-out records, unique per (userId, date).
-- `Setting` - JSON storage for leave policy and approval flow.
-- `Department` - simple master table for active departments.
-- `Notification` - per-user inbox items.
+- `User`
+- `LeaveType`
+- `LeaveBalance`
+- `LeaveRequest`
+- `OvertimeRecord`
+- `CompOffRecord`
+- `Attendance`
+- `Holiday`
+- `Department`
+- `Setting`
+- `Notification`
 
-### Key enums
+### Operational extension entities
 
-- `UserRole`: `EMPLOYEE`, `MANAGER`, `HR`, `ADMIN`
-- `LeaveRequestStatus`: `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`
-- `OvertimeStatus`: `PENDING`, `APPROVED`, `REJECTED`
+- `Device`
+- `DeviceImage`
+- `DeviceSpec`
+- `DeviceAssignment`
+- `DeviceMaintenanceLog`
+- `DeviceAuditLog`
+- `AuditLog`
+- `SkillCategory`
+- `Skill`
+- `UserSkill`
 
-## 5. Runtime/deployment shape
+### Key enums present in schema
 
-### Local non-Docker
+- `UserRole`
+- `LeaveRequestStatus`
+- `DurationMode`
+- `OvertimeStatus`
+- `CompensationType`
+- `NotificationType`
+- `NotificationEntityType`
+- `DeviceStatus`
+- `DeviceType`
+- `AssignmentStatus`
+- `MaintenanceStatus`
+- `DeviceAuditAction`
+- `AuditAction`
+- `AuditModule`
 
-- Frontend usually on `3000`.
-- Backend usually on `4000`.
-- Postgres from local machine or custom container.
+## 5. Runtime and deployment shape
 
-### Docker stack in repo
+### Local non-Docker defaults
 
-- Frontend on `5500`.
-- Backend on `5501`.
-- Postgres on `5532`.
-- Frontend proxies `/uploads/*` to backend via `BACKEND_URL` rewrite.
+- frontend: `3000`
+- backend: `4000`
+- database: external/local PostgreSQL if not using Docker
 
-## 6. Build/test status observed from repo
+### Docker ports used by the repo
 
-- Frontend build script runs formatter before `next build`.
-- Backend build script runs formatter before `tsc`.
-- Backend depends on generated Prisma client before build succeeds.
-- `backend/tests/setup.ts` exists, but repo currently lacks meaningful backend test files.
-- `next.config.mjs` ignores TypeScript build errors.
+- frontend: `5500`
+- backend: `5501`
+- PostgreSQL: `5532`
 
-## 7. Most important code-level caveats
+### Upload and static file behavior
 
-- Two leave request UI flows exist; prefer consolidating around modal-based flow.
-- Frontend route protection is client-side only.
-- Token in browser storage is XSS-sensitive.
-- Settings are stored as loose JSON and some seeded keys do not match runtime-used keys exactly.
-- SSE notification connections are in-memory only; no multi-instance fanout.
-- `Department` table is not enforced as a relation from `User.department`.
+- backend serves local files from `/uploads`
+- frontend rewrites `/uploads/:path*` to `BACKEND_URL`
+- uploaded files are persisted to `backend/uploads`
 
-## 8. Good files to inspect first when changing behavior
+## 6. Current build and test reality
 
-- Auth/session issue: `lib/api-client.ts`, `backend/src/modules/auth/auth.service.ts`
-- Leave request issue: `components/leave-request-modal.tsx`, `backend/src/modules/leave-requests/leave-requests.service.ts`
-- Notification issue: `hooks/use-notifications.ts`, `backend/src/modules/notifications/*`
-- Role/scope issue: `components/app-layout.tsx`, backend routers + leave/dashboard/report services
-- Deployment issue: `docker-compose.dev.yml`, `docker-compose.yml`, `next.config.mjs`, `backend/.env.example`
+- root `pnpm build` runs Prettier before `next build`
+- `next.config.mjs` sets `typescript.ignoreBuildErrors = true`
+- `pnpm -C backend build` runs Prettier before `tsc`
+- backend build depends on generated Prisma client
+- backend has `vitest`, but automated coverage is still limited
+- frontend has no dedicated test setup in this repo
+
+## 7. Repo caveats worth remembering
+
+- two leave request UI flows still exist: modal-based reusable flow and legacy standalone page
+- frontend protected-route behavior is still client-side oriented
+- access token lives in browser storage, so XSS sensitivity remains relevant
+- settings are stored as JSON in `Setting.value`
+- SSE registry is in-memory only and is not horizontally scalable as-is
+- `Department` remains soft master data rather than a strict relation from `User.department`

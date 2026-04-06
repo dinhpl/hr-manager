@@ -1,6 +1,6 @@
 # System Architecture
 
-## 1. High-level view
+## 1. High-level topology
 
 ```mermaid
 flowchart LR
@@ -8,30 +8,37 @@ flowchart LR
     F -->|REST /api/*| B[Express Backend]
     F -->|SSE /api/notifications/stream| B
     B --> P[(PostgreSQL via Prisma)]
-    B --> FS[(Local uploads/)]
-    B --> C[Daily cron job]
+    B --> FS[(Local uploads directory)]
+    B --> J[Daily cron job]
+    B --> M[SMTP provider when mail is enabled]
 ```
 
 ## 2. Frontend architecture
 
 ### Composition
 
-- `app/layout.tsx` sets global HTML shell, font, toaster, analytics.
-- `app/dashboard/layout.tsx` wraps all dashboard pages with `components/app-layout.tsx`.
-- Page components are mostly client components and fetch data on mount.
+- `app/layout.tsx` defines the root HTML shell, global font, toaster, and analytics
+- `app/dashboard/layout.tsx` wraps dashboard routes with `components/app-layout.tsx`
+- pages are mostly client-rendered and perform browser-side data fetching
 
 ### State model
 
-- No centralized store.
-- Session state is inferred from browser storage + `/api/auth/me`.
-- Page data is local and page-specific.
-- Notification state is isolated in `hooks/use-notifications.ts`.
+- there is no centralized application store
+- auth state is reconstructed from `localStorage` and `/api/auth/me`
+- page state is mostly local to each route
+- notifications are isolated in `hooks/use-notifications.ts`
 
 ### API boundary
 
-- All network access should go through `lib/api-client.ts`.
-- `ApiError` preserves `status`, `code`, and `details` from backend.
-- Refresh flow is automatic for most protected API calls.
+- all normal HTTP access should go through `lib/api-client.ts`
+- `ApiError` preserves `status`, `code`, and `details`
+- refresh flow is automatic for protected API calls that return `401`
+
+### UI boundary
+
+- shared primitives live in `components/ui/*`
+- domain flows are implemented in reusable feature components under `components/`
+- design tokens and motion utilities live in `app/globals.css`
 
 ## 3. Backend architecture
 
@@ -39,30 +46,31 @@ flowchart LR
 
 1. Express global middleware
 2. auth middleware if route is protected
-3. role middleware if route is restricted by role
-4. controller parses request and validation
-5. service executes business rules
-6. Prisma reads/writes database
-7. response serialized with BigInt -> string conversion
+3. role middleware if route is role-restricted
+4. controller parses request and delegates
+5. validation schemas check params/query/body where applicable
+6. service executes business rules
+7. Prisma reads/writes PostgreSQL
+8. response is serialized with `BigInt` converted to strings
 
 ### Cross-cutting concerns
 
-- Security headers via `helmet`
+- `helmet` security headers
 - CORS with credentials support
-- global rate limit `200 req/min/IP`
-- request logging via `pino-http`
-- cookie parsing for refresh token
+- global rate limit set to `1000 req/min/IP`
+- `pino-http` request logging
+- `cookie-parser` for refresh token cookie access
 - static file serving at `/uploads`
 - centralized error middleware
 
-## 4. Auth/session architecture
+## 4. Auth and session architecture
 
-### Current model
+### Token model
 
-- Access token: JWT returned in response body.
-- Refresh token: JWT set in httpOnly cookie.
-- Backend does not persist refresh tokens in DB.
-- Logout clears cookie on response path; there is no token blacklist.
+- access token: JWT returned in response body
+- refresh token: JWT stored in `httpOnly` cookie
+- frontend persists access token and user info in `localStorage`
+- backend does not currently persist refresh tokens in DB
 
 ### Flow
 
@@ -74,97 +82,95 @@ sequenceDiagram
     U->>F: submit login form
     F->>B: POST /api/auth/login
     B-->>F: accessToken + user + refresh cookie
-    F->>F: save accessToken in local/sessionStorage
+    F->>F: persist auth session in localStorage
     F->>B: protected API with Bearer token
-    B-->>F: 401 if expired
+    B-->>F: 401 if token expired
     F->>B: POST /api/auth/refresh-token with cookie
     B-->>F: new accessToken
     F->>B: retry original request
 ```
 
-### Main trade-offs
+### Trade-offs
 
-- Simple to implement.
-- Works well for SPA-style frontend.
-- Weak revocation story because refresh tokens are stateless.
-- Browser storage for access token increases XSS sensitivity.
+- simple SPA-friendly implementation
+- weak refresh-token revocation story
+- browser-stored access token increases XSS sensitivity
 
-## 5. Leave request architecture
+## 5. Main business sub-systems
 
-### Main flow
+### Leave requests
 
-```mermaid
-flowchart TD
-    A[Create leave request] --> B[Validate dates and mode]
-    B --> C[Resolve target user and approver]
-    C --> D[Check overlap]
-    D --> E[Check balance]
-    E --> F[Check policy settings]
-    F --> G[Persist request as PENDING or auto-approve rule path]
-    G --> H[Create notification]
-    H --> I[Approver acts]
-    I --> J[Approve: deduct balance]
-    I --> K[Reject]
-    I --> L[Cancel: may restore balance]
-```
+- frontend reusable flow centers around `components/leave-request-modal.tsx`
+- backend source of truth is `backend/src/modules/leave-requests/leave-requests.service.ts`
+- balance updates rely on `leave-balances` service helpers
+- settings are read from `Setting.value` JSON for policy-related logic
 
-### Sources of truth
+### Leave balances
 
-- Frontend input shaping: `lib/hr-utils.ts`
-- Main reusable UI flow: `components/leave-request-modal.tsx`
-- Backend validation/business rules: `backend/src/modules/leave-requests/leave-requests.service.ts`
-- Leave settings lookup: `backend/src/modules/settings/settings.service.ts`
-- Balance change helpers: `backend/src/modules/leave-balances/leave-balances.service.ts`
+- annual leave, carry-over, seniority, comp-off, WFH, and used metrics are stored per user / leave type / year
+- recalculation and adjustment logic lives in `backend/src/modules/leave-balances/leave-balances.service.ts`
+- frontend has a dedicated page at `/dashboard/leave-balances`
 
-## 6. Overtime/comp-off architecture
+### Attendance
 
-- Overtime and comp-off are separate modules.
-- Approved overtime creates an approved comp-off record automatically.
-- Comp-off expiration is enforced by daily cron.
-- Expiration currently rewrites status from `APPROVED` to `REJECTED`, which is semantically weak.
+- one attendance record per user per date
+- check-in/check-out and work-hour logic live in `attendances` module
+- attendance screens also mix in leave and holiday context
 
-## 7. Notification architecture
+### Overtime and comp-off
 
-### Current design
+- overtime is a separate approval flow
+- approved overtime can generate comp-off records
+- expiration is handled by `backend/src/jobs/expire-compoff.job.ts`
 
-- Notification records are stored in database.
-- REST endpoints handle list, unread count, mark read, mark all read.
-- Realtime uses in-memory SSE connection registry keyed by user ID.
+### Notifications
 
-### SSE event types
+- notification records are stored in DB
+- REST supports listing and read state updates
+- realtime delivery uses in-memory SSE connection tracking keyed by user ID
 
-- `connected`
-- `notification.created`
-- `notification.read`
-- `notification.read-all`
+### Devices
 
-### Limitation
+- device inventory is modeled separately from user records
+- assignment, return, maintenance, and audit trails are first-class backend modules/entities
 
-- Current SSE implementation is single-instance friendly only.
-- If backend scales horizontally, notifications will need shared pub/sub or websocket infrastructure.
+### Skills
 
-## 8. Data/storage architecture
+- skill categories, skills, and user skill mappings are persisted in schema and exposed through dedicated modules
+
+### Audit logs
+
+- operational actions are recorded in `AuditLog`
+- frontend exposes a dedicated activity log page
+
+### Mail
+
+- backend can send mail when SMTP env settings are enabled
+- mail behavior is controlled by environment configuration plus settings/UI flows
+
+## 6. Data and storage architecture
 
 ### Database
 
-- PostgreSQL via Prisma.
-- IDs are `BigInt` for most domain tables.
-- `Setting.value` is JSON and is used for leave policy / approval flow.
+- PostgreSQL via Prisma
+- most IDs are `BigInt`
+- `Setting.value` is JSON and stores flexible configuration
 
 ### File storage
 
-- Local disk only.
-- Static path exposed at `/uploads`.
-- Avatar upload path and leave attachment path share local filesystem strategy.
+- local disk only
+- backend exposes the directory via `/uploads`
+- frontend proxies upload URLs through Next rewrites
 
-## 9. Environment model
+## 7. Environment model
 
-### Frontend
+### Frontend env
 
 - `NEXT_PUBLIC_API_URL`
-- `BACKEND_URL` for server-side upload rewrites inside Docker
+- `BACKEND_URL`
+- optional `NEXT_PUBLIC_VERSION`
 
-### Backend
+### Backend env
 
 - `DATABASE_URL`
 - `JWT_ACCESS_SECRET`
@@ -175,12 +181,22 @@ flowchart TD
 - `NODE_ENV`
 - `FRONTEND_URL`
 - `UPLOAD_DIR`
+- `MAIL_ENABLED`
+- `MAIL_HOST`
+- `MAIL_PORT`
+- `MAIL_SECURE`
+- `MAIL_USER`
+- `MAIL_PASSWORD`
+- `MAIL_FROM_EMAIL`
+- `MAIL_FROM_NAME`
+- `MAIL_REPLY_TO`
 
-## 10. Main architectural risks
+## 8. Architectural risks and debt
 
-- Client-only route guarding on frontend.
-- Ignored TypeScript build errors in Next config.
-- Weakly typed JSON settings contract.
-- In-memory SSE fanout.
-- Duplicated leave request UI flow.
-- No strong automated test coverage.
+- client-oriented route guarding on the frontend
+- `ignoreBuildErrors` enabled in Next config
+- sparse automated test coverage
+- loose JSON contract for settings
+- in-memory SSE registry is single-instance oriented
+- local-disk uploads are not cloud-native
+- duplicated leave-request UI still exists

@@ -1,43 +1,64 @@
-# Project Overview / PDR
+# Project Overview
 
 ## 1. Project identity
 
-- Name in code: `Leave Management System`.
-- Repository shape: one frontend app at repo root and one backend app in `backend/`.
-- Frontend stack: `Next.js 16` App Router, `React 19`, Tailwind CSS v4, shadcn/Radix UI, Recharts.
-- Backend stack: `Express`, `Prisma`, `PostgreSQL`, `Zod`, JWT auth, SSE notifications.
-- Main business domain: HR leave management, leave approval, overtime, comp-off, employee admin, reports, settings.
+- Product in code: `Leave Management System`
+- Repository shape: monorepo-style single checkout with:
+  - frontend app at repo root
+  - backend app in `backend/`
+- Main domain: HR operations for leave, attendance, overtime, comp-off, employee admin, device management, skills tracking, audit logs, mail settings, and notifications
 
-## 2. Product goal
+## 2. Current stacks
 
-This system manages employee leave requests end to end:
+### Frontend
 
-- employees log in, see balances, create leave requests, check history, update profile;
-- managers/HR/admin approve or reject requests;
-- HR/admin manage employees, settings, reports, leave types, balances;
-- overtime approval can generate comp-off credit;
-- in-app notifications are delivered by REST + Server-Sent Events.
+- `Next.js 16` App Router
+- `React 19`
+- `TypeScript`
+- `Tailwind CSS v4`
+- Radix/shadcn component set under `components/ui/*`
+- `axios` for API access
+- `@microsoft/fetch-event-source` for SSE notifications
+- `recharts` for dashboard/report charts
 
-## 3. Current product scope in code
+### Backend
+
+- `Express`
+- `TypeScript`
+- `Prisma`
+- `PostgreSQL`
+- `Zod`
+- `JWT` access + refresh flow
+- `multer` for local uploads
+- `nodemailer` for outbound mail
+- `node-cron` for scheduled jobs
+- Swagger in development only
+
+## 3. Product scope in the current repo
 
 ### Frontend routes
 
-- `/` - login.
-- `/dashboard` - role-aware dashboard.
-- `/dashboard/leave-history` - leave history, filters, detail, edit/cancel pending.
-- `/dashboard/approval` - approval queue and bulk approve.
-- `/dashboard/employees` - employee management for HR/admin.
-- `/dashboard/settings` - leave policy and approval flow editor.
-- `/dashboard/profile` - self profile, avatar, password.
-- `/dashboard/reports` - analytics and CSV export.
-- `/dashboard/attendance` - attendance check-in/check-out screen.
-- `/dashboard/leave-balances` - leave balance overview (dedicated page).
-- `/dashboard/leave-detail/[id]` - leave request detail view.
-- `/dashboard/leave-request` - older standalone leave request page.
-- `/dashboard/overtime` - overtime screen.
-- `/dashboard/compoff` - comp-off screen.
+- `/` - login
+- `/dashboard` - role-aware summary dashboard
+- `/dashboard/activity-log` - audit log page for HR/admin-eligible users
+- `/dashboard/approval` - leave approval queue
+- `/dashboard/attendance` - attendance check-in/check-out and calendar details
+- `/dashboard/compoff` - comp-off listing and summaries
+- `/dashboard/devices` - device management
+- `/dashboard/employees` - employee directory and admin actions
+- `/dashboard/leave-balances` - leave-balance overview page
+- `/dashboard/leave-detail/[id]` - leave request detail view
+- `/dashboard/leave-history` - personal or scoped leave history
+- `/dashboard/leave-request` - legacy standalone leave request page
+- `/dashboard/overtime` - overtime submission and review
+- `/dashboard/profile` - profile, avatar, password, personal widgets
+- `/dashboard/reports` - reports and exports
+- `/dashboard/settings` - system settings including mail controls
+- `/dashboard/skills` - skills matrix and management UI
+- `/dashboard/skills/settings` - skills-specific settings page
+- `/guild-ui` - design-system / UI workbench page
 
-### Backend modules
+### Backend API modules
 
 - `auth`
 - `users`
@@ -47,91 +68,111 @@ This system manages employee leave requests end to end:
 - `overtime`
 - `comp-off`
 - `attendances`
+- `holidays`
 - `dashboard`
 - `reports`
 - `settings`
 - `departments`
 - `notifications`
+- `devices`
+- `skills`
+- `user-skills`
+- `audit-logs`
+- `mail` service support
 
-## 4. User roles
+## 4. Roles and access model
 
-- `EMPLOYEE` - self-service leave and profile.
-- `MANAGER` - own data plus approval responsibility for assigned staff.
-- `HR` - broader approval and admin access.
-- `ADMIN` - full access.
+- `EMPLOYEE` - self-service leave, attendance, profile, personal views
+- `MANAGER` - approval and scoped team visibility
+- `HR` - broader operational access
+- `ADMIN` - full system access
 
-Important: frontend hides or shows navigation by role, but hard enforcement still depends on backend APIs.
+Important runtime reality:
+
+- frontend navigation is role-aware, but hard enforcement still depends on backend middleware and service-level scope checks
+- some pages are client-rendered and redirect after client bootstrap rather than via server middleware
 
 ## 5. Core business flows
 
-### Login/session
+### Auth/session
 
-- User logs in with username or email plus password.
-- Backend returns access token in response body and refresh token in httpOnly cookie.
-- Frontend stores access token in `localStorage` or `sessionStorage` depending on `remember me`.
-- Axios interceptor refreshes access token on `401` by calling `/api/auth/refresh-token`.
+- login with username or email + password
+- backend returns access token in response body
+- backend sets refresh token in `httpOnly` cookie
+- frontend persists access token and user data in `localStorage`
+- axios interceptor calls `/api/auth/refresh-token` on `401`
 
-### Leave request lifecycle
+### Leave lifecycle
 
-- User creates leave request with full-day, half-day, or hourly mode.
-- Backend resolves approver from manager first, then falls back to active HR/admin.
-- Backend checks date validity, overlap, balance, and some settings-based rules.
-- Approver can approve/reject; employee or HR/admin can cancel depending on status.
-- Approval deducts balance; approved cancel restores balance.
+- employee creates leave request with full-day, half-day, or hourly-like date/time shaping from shared helpers/UI
+- backend validates overlap, dates, policies, approver resolution, and balances
+- approver or privileged roles approve/reject
+- cancellation and balance restoration depend on status and role
 
-### Overtime -> comp-off
+### Overtime and comp-off
 
-- User submits overtime record.
-- Approver approves or rejects.
-- Approved overtime auto-creates an approved comp-off record with 90-day validity.
+- employee submits overtime
+- approver approves/rejects
+- approved overtime can produce comp-off credit
+- daily cron handles comp-off expiration logic
+
+### Attendance
+
+- employee checks in / checks out
+- backend persists one record per `(userId, date)`
+- dashboard/profile pages reuse attendance-derived summaries and visualizations
 
 ### Notifications
 
-- Backend creates notification records on leave/overtime events.
-- Frontend loads list + unread count via REST.
-- Frontend opens SSE connection to `/api/notifications/stream` for realtime updates.
+- notifications are stored in database
+- frontend reads list and unread counters via REST
+- frontend listens to `/api/notifications/stream` via SSE
 
-## 6. Architecture snapshot
+### Operational admin extensions
 
-- Frontend is mostly client-rendered; pages fetch directly from backend in `useEffect`.
-- Shared frontend layout lives in `components/app-layout.tsx`.
-- Shared frontend API wrapper lives in `lib/api-client.ts`.
-- Shared business/date helpers live in `lib/hr-utils.ts`.
-- Backend uses `router -> controller -> service -> Prisma`.
-- Global app composition is in `backend/src/app.ts`.
-- Database schema source of truth is `backend/prisma/schema.prisma`.
+- device inventory, assignment, maintenance, and device audit logs
+- skill categories, skills, and user skill mappings
+- global audit log visibility for permitted roles
+- mail settings and template-driven mail sending support
+
+## 6. Runtime architecture snapshot
+
+- frontend is mostly client-rendered
+- shared dashboard shell: `app/dashboard/layout.tsx` -> `components/app-layout.tsx`
+- shared API client: `lib/api-client.ts`
+- shared business/date helpers: `lib/hr-utils.ts`
+- backend follows `router -> controller -> service -> validation`
+- backend entry points: `backend/src/app.ts` and `backend/src/server.ts`
+- database source of truth: `backend/prisma/schema.prisma`
 
 ## 7. Important implementation realities
 
-- No `README.md` exists in the repo root at the time of this analysis.
-- Frontend has no middleware-based route protection; redirect happens after client bootstraps.
-- A legacy leave request page and a newer modal flow both exist; this is duplicated business UI.
-- `next.config.mjs` sets `typescript.ignoreBuildErrors = true`.
-- Backend tests are scaffolded but there are effectively no real test files.
-- Swagger is mounted only in backend development mode at `/api/docs`.
+- `next.config.mjs` sets `typescript.ignoreBuildErrors = true`
+- frontend build runs Prettier before `next build`
+- backend build runs Prettier before `tsc`
+- backend tests exist only lightly; coverage is still sparse
+- Swagger is mounted only when `NODE_ENV=development`
+- uploads are stored on local disk and served from `/uploads`
+- SSE fanout is in-memory and therefore single-instance oriented
 
-## 8. Fast re-onboarding reading order
+## 8. Docs reading order
 
-For the next session, load docs in this order:
+Read in this order when reloading context:
 
 1. `docs/project-overview-pdr.md`
 2. `docs/codebase-summary.md`
 3. `docs/system-architecture.md`
-4. `docs/project-roadmap.md`
-5. `docs/deployment-guide.md`
+4. `docs/deployment-guide.md`
+5. `docs/code-standards.md`
 
-## 9. Key source files
+## 9. High-value source files
 
 - Frontend root layout: `app/layout.tsx`
-- Login page: `app/page.tsx`
+- Frontend login page: `app/page.tsx`
 - Dashboard shell: `components/app-layout.tsx`
-- API client: `lib/api-client.ts`
-- Shared HR/date helpers: `lib/hr-utils.ts`
+- API/session client: `lib/api-client.ts`
+- Shared HR helpers: `lib/hr-utils.ts`
 - Backend app composition: `backend/src/app.ts`
-- Backend server bootstrap: `backend/src/server.ts`
+- Backend bootstrap: `backend/src/server.ts`
 - Prisma schema: `backend/prisma/schema.prisma`
 - Seed data: `backend/prisma/seed.ts`
-
-## 10. Current documentation intent
-
-The docs in `docs/` are written so a future agent or developer can reload project context quickly without re-exploring the full codebase from zero.
