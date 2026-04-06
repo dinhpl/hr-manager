@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SERVER_USER="ec2-user"
-SERVER_HOST="13.115.82.223"
+SERVER_HOST="54.254.150.3"
 SERVER_PORT="22"
 SERVER_DIR="/home/ec2-user/www/ota-hr"
 SSH_KEY="/Users/dinhpl/Documents/TEST_AI/ota-workspace-app/pms-server.pem"
