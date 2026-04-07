@@ -25,6 +25,7 @@ import { devicesRouter } from './modules/devices/devices.router';
 import { skillsRouter } from './modules/skills/skills.router';
 import { userSkillsRouter } from './modules/user-skills/user-skills.router';
 import { auditLogsRouter } from './modules/audit-logs/audit-logs.router';
+import { recruitmentRouter } from './modules/recruitment/recruitment.router';
 
 export function createApp(): Application {
   const app = express();
@@ -97,6 +98,7 @@ export function createApp(): Application {
   app.use('/api/skills', skillsRouter);
   app.use('/api/user-skills', userSkillsRouter);
   app.use('/api/audit-logs', auditLogsRouter);
+  app.use('/api/recruitment', recruitmentRouter);
 
   // Swagger docs (dev only)
   if (env.NODE_ENV === 'development') {

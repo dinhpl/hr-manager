@@ -118,6 +118,7 @@ enum AuditModule {
   SKILL
   USER_SKILL
   SETTING
+  RECRUITMENT
 }
 
 model User {
@@ -170,8 +171,89 @@ model User {
   deviceAuditLogs      DeviceAuditLog[]     @relation("DeviceAuditActor")
   userSkills           UserSkill[]
   auditLogs            AuditLog[]           @relation("AuditLogActor")
+  createdPositions     JobPosition[]        @relation("PositionCreatedBy")
+  stageLogs            CandidateStageLog[]  @relation("StageLogChangedBy")
 
   @@map("users")
+}
+
+// ─── Recruitment ─────────────────────────────────────────────
+
+model JobPosition {
+  id          BigInt    @id @default(autoincrement())
+  title       String    @db.VarChar(255)
+  level       String    @default("") @db.VarChar(100)
+  domain      String    @default("") @db.VarChar(100)
+  priority    String    @default("B") @db.VarChar(10)
+  headcount   Int       @default(1)
+  status      String    @default("NOT_STARTED") @db.VarChar(50)
+  note        String?   @db.Text
+  blocker     String?   @db.Text
+  openedAt    DateTime  @default(now()) @map("opened_at")
+  closedAt    DateTime? @map("closed_at")
+  createdById BigInt    @map("created_by_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  createdBy   User                   @relation("PositionCreatedBy", fields: [createdById], references: [id])
+  candidates  RecruitmentCandidate[]
+  weeklyStats WeeklyKpi[]
+
+  @@map("job_positions")
+}
+
+model RecruitmentCandidate {
+  id           BigInt   @id @default(autoincrement())
+  positionId   BigInt   @map("position_id")
+  fullName     String   @map("full_name") @db.VarChar(255)
+  email        String?  @db.VarChar(255)
+  phone        String?  @db.VarChar(30)
+  source       String   @default("OTHER") @db.VarChar(50)
+  currentStage String   @default("APPLIED") @map("current_stage") @db.VarChar(50)
+  cvUrl        String?  @map("cv_url") @db.VarChar(500)
+  note         String?  @db.Text
+  appliedAt    DateTime @default(now()) @map("applied_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  position     JobPosition          @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  stageHistory CandidateStageLog[]
+
+  @@index([positionId])
+  @@map("recruitment_candidates")
+}
+
+model WeeklyKpi {
+  id          BigInt @id @default(autoincrement())
+  positionId  BigInt @map("position_id")
+  year        Int
+  month       Int
+  week        Int
+  stage       String @db.VarChar(50)
+  kpiTarget   Int    @default(0) @map("kpi_target")
+  actual      Int    @default(0)
+
+  position JobPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@unique([positionId, year, month, week, stage])
+  @@index([positionId, year, month])
+  @@map("weekly_kpis")
+}
+
+model CandidateStageLog {
+  id          BigInt   @id @default(autoincrement())
+  candidateId BigInt   @map("candidate_id")
+  fromStage   String?  @map("from_stage") @db.VarChar(50)
+  toStage     String   @map("to_stage") @db.VarChar(50)
+  changedById BigInt   @map("changed_by_id")
+  changedAt   DateTime @default(now()) @map("changed_at")
+  note        String?  @db.Text
+
+  candidate   RecruitmentCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  changedBy   User                 @relation("StageLogChangedBy", fields: [changedById], references: [id])
+
+  @@index([candidateId])
+  @@map("candidate_stage_logs")
 }
 
 model LeaveType {

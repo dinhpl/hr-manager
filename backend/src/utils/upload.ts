@@ -149,3 +149,37 @@ export const uploadAttendanceExcel = multer({
     cb(new Error('File type not allowed. Use XLS or XLSX.'));
   },
 });
+
+// CV upload — PDF + DOC/DOCX only
+const cvDir = path.join(process.cwd(), 'uploads', 'cv');
+
+const cvStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    if (!fs.existsSync(cvDir)) fs.mkdirSync(cvDir, { recursive: true });
+    cb(null, cvDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `cv-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+const CV_ALLOWED_MIME = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+export const uploadCv = multer({
+  storage: cvStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (CV_ALLOWED_MIME.includes(file.mimetype) || ['.pdf', '.doc', '.docx'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('CV must be PDF, DOC, or DOCX.'));
+    }
+  },
+});

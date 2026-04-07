@@ -21,6 +21,7 @@ import {
   BookOpen,
   ClipboardList,
   Clock,
+  Briefcase,
 } from 'lucide-react';
 import BrandLogo from '@/components/brand-logo';
 import { apiClient, clearAuthSession, getApiBaseUrl } from '@/lib/api-client';
@@ -101,6 +102,7 @@ const NAV_ITEMS = [
     key: 'activity-log',
   },
   // [MVP-HIDDEN] Báo cáo - not in MVP scope
+  { href: '/dashboard/recruitment', label: 'Tuyển dụng', icon: Briefcase, key: 'recruitment' },
   { href: '/dashboard/reports', label: 'Báo cáo', icon: BarChart3, key: 'reports' },
   {
     href: '/dashboard/settings',
@@ -129,7 +131,7 @@ const NAV_GROUPS = [
   {
     key: 'report-group',
     label: 'Báo cáo',
-    items: ['reports', 'activity-log'],
+    items: ['reports', 'recruitment', 'activity-log'],
   },
   {
     key: 'system-group',
@@ -204,6 +206,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (item.key === 'approval') return currentRole !== 'employee' || isSystemAdmin;
     if (item.key === 'reports') return currentRole !== 'employee';
     if (item.key === 'activity-log') return canViewActivityLog;
+    if (item.key === 'recruitment') {
+      return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
+    }
     // if (item.key === 'attendance') {
     //   return currentRole === 'hr' || currentRole === 'admin' || isSystemAdmin;
     // }
