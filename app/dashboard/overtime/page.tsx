@@ -400,7 +400,7 @@ export default function OvertimePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <h1 className="text-xl font-bold" style={{ color: '#203430' }}>
-            Quản lý Overtime
+            Overtime
           </h1>
           {!isLoading && (
             <span
@@ -471,7 +471,7 @@ export default function OvertimePage() {
                 >
                   {[
                     { val: 'COMP_OFF', label: 'Nghỉ bù (Comp-off)' },
-                    { val: 'PAYMENT', label: 'Thanh toán tiền' },
+                    { val: 'PAYMENT', label: 'Tính lương' },
                   ].map((option) => (
                     <label
                       key={option.val}
@@ -533,7 +533,7 @@ export default function OvertimePage() {
                       </>
                     ) : (
                       <p className="text-xs font-medium" style={{ color: '#6b7f78' }}>
-                        Thanh toán tiền lương
+                        Tính lương
                       </p>
                     )}
                   </div>
@@ -997,7 +997,7 @@ export default function OvertimePage() {
               >
                 {[
                   { val: 'COMP_OFF', label: 'Nghỉ bù (Comp-off)' },
-                  { val: 'PAYMENT', label: 'Thanh toán tiền' },
+                  { val: 'PAYMENT', label: 'Tính lương' },
                 ].map((option) => (
                   <label key={option.val} className="flex cursor-pointer items-center gap-2 text-sm" style={{ color: '#203430' }}>
                     <RadioGroupItem value={option.val} id={`edit-comp-${option.val}`} />

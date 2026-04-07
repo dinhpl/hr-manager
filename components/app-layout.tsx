@@ -55,8 +55,7 @@ const NAV_ITEMS = [
     icon: History,
     key: 'leave-history',
   },
-  // [MVP-HIDDEN] Quản lý Overtime - tạm ẩn
-  // { href: '/dashboard/overtime', label: 'Quản lý Overtime', icon: Clock, key: 'overtime' },
+  { href: '/dashboard/overtime', label: 'Overtime', icon: Clock, key: 'overtime' },
   // [MVP-HIDDEN] Nghỉ bù (Comp-off) - not in MVP scope
   // { href: '/dashboard/compoff', label: 'Nghỉ bù (Comp-off)', icon: BedDouble, key: 'compoff' },
   {
