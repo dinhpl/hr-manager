@@ -67,6 +67,9 @@ export async function postPosition(req: Request, res: Response, next: NextFuncti
     if (body.priority && !VALID_PRIORITIES.includes(body.priority)) {
       return sendError(res, `priority must be one of ${VALID_PRIORITIES.join(', ')}`, 'VALIDATION_ERROR', 400);
     }
+    if (body.headcount !== undefined && (!Number.isInteger(body.headcount) || body.headcount < 1)) {
+      return sendError(res, 'headcount must be an integer >= 1', 'VALIDATION_ERROR', 400);
+    }
     const pos = await svc.createPosition(body, req.user!.id);
     void createAuditLog({
       actorId: req.user!.id,
@@ -91,6 +94,12 @@ export async function patchPosition(req: Request, res: Response, next: NextFunct
     const body = req.body as UpdatePositionDto;
     if (body.status && !VALID_STATUSES.includes(body.status as RecruitmentStatus)) {
       return sendError(res, `status must be one of ${VALID_STATUSES.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+    if (body.priority && !VALID_PRIORITIES.includes(body.priority)) {
+      return sendError(res, `priority must be one of ${VALID_PRIORITIES.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+    if (body.headcount !== undefined && (!Number.isInteger(body.headcount) || body.headcount < 1)) {
+      return sendError(res, 'headcount must be an integer >= 1', 'VALIDATION_ERROR', 400);
     }
     const pos = await svc.updatePosition(id, body);
     void createAuditLog({
@@ -221,11 +230,12 @@ export async function postCandidateCv(req: Request, res: Response, next: NextFun
   try {
     const id = parseBigInt(req.params.candidateId, res);
     if (id === null) return;
-    if (!req.file) {
-      return sendError(res, 'No file uploaded', 'VALIDATION_ERROR', 400);
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (!files || files.length === 0) {
+      return sendError(res, 'No files uploaded', 'VALIDATION_ERROR', 400);
     }
-    const cvUrl = `/uploads/cv/${path.basename(req.file.path)}`;
-    const cand = await svc.updateCandidateCv(id, cvUrl);
+    const cvUrls = files.map((f) => `/uploads/cv/${path.basename(f.path)}`);
+    const cand = await svc.updateCandidateCv(id, JSON.stringify(cvUrls));
     sendSuccess(res, cand);
   } catch (err) {
     next(err);

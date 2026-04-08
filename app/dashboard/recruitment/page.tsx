@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { apiClient, getStoredUser } from '@/lib/api-client';
 import {
   AlertCircle,
@@ -8,13 +8,16 @@ import {
   Briefcase,
   ChevronLeft,
   ChevronRight,
+  CloudUpload,
   Download,
   Eye,
+  FileText,
   Pencil,
   Plus,
   Search,
   Trash2,
   TrendingUp,
+  Upload,
   UserPlus,
   Users,
   X,
@@ -30,6 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   ChartContainer,
   ChartTooltip,
@@ -70,6 +74,7 @@ interface Candidate {
   currentStage: CandidateStage;
   note: string;
   appliedAt: string;
+  cvUrls: string[];
 }
 
 interface WeeklyData {
@@ -86,6 +91,13 @@ interface Position {
   priority: Priority;
   headcount: number;
   status: RecruitmentStatus;
+  requestDate: string;
+  onboardDeadline: string;
+  descriptionSkills: string;
+  salaryRangeUsd: string;
+  mainSkills: string;
+  jdDetails: string;
+  cvSource: string;
   note: string;
   blocker: string;
   openedAt: string;
@@ -137,7 +149,8 @@ const STAGE_CONFIG: Record<
   },
 };
 
-const DOMAINS = ['NC', 'Web/App', 'AI/ML', 'AI/Product', 'Mobile', 'DevOps', 'QA', 'Design'];
+const LEVELS = ['Senior', 'Middle', 'Lead'] as const;
+const DOMAINS = ['MK', 'NC', 'Exsiting'] as const;
 const SOURCES: CandidateSource[] = [
   'LINKEDIN',
   'REFERRAL',
@@ -172,6 +185,7 @@ interface ApiCandidate {
   phone: string | null;
   source: CandidateSource;
   currentStage: CandidateStage;
+  cvUrl: string | null;
   note: string | null;
   appliedAt: string;
 }
@@ -195,6 +209,13 @@ interface ApiPosition {
   priority: Priority;
   headcount: number;
   status: RecruitmentStatus;
+  requestDate: string | null;
+  onboardDeadline: string | null;
+  descriptionSkills: string | null;
+  salaryRangeUsd: string | null;
+  mainSkills: string | null;
+  jdDetails: string | null;
+  cvSource: string | null;
   note: string | null;
   blocker: string | null;
   openedAt: string;
@@ -228,6 +249,7 @@ function transformPosition(api: ApiPosition): Position {
     currentStage: c.currentStage,
     note: c.note ?? '',
     appliedAt: c.appliedAt ? c.appliedAt.slice(0, 10) : '',
+    cvUrls: parseCandidateCvUrls(c.cvUrl),
   }));
 
   return {
@@ -238,6 +260,13 @@ function transformPosition(api: ApiPosition): Position {
     priority: api.priority,
     headcount: api.headcount,
     status: api.status,
+    requestDate: api.requestDate ? api.requestDate.slice(0, 10) : '',
+    onboardDeadline: api.onboardDeadline ? api.onboardDeadline.slice(0, 10) : '',
+    descriptionSkills: api.descriptionSkills ?? '',
+    salaryRangeUsd: api.salaryRangeUsd ?? '',
+    mainSkills: api.mainSkills ?? '',
+    jdDetails: api.jdDetails ?? '',
+    cvSource: api.cvSource ?? '',
     note: api.note ?? '',
     blocker: api.blocker ?? '',
     openedAt: api.openedAt ? api.openedAt.slice(0, 10) : '',
@@ -255,6 +284,40 @@ function getInitials(name: string) {
 
 function sumArr(arr: number[]) {
   return arr.reduce((s, v) => s + v, 0);
+}
+
+function parseCandidateCvUrls(cvUrl?: string | null): string[] {
+  if (!cvUrl) return [];
+  const raw = cvUrl.trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+  } catch {
+    // fallback for old data stored as a plain string
+  }
+
+  return [raw];
+}
+
+function normalizeCandidateFileUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) return url;
+  if (url.startsWith('uploads/')) return `/${url}`;
+  return `/uploads/cv/${url}`;
+}
+
+function getFilenameFromUrl(url: string): string {
+  const cleanUrl = url.split('?')[0];
+  const name = cleanUrl.split('/').filter(Boolean).pop() ?? url;
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
 }
 
 // ─── Sub-components ─────────────────────────────────────────
@@ -365,24 +428,17 @@ function CandidateChip({
 
 // ─── Funnel card ────────────────────────────────────────────
 function FunnelCard({ positions }: { positions: Position[] }) {
-  const totals = FUNNEL_STAGES.map((_, si) =>
+  // Dùng giá trị W4 đã nhập thay vì tự tính từ candidates
+  const totals = FUNNEL_STAGES.map((stage) =>
     positions.reduce((sum, p) => {
-      if (si === 0) {
-        return sum + p.candidates.length;
-      }
-      return (
-        sum +
-        p.candidates.filter((c) => {
-          const idx = FUNNEL_STAGES.indexOf(c.currentStage as CandidateStage);
-          return idx >= si;
-        }).length
-      );
+      const stageData = p.weekly.find((w) => w.stage === stage);
+      return sum + (stageData ? stageData.actual[3] : 0);
     }, 0),
   );
   const kpis = FUNNEL_STAGES.map((stage) =>
     positions.reduce((sum, p) => {
       const stageData = p.weekly.find((w) => w.stage === stage);
-      return sum + (stageData ? sumArr(stageData.kpi) : 0);
+      return sum + (stageData ? stageData.kpi[3] : 0);
     }, 0),
   );
   const maxVal = Math.max(...kpis, 1);
@@ -834,7 +890,15 @@ function InsightDialog({
 }
 
 // ─── Weekly KPI Modal ────────────────────────────────────────
-function WeeklyKpiModal({ position, onClose }: { position: Position | null; onClose: () => void }) {
+function WeeklyKpiModal({
+  position,
+  onClose,
+  onCandidateClick,
+}: {
+  position: Position | null;
+  onClose: () => void;
+  onCandidateClick: (c: Candidate) => void;
+}) {
   if (!position) return null;
 
   function numCls(kpi: number, act: number) {
@@ -902,7 +966,7 @@ function WeeklyKpiModal({ position, onClose }: { position: Position | null; onCl
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-[#1DB87A]" />
@@ -1058,6 +1122,91 @@ function WeeklyKpiModal({ position, onClose }: { position: Position | null; onCl
           })}
         </div>
 
+        {/* Candidate list */}
+        <div className="mt-1">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9aa5b4] flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" />
+              Ứng viên ({position.candidates.length})
+            </p>
+          </div>
+          {position.candidates.length === 0 ? (
+            <p className="text-[11px] text-[#bbb] italic text-center py-4">
+              Chưa có ứng viên nào cho vị trí này.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-[#f0f2f5]">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="bg-[#fafbfc] border-b border-[#f0f2f5]">
+                    <th className="text-left px-3 py-2 text-[9.5px] font-medium text-[#9aa5b4] uppercase tracking-wide">
+                      Họ tên
+                    </th>
+                    <th className="text-center px-3 py-2 text-[9.5px] font-medium text-[#9aa5b4] uppercase tracking-wide">
+                      Stage
+                    </th>
+                    <th className="text-center px-3 py-2 text-[9.5px] font-medium text-[#9aa5b4] uppercase tracking-wide">
+                      Nguồn
+                    </th>
+                    <th className="text-center px-3 py-2 text-[9.5px] font-medium text-[#9aa5b4] uppercase tracking-wide">
+                      Apply
+                    </th>
+                    <th className="text-center px-3 py-2 text-[9.5px] font-medium text-[#9aa5b4] uppercase tracking-wide w-[60px]">
+                      Chi tiết
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {position.candidates.map((c) => (
+                    <tr
+                      key={c.id}
+                      className="border-b border-[#f8f9fb] last:border-b-0 hover:bg-[#fafbfc] cursor-pointer transition-colors"
+                      onClick={() => onCandidateClick(c)}
+                    >
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-[#1DB87A] text-white text-[8px] font-bold flex items-center justify-center flex-shrink-0">
+                            {getInitials(c.fullName)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-[#1a2332] text-[11.5px]">{c.fullName}</p>
+                            {c.email && (
+                              <p className="text-[9.5px] text-[#9aa5b4] truncate max-w-[160px]">
+                                {c.email}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <StageBadge stage={c.currentStage} />
+                      </td>
+                      <td className="px-3 py-2 text-center text-[10.5px] text-[#5a6a7e]">
+                        {SOURCE_LABELS[c.source] ?? c.source}
+                      </td>
+                      <td className="px-3 py-2 text-center text-[10.5px] text-[#9aa5b4]">
+                        {c.appliedAt || '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          className="w-6 h-6 rounded border border-[#e2e6ea] bg-white text-[#5a6a7e] hover:bg-blue-50 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center transition-colors mx-auto"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCandidateClick(c);
+                          }}
+                          title="Xem chi tiết"
+                        >
+                          <Eye className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-end pt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
             Đóng
@@ -1078,6 +1227,7 @@ function PositionRow({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
+  onWeeklyKpiSave,
 }: {
   position: Position;
   canEdit: boolean;
@@ -1087,19 +1237,41 @@ function PositionRow({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
+  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
 }) {
-  // Compute per-stage totals for last week (w4) in display
-  const stageActuals = FUNNEL_STAGES.map((_, si) => {
-    if (si === 0) return position.candidates.length;
-    return position.candidates.filter((c) => {
-      const idx = FUNNEL_STAGES.indexOf(c.currentStage as CandidateStage);
-      return idx >= si;
-    }).length;
+  // Read actual from weekly data (W4) — manually entered by user
+  const stageActuals = FUNNEL_STAGES.map((stage) => {
+    const d = position.weekly.find((w) => w.stage === stage);
+    return d ? d.actual[3] : 0;
   });
   const stageKpis = FUNNEL_STAGES.map((stage) => {
     const d = position.weekly.find((w) => w.stage === stage);
-    return d ? d.kpi[3] : 0; // use W4 KPI as monthly target
+    return d ? d.kpi[3] : 0;
   });
+
+  // Inline edit state
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editKpi, setEditKpi] = useState('');
+  const [editActual, setEditActual] = useState('');
+
+  function startEdit(si: number) {
+    setEditingIdx(si);
+    setEditKpi(String(stageKpis[si]));
+    setEditActual(String(stageActuals[si]));
+  }
+
+  function commitEdit() {
+    if (editingIdx === null) return;
+    const stage = FUNNEL_STAGES[editingIdx];
+    const kpi = Math.max(0, parseInt(editKpi, 10) || 0);
+    const actual = Math.max(0, parseInt(editActual, 10) || 0);
+    onWeeklyKpiSave(position.id, stage, kpi, actual);
+    setEditingIdx(null);
+  }
+
+  function cancelEdit() {
+    setEditingIdx(null);
+  }
 
   // Highest active stage
   const highestIdx = [...stageActuals].reverse().findIndex((v) => v > 0);
@@ -1168,12 +1340,51 @@ function PositionRow({
           {STAGE_CONFIG[currentStage].label}
         </span>
       </td>
-      {/* KPI / Actual per stage */}
+      {/* KPI / Actual per stage — inline editable */}
       {FUNNEL_STAGES.map((stage, si) => (
-        <td key={stage} className="py-2 px-2 text-center text-[11.5px]">
-          <span className="text-[#bbb] text-[10px]">{stageKpis[si]}</span>
-          <span className="text-[#bbb] mx-0.5">/</span>
-          <span className={numCls(stageKpis[si], stageActuals[si])}>{stageActuals[si]}</span>
+        <td key={stage} className="py-2 px-1 text-center text-[11.5px]">
+          {canEdit && editingIdx === si ? (
+            <div
+              className="inline-flex items-center gap-0.5"
+              onBlur={(e) => {
+                // commit chỉ khi focus rời khỏi cả 2 input
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  commitEdit();
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
+                if (e.key === 'Escape') cancelEdit();
+              }}
+            >
+              <input
+                autoFocus
+                type="number"
+                min={0}
+                value={editKpi}
+                onChange={(e) => setEditKpi(e.target.value)}
+                className="w-9 text-center text-[11px] border border-[#1DB87A] rounded px-0.5 py-0.5 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="text-[#bbb] text-[10px]">/</span>
+              <input
+                type="number"
+                min={0}
+                value={editActual}
+                onChange={(e) => setEditActual(e.target.value)}
+                className="w-9 text-center text-[11px] border border-[#1DB87A] rounded px-0.5 py-0.5 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+            </div>
+          ) : (
+            <div
+              className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 ${canEdit ? 'cursor-pointer hover:bg-[#f0f9f5] hover:outline hover:outline-1 hover:outline-[#1DB87A]/30' : ''}`}
+              onClick={() => canEdit && startEdit(si)}
+              title={canEdit ? 'Click để chỉnh sửa KPI / Actual' : undefined}
+            >
+              <span className="text-[#bbb] text-[10px]">{stageKpis[si]}</span>
+              <span className="text-[#bbb] text-[10px]">/</span>
+              <span className={numCls(stageKpis[si], stageActuals[si])}>{stageActuals[si]}</span>
+            </div>
+          )}
         </td>
       ))}
       {/* Status — select only */}
@@ -1250,6 +1461,7 @@ function PositionsTable({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
+  onWeeklyKpiSave,
 }: {
   positions: Position[];
   canEdit: boolean;
@@ -1259,6 +1471,7 @@ function PositionsTable({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
+  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -1279,7 +1492,8 @@ function PositionsTable({
                 key={stage}
                 className="text-center px-2 py-2.5 text-[10px] font-medium text-[#9aa5b4] uppercase tracking-wide whitespace-nowrap"
               >
-                {STAGE_CONFIG[stage].short === 'Applied' ? 'Applied' : STAGE_CONFIG[stage].label}
+                <div>{STAGE_CONFIG[stage].short === 'Applied' ? 'Applied' : STAGE_CONFIG[stage].label}</div>
+                <div className="text-[8.5px] font-normal normal-case tracking-normal text-[#c0c8d2] mt-0.5">KPI / Actual</div>
               </th>
             ))}
             <th className="text-center px-3 py-2.5 text-[10px] font-medium text-[#9aa5b4] uppercase tracking-wide min-w-[130px]">
@@ -1314,6 +1528,7 @@ function PositionsTable({
                 onAddCandidate={onAddCandidate}
                 onCandidateClick={onCandidateClick}
                 onWeeklyKpiClick={onWeeklyKpiClick}
+                onWeeklyKpiSave={onWeeklyKpiSave}
               />
             ))
           )}
@@ -1424,6 +1639,13 @@ function PositionDialog({
     domain: editing?.domain ?? '',
     priority: (editing?.priority ?? 'B') as Priority,
     headcount: editing?.headcount ?? 1,
+    requestDate: editing?.requestDate ?? '',
+    onboardDeadline: editing?.onboardDeadline ?? '',
+    descriptionSkills: editing?.descriptionSkills ?? '',
+    salaryRangeUsd: editing?.salaryRangeUsd ?? '',
+    mainSkills: editing?.mainSkills ?? '',
+    jdDetails: editing?.jdDetails ?? '',
+    cvSource: editing?.cvSource ?? '',
     note: editing?.note ?? '',
     blocker: editing?.blocker ?? '',
   });
@@ -1436,15 +1658,22 @@ function PositionDialog({
       domain: editing?.domain ?? '',
       priority: (editing?.priority ?? 'B') as Priority,
       headcount: editing?.headcount ?? 1,
+      requestDate: editing?.requestDate ?? '',
+      onboardDeadline: editing?.onboardDeadline ?? '',
+      descriptionSkills: editing?.descriptionSkills ?? '',
+      salaryRangeUsd: editing?.salaryRangeUsd ?? '',
+      mainSkills: editing?.mainSkills ?? '',
+      jdDetails: editing?.jdDetails ?? '',
+      cvSource: editing?.cvSource ?? '',
       note: editing?.note ?? '',
       blocker: editing?.blocker ?? '',
     });
   }, [editing]);
 
-  // Reset on open
-  useState(() => {
-    resetForm();
-  });
+  // Reset on open/edit mode change
+  useEffect(() => {
+    if (open) resetForm();
+  }, [open, resetForm]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1483,11 +1712,18 @@ function PositionDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Level</label>
-              <Input
-                placeholder="Senior / Middle / Lead"
-                value={form.level}
-                onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
-              />
+              <Select value={form.level} onValueChange={(v) => setForm((f) => ({ ...f, level: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEVELS.map((level) => (
+                    <SelectItem key={level} value={level}>
+                      {level}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Domain</label>
@@ -1506,6 +1742,74 @@ function PositionDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
+                Request Date
+              </label>
+              <DatePicker
+                value={form.requestDate}
+                onChange={(v) => setForm((f) => ({ ...f, requestDate: v }))}
+                placeholder="Chọn ngày request"
+                captionLayout="dropdown"
+                fromYear={new Date().getFullYear() - 2}
+                toYear={new Date().getFullYear() + 5}
+                className="h-9 text-xs"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Onboard</label>
+              <DatePicker
+                value={form.onboardDeadline}
+                onChange={(v) => setForm((f) => ({ ...f, onboardDeadline: v }))}
+                placeholder="Chọn deadline onboard"
+                captionLayout="dropdown"
+                fromYear={new Date().getFullYear() - 2}
+                toYear={new Date().getFullYear() + 5}
+                className="h-9 text-xs"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
+                Salary Range (USD)
+              </label>
+              <Input
+                placeholder="VD: 1500 - 2500"
+                value={form.salaryRangeUsd}
+                onChange={(e) => setForm((f) => ({ ...f, salaryRangeUsd: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
+                Main skills
+              </label>
+              <Input
+                placeholder="VD: React, TypeScript, Node.js"
+                value={form.mainSkills}
+                onChange={(e) => setForm((f) => ({ ...f, mainSkills: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">JD Details</label>
+              <Input
+                placeholder="Link JD"
+                value={form.jdDetails}
+                onChange={(e) => setForm((f) => ({ ...f, jdDetails: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">NguồnCV</label>
+              <Input
+                placeholder="VD: LinkedIn, ITviec, Referral..."
+                value={form.cvSource}
+                onChange={(e) => setForm((f) => ({ ...f, cvSource: e.target.value }))}
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1536,21 +1840,13 @@ function PositionDialog({
             </div>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Note</label>
+            <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
+              Description/Skills
+            </label>
             <Textarea
               rows={2}
-              placeholder="Ghi chú thêm về vị trí..."
-              value={form.note}
-              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Blocker</label>
-            <Textarea
-              rows={2}
-              placeholder="Vấn đề đang chặn tiến độ..."
-              value={form.blocker}
-              onChange={(e) => setForm((f) => ({ ...f, blocker: e.target.value }))}
+              value={form.descriptionSkills}
+              onChange={(e) => setForm((f) => ({ ...f, descriptionSkills: e.target.value }))}
             />
           </div>
           <div className="flex justify-end gap-2 pt-1">
@@ -1568,6 +1864,15 @@ function PositionDialog({
 }
 
 // ─── Add / Edit Candidate Dialog ─────────────────────────────
+const CV_ACCEPT = '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx';
+const CV_MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function CandidateDialog({
   open,
   editing,
@@ -1581,16 +1886,52 @@ function CandidateDialog({
   positionId: string;
   positionTitle: string;
   onClose: () => void;
-  onSave: (data: Partial<Candidate>) => void | Promise<void>;
+  onSave: (data: Partial<Candidate>, files: File[]) => void | Promise<void>;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [cvFiles, setCvFiles] = useState<File[]>([]);
+
   const [form, setForm] = useState({
     fullName: editing?.fullName ?? '',
     email: editing?.email ?? '',
     phone: editing?.phone ?? '',
-    source: editing?.source ?? 'LINKEDIN',
+    source: (editing?.source ?? 'LINKEDIN') as CandidateSource,
     currentStage: (editing?.currentStage ?? 'APPLIED') as CandidateStage,
     note: editing?.note ?? '',
+    appliedAt: editing?.appliedAt ?? '',
   });
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        fullName: editing?.fullName ?? '',
+        email: editing?.email ?? '',
+        phone: editing?.phone ?? '',
+        source: (editing?.source ?? 'LINKEDIN') as CandidateSource,
+        currentStage: (editing?.currentStage ?? 'APPLIED') as CandidateStage,
+        note: editing?.note ?? '',
+        appliedAt: editing?.appliedAt ?? '',
+      });
+      setCvFiles([]);
+    }
+  }, [open, editing]);
+
+  function addFiles(incoming: FileList | File[]) {
+    const arr = Array.from(incoming);
+    const valid: File[] = [];
+    for (const f of arr) {
+      if (f.size > CV_MAX_SIZE) {
+        toast.error(`${f.name} vượt quá 10MB`);
+        continue;
+      }
+      valid.push(f);
+    }
+    setCvFiles((prev) => {
+      const names = new Set(prev.map((f) => f.name));
+      return [...prev, ...valid.filter((f) => !names.has(f.name))];
+    });
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1598,7 +1939,7 @@ function CandidateDialog({
       toast.error('Vui lòng nhập họ tên ứng viên');
       return;
     }
-    onSave({ ...form, positionId });
+    onSave({ ...form, positionId }, cvFiles);
   };
 
   return (
@@ -1608,7 +1949,7 @@ function CandidateDialog({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">
             {editing ? 'Sửa ứng viên' : 'Thêm ứng viên'}
@@ -1640,9 +1981,7 @@ function CandidateDialog({
               />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
-                Số điện thoại
-              </label>
+              <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Số điện thoại</label>
               <Input
                 placeholder="0901234567"
                 value={form.phone}
@@ -1689,6 +2028,15 @@ function CandidateDialog({
             </div>
           </div>
           <div>
+            <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Applied Date</label>
+            <DatePicker
+              value={form.appliedAt}
+              onChange={(v) => setForm((f) => ({ ...f, appliedAt: v ?? '' }))}
+              placeholder="Chọn ngày ứng tuyển"
+              className="h-9 text-xs w-full"
+            />
+          </div>
+          <div>
             <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">Ghi chú</label>
             <Textarea
               rows={2}
@@ -1697,6 +2045,73 @@ function CandidateDialog({
               onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
             />
           </div>
+
+          {/* CV Upload */}
+          <div>
+            <label className="text-[11px] font-medium text-[#5a6a7e] flex items-center gap-1.5 mb-1.5">
+              <Upload className="w-3 h-3" />
+              File đính kèm (CV)
+            </label>
+            {/* Drop zone */}
+            <div
+              className="rounded-lg p-4 text-center cursor-pointer transition-all border-2 border-dashed"
+              style={{
+                borderColor: dragging ? '#1DB87A' : '#D3F2E7',
+                background: dragging ? '#f0f9f5' : '#fafffe',
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                addFiles(e.dataTransfer.files);
+              }}
+            >
+              <CloudUpload className="w-6 h-6 mx-auto mb-1.5" style={{ color: '#1DB87A' }} />
+              <p className="text-[11.5px] font-medium text-[#203430]">
+                Nhấp để chọn hoặc kéo thả file vào đây
+              </p>
+              <p className="text-[10px] mt-0.5 text-[#9aa5b4]">
+                PDF, DOC, DOCX, JPG, JPEG, PNG, HEIC · Tối đa 10MB/file · Nhiều file
+              </p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept={CV_ACCEPT}
+              multiple
+              onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
+            />
+            {/* File list */}
+            {cvFiles.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {cvFiles.map((f, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#D3F2E7] bg-[#f0f9f5]"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#1DB87A] flex-shrink-0" />
+                    <span className="text-[11px] font-medium text-[#203430] flex-1 truncate">
+                      {f.name}
+                    </span>
+                    <span className="text-[10px] text-[#9aa5b4] flex-shrink-0">
+                      {formatFileSize(f.size)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCvFiles((prev) => prev.filter((_, j) => j !== i))}
+                      className="text-[#9aa5b4] hover:text-red-500 transition-colors flex-shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
               Huỷ
@@ -1818,6 +2233,32 @@ function CandidateDetailDialog({
           </div>
         </div>
 
+        {candidate.cvUrls.length > 0 && (
+          <div className="rounded-lg border border-[#D3F2E7] bg-[#f0f9f5] px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a6a7e] mb-2">
+              Files đã upload ({candidate.cvUrls.length})
+            </p>
+            <div className="space-y-1.5">
+              {candidate.cvUrls.map((fileUrl, idx) => {
+                const normalizedUrl = normalizeCandidateFileUrl(fileUrl);
+                return (
+                  <a
+                    key={`${fileUrl}-${idx}`}
+                    href={normalizedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-md border border-[#D3F2E7] bg-white px-2.5 py-2 text-[11px] text-[#203430] hover:border-[#1DB87A] hover:bg-[#f9fffc] transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#1DB87A] flex-shrink-0" />
+                    <span className="flex-1 truncate">{getFilenameFromUrl(normalizedUrl)}</span>
+                    <Download className="w-3.5 h-3.5 text-[#9aa5b4] flex-shrink-0" />
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Note */}
         {candidate.note && (
           <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-xs text-amber-800">
@@ -1856,6 +2297,7 @@ function MonthlyTrackerView({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
+  onWeeklyKpiSave,
   onAddHighlight,
   onAddBlocker,
 }: {
@@ -1867,6 +2309,7 @@ function MonthlyTrackerView({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
+  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
   onAddHighlight: () => void;
   onAddBlocker: () => void;
 }) {
@@ -1914,6 +2357,7 @@ function MonthlyTrackerView({
           onAddCandidate={onAddCandidate}
           onCandidateClick={onCandidateClick}
           onWeeklyKpiClick={onWeeklyKpiClick}
+          onWeeklyKpiSave={onWeeklyKpiSave}
         />
       </div>
       <HBCard
@@ -1979,6 +2423,22 @@ export default function RecruitmentPage() {
   useEffect(() => {
     void fetchPositions(curYear, curMonth);
   }, [curYear, curMonth, fetchPositions]);
+
+  // Sync open modals khi positions được reload
+  useEffect(() => {
+    if (weeklyKpiModal) {
+      const fresh = positions.find((p) => p.id === weeklyKpiModal.id);
+      if (fresh) setWeeklyKpiModal(fresh);
+    }
+  }, [positions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (candidateDetail) {
+      const freshPos = positions.find((p) => p.id === candidateDetail.positionId);
+      const fresh = freshPos?.candidates.find((c) => c.id === candidateDetail.id);
+      if (fresh) setCandidateDetail(fresh);
+    }
+  }, [positions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Filtered positions
   const filtered = useMemo(() => {
@@ -2073,17 +2533,34 @@ export default function RecruitmentPage() {
   }, []);
 
   const handleSaveCandidate = useCallback(
-    async (data: Partial<Candidate>) => {
+    async (data: Partial<Candidate>, files: File[]) => {
       try {
+        let candidateId: string | null = null;
+
         if (candidateDialog.editing) {
           await apiClient.patch(`/api/recruitment/candidates/${candidateDialog.editing.id}`, data);
+          candidateId = candidateDialog.editing.id;
           toast.success('Đã cập nhật ứng viên');
         } else {
           const posId = candidateDialog.position?.id;
           if (!posId) return;
-          await apiClient.post(`/api/recruitment/positions/${posId}/candidates`, data);
+          const res = await apiClient.post<{ id: string }>(
+            `/api/recruitment/positions/${posId}/candidates`,
+            data,
+          );
+          candidateId = res.data?.id ?? null;
           toast.success('Đã thêm ứng viên');
         }
+
+        // Upload CV files if any
+        if (candidateId && files.length > 0) {
+          const formData = new FormData();
+          files.forEach((f) => formData.append('cv', f));
+          await apiClient.post(`/api/recruitment/candidates/${candidateId}/cv`, formData, {
+            headers: { 'Content-Type': undefined }, // let browser set multipart/form-data with boundary
+          });
+        }
+
         setCandidateDialog({ open: false, editing: null, position: null });
         void fetchPositions(curYear, curMonth);
       } catch (err: unknown) {
@@ -2091,6 +2568,38 @@ export default function RecruitmentPage() {
       }
     },
     [candidateDialog, curYear, curMonth, fetchPositions],
+  );
+
+  const handleWeeklyKpiSave = useCallback(
+    async (positionId: string, stage: CandidateStage, kpi: number, actual: number) => {
+      // Optimistic update
+      setPositions((prev) =>
+        prev.map((p) => {
+          if (p.id !== positionId) return p;
+          return {
+            ...p,
+            weekly: p.weekly.map((w) => {
+              if (w.stage !== stage) return w;
+              const newKpi = [...w.kpi] as [number, number, number, number];
+              const newActual = [...w.actual] as [number, number, number, number];
+              newKpi[3] = kpi;
+              newActual[3] = actual;
+              return { ...w, kpi: newKpi, actual: newActual };
+            }),
+          };
+        }),
+      );
+      try {
+        await apiClient.put(
+          `/api/recruitment/positions/${positionId}/weekly?year=${curYear}&month=${curMonth + 1}`,
+          { week: 4, stage, kpiTarget: kpi, actual },
+        );
+      } catch (err: unknown) {
+        void fetchPositions(curYear, curMonth);
+        toast.error(err instanceof Error ? err.message : 'Lưu KPI thất bại');
+      }
+    },
+    [curYear, curMonth, fetchPositions],
   );
 
   const handleSaveInsight = useCallback(
@@ -2337,7 +2846,7 @@ export default function RecruitmentPage() {
                     <Briefcase className="w-3.5 h-3.5 text-[#9aa5b4]" />
                     Active Positions ({filtered.length})
                   </span>
-                  <span className="text-[10px] text-[#9aa5b4]">Click row để xem chi tiết</span>
+                  <span className="text-[10px] text-[#9aa5b4]">KPI / Actual — click ô để chỉnh sửa</span>
                 </div>
                 <PositionsTable
                   positions={filtered}
@@ -2350,6 +2859,7 @@ export default function RecruitmentPage() {
                   }
                   onCandidateClick={setCandidateDetail}
                   onWeeklyKpiClick={setWeeklyKpiModal}
+                  onWeeklyKpiSave={handleWeeklyKpiSave}
                 />
               </div>
               {/* Funnel */}
@@ -2377,6 +2887,7 @@ export default function RecruitmentPage() {
             onAddCandidate={(p) => setCandidateDialog({ open: true, editing: null, position: p })}
             onCandidateClick={setCandidateDetail}
             onWeeklyKpiClick={setWeeklyKpiModal}
+            onWeeklyKpiSave={handleWeeklyKpiSave}
             onAddHighlight={() => setInsightDialog({ open: true, kind: 'note' })}
             onAddBlocker={() => setInsightDialog({ open: true, kind: 'blocker' })}
           />
@@ -2404,7 +2915,11 @@ export default function RecruitmentPage() {
       </div>
 
       {/* ── Dialogs ── */}
-      <WeeklyKpiModal position={weeklyKpiModal} onClose={() => setWeeklyKpiModal(null)} />
+      <WeeklyKpiModal
+        position={weeklyKpiModal}
+        onClose={() => setWeeklyKpiModal(null)}
+        onCandidateClick={setCandidateDetail}
+      />
       <InsightDialog
         open={insightDialog.open}
         kind={insightDialog.kind}

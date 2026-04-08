@@ -180,20 +180,27 @@ model User {
 // ─── Recruitment ─────────────────────────────────────────────
 
 model JobPosition {
-  id          BigInt    @id @default(autoincrement())
-  title       String    @db.VarChar(255)
-  level       String    @default("") @db.VarChar(100)
-  domain      String    @default("") @db.VarChar(100)
-  priority    String    @default("B") @db.VarChar(10)
-  headcount   Int       @default(1)
-  status      String    @default("NOT_STARTED") @db.VarChar(50)
-  note        String?   @db.Text
-  blocker     String?   @db.Text
-  openedAt    DateTime  @default(now()) @map("opened_at")
-  closedAt    DateTime? @map("closed_at")
-  createdById BigInt    @map("created_by_id")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id                BigInt    @id @default(autoincrement())
+  title             String    @db.VarChar(255)
+  level             String    @default("") @db.VarChar(100)
+  domain            String    @default("") @db.VarChar(100)
+  priority          String    @default("B") @db.VarChar(10)
+  headcount         Int       @default(1)
+  status            String    @default("NOT_STARTED") @db.VarChar(50)
+  requestDate       DateTime? @map("request_date")
+  onboardDeadline   DateTime? @map("onboard_deadline")
+  descriptionSkills String?   @map("description_skills") @db.Text
+  salaryRangeUsd    String?   @map("salary_range_usd") @db.VarChar(255)
+  mainSkills        String?   @map("main_skills") @db.Text
+  jdDetails         String?   @map("jd_details") @db.Text
+  cvSource          String?   @map("cv_source") @db.Text
+  note              String?   @db.Text
+  blocker           String?   @db.Text
+  openedAt          DateTime  @default(now()) @map("opened_at")
+  closedAt          DateTime? @map("closed_at")
+  createdById       BigInt    @map("created_by_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   createdBy   User                   @relation("PositionCreatedBy", fields: [createdById], references: [id])
   candidates  RecruitmentCandidate[]

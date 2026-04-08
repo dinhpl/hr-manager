@@ -57,6 +57,13 @@ export interface CreatePositionDto {
   domain?: string;
   priority?: Priority;
   headcount?: number;
+  requestDate?: string;
+  onboardDeadline?: string;
+  descriptionSkills?: string;
+  salaryRangeUsd?: string;
+  mainSkills?: string;
+  jdDetails?: string;
+  cvSource?: string;
   note?: string;
   blocker?: string;
   openedAt?: string;
@@ -68,6 +75,13 @@ export interface UpdatePositionDto {
   domain?: string;
   priority?: Priority;
   headcount?: number;
+  requestDate?: string | null;
+  onboardDeadline?: string | null;
+  descriptionSkills?: string;
+  salaryRangeUsd?: string;
+  mainSkills?: string;
+  jdDetails?: string;
+  cvSource?: string;
   status?: RecruitmentStatus;
   note?: string;
   blocker?: string;
@@ -92,6 +106,7 @@ export interface CreateCandidateDto {
   source?: string;
   currentStage?: CandidateStage;
   note?: string;
+  appliedAt?: string;
 }
 
 export interface UpdateCandidateDto {

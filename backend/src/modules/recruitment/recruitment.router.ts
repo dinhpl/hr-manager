@@ -36,4 +36,4 @@ recruitmentRouter.get(   '/candidates/:candidateId',         ctrl.getCandidateBy
 recruitmentRouter.patch( '/candidates/:candidateId',         requireRoles('HR', 'ADMIN'), ctrl.patchCandidate);
 recruitmentRouter.delete('/candidates/:candidateId',         requireRoles('HR', 'ADMIN'), ctrl.removeCandidate);
 recruitmentRouter.patch( '/candidates/:candidateId/stage',   requireRoles('HR', 'ADMIN'), ctrl.patchCandidateStage);
-recruitmentRouter.post(  '/candidates/:candidateId/cv',      requireRoles('HR', 'ADMIN'), uploadCv.single('cv'), ctrl.postCandidateCv);
+recruitmentRouter.post(  '/candidates/:candidateId/cv',      requireRoles('HR', 'ADMIN'), uploadCv.array('cv', 10), ctrl.postCandidateCv);

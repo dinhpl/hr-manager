@@ -20,6 +20,12 @@ function serializeBigInt<T>(obj: T): T {
   ) as T;
 }
 
+function normalizeText(value?: string): string | null {
+  if (value === undefined) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 const CANDIDATE_SELECT = {
   id: true,
   positionId: true,
@@ -43,6 +49,13 @@ const POSITION_SELECT = {
   priority: true,
   headcount: true,
   status: true,
+  requestDate: true,
+  onboardDeadline: true,
+  descriptionSkills: true,
+  salaryRangeUsd: true,
+  mainSkills: true,
+  jdDetails: true,
+  cvSource: true,
   note: true,
   blocker: true,
   openedAt: true,
@@ -125,39 +138,61 @@ export async function getPosition(id: bigint) {
 }
 
 export async function createPosition(dto: CreatePositionDto, createdById: bigint) {
+  const createData: Record<string, unknown> = {
+    title: dto.title.trim(),
+    level: dto.level?.trim() ?? '',
+    domain: dto.domain?.trim() ?? '',
+    priority: dto.priority ?? 'B',
+    headcount: dto.headcount ?? 1,
+    requestDate: dto.requestDate ? new Date(dto.requestDate) : null,
+    onboardDeadline: dto.onboardDeadline ? new Date(dto.onboardDeadline) : null,
+    descriptionSkills: normalizeText(dto.descriptionSkills),
+    salaryRangeUsd: normalizeText(dto.salaryRangeUsd),
+    mainSkills: normalizeText(dto.mainSkills),
+    jdDetails: normalizeText(dto.jdDetails),
+    cvSource: normalizeText(dto.cvSource),
+    note: normalizeText(dto.note),
+    blocker: normalizeText(dto.blocker),
+    openedAt: dto.openedAt ? new Date(dto.openedAt) : new Date(),
+    createdById,
+  };
+
   const pos = await prisma.jobPosition.create({
-    data: {
-      title: dto.title.trim(),
-      level: dto.level?.trim() ?? '',
-      domain: dto.domain?.trim() ?? '',
-      priority: dto.priority ?? 'B',
-      headcount: dto.headcount ?? 1,
-      note: dto.note?.trim() ?? null,
-      blocker: dto.blocker?.trim() ?? null,
-      openedAt: dto.openedAt ? new Date(dto.openedAt) : new Date(),
-      createdById,
-    },
+    data: createData as never,
     select: POSITION_SELECT,
   });
   return serializeBigInt(pos);
 }
 
 export async function updatePosition(id: bigint, dto: UpdatePositionDto) {
+  const updateData: Record<string, unknown> = {
+    ...(dto.title !== undefined && { title: dto.title.trim() }),
+    ...(dto.level !== undefined && { level: dto.level.trim() }),
+    ...(dto.domain !== undefined && { domain: dto.domain.trim() }),
+    ...(dto.priority !== undefined && { priority: dto.priority }),
+    ...(dto.headcount !== undefined && { headcount: dto.headcount }),
+    ...(dto.requestDate !== undefined && {
+      requestDate: dto.requestDate ? new Date(dto.requestDate) : null,
+    }),
+    ...(dto.onboardDeadline !== undefined && {
+      onboardDeadline: dto.onboardDeadline ? new Date(dto.onboardDeadline) : null,
+    }),
+    ...(dto.descriptionSkills !== undefined && { descriptionSkills: normalizeText(dto.descriptionSkills) }),
+    ...(dto.salaryRangeUsd !== undefined && { salaryRangeUsd: normalizeText(dto.salaryRangeUsd) }),
+    ...(dto.mainSkills !== undefined && { mainSkills: normalizeText(dto.mainSkills) }),
+    ...(dto.jdDetails !== undefined && { jdDetails: normalizeText(dto.jdDetails) }),
+    ...(dto.cvSource !== undefined && { cvSource: normalizeText(dto.cvSource) }),
+    ...(dto.status !== undefined && VALID_STATUSES.includes(dto.status) && { status: dto.status }),
+    ...(dto.note !== undefined && { note: normalizeText(dto.note) }),
+    ...(dto.blocker !== undefined && { blocker: normalizeText(dto.blocker) }),
+    ...(dto.closedAt !== undefined && {
+      closedAt: dto.closedAt ? new Date(dto.closedAt) : null,
+    }),
+  };
+
   const pos = await prisma.jobPosition.update({
     where: { id },
-    data: {
-      ...(dto.title !== undefined && { title: dto.title.trim() }),
-      ...(dto.level !== undefined && { level: dto.level.trim() }),
-      ...(dto.domain !== undefined && { domain: dto.domain.trim() }),
-      ...(dto.priority !== undefined && { priority: dto.priority }),
-      ...(dto.headcount !== undefined && { headcount: dto.headcount }),
-      ...(dto.status !== undefined && VALID_STATUSES.includes(dto.status) && { status: dto.status }),
-      ...(dto.note !== undefined && { note: dto.note?.trim() ?? null }),
-      ...(dto.blocker !== undefined && { blocker: dto.blocker?.trim() ?? null }),
-      ...(dto.closedAt !== undefined && {
-        closedAt: dto.closedAt ? new Date(dto.closedAt) : null,
-      }),
-    },
+    data: updateData as never,
     select: POSITION_SELECT,
   });
   return serializeBigInt(pos);
@@ -225,6 +260,7 @@ export async function createCandidate(positionId: bigint, dto: CreateCandidateDt
       source: dto.source ?? 'OTHER',
       currentStage: dto.currentStage ?? 'APPLIED',
       note: dto.note?.trim() ?? null,
+      ...(dto.appliedAt ? { appliedAt: new Date(dto.appliedAt) } : {}),
     },
     select: CANDIDATE_SELECT,
   });

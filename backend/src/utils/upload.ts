@@ -169,17 +169,23 @@ const CV_ALLOWED_MIME = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
 ];
+
+const CV_ALLOWED_EXT = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.heic'];
 
 export const uploadCv = multer({
   storage: cvStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (CV_ALLOWED_MIME.includes(file.mimetype) || ['.pdf', '.doc', '.docx'].includes(ext)) {
+    if (CV_ALLOWED_MIME.includes(file.mimetype) || CV_ALLOWED_EXT.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('CV must be PDF, DOC, or DOCX.'));
+      cb(new Error('File must be PDF, DOC, DOCX, JPG, JPEG, PNG, or HEIC.'));
     }
   },
 });
