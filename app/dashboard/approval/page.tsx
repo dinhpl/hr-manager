@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useConfirmDialog } from '@/hooks/use-confirm-dialog';
-import { apiClient, getLeaveAttachmentUrl } from '@/lib/api-client';
+import { apiClient, getApiBaseUrl, getLeaveAttachmentUrl } from '@/lib/api-client';
 import {
   buildQuery,
   formatDateTimeVN,
@@ -70,6 +70,7 @@ interface LeaveRequestItem {
     id?: string;
     fullName?: string | null;
     username?: string | null;
+    avatar?: string | null;
     department?: string | null;
   };
   leaveType?: {
@@ -114,13 +115,18 @@ function getEmployeeInitials(name?: string | null) {
     .join('');
 }
 
-function getPrimaryReason(reason?: string | null) {
+function getAvatarUrl(avatar?: string | null): string | null {
+  if (!avatar) return null;
+  if (avatar.startsWith('http')) return avatar;
+  if (avatar.startsWith('/assets')) return avatar;
+  if (avatar.startsWith('/uploads')) return getApiBaseUrl() + avatar;
+  return null;
+}
+
+function getDisplayReason(reason?: string | null) {
   if (!reason) return '—';
-  const [firstLine] = reason
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-  return firstLine || '—';
+  const normalized = reason.trim();
+  return normalized || '—';
 }
 
 function isOverdue(request: LeaveRequestItem) {
@@ -687,6 +693,15 @@ export default function ApprovalPage() {
             const isLoading = actionLoadingId === requestId;
             const isViewLoading = detailLoadingId === requestId;
             const accentColor = derivedStatus === 'overdue' ? '#dc2626' : '#1DB87A';
+            const avatarUrl = getAvatarUrl(request.user?.avatar);
+            const leaveTypeCode = request.leaveType?.code || '—';
+            const leaveTypeName = request.leaveType?.name || 'Chưa xác định';
+            const leaveTypeLabel =
+              leaveTypeCode !== '—' && leaveTypeName !== 'Chưa xác định'
+                ? `${leaveTypeCode} · ${leaveTypeName}`
+                : leaveTypeCode !== '—'
+                  ? leaveTypeCode
+                  : leaveTypeName;
 
             return (
               <div
@@ -702,12 +717,20 @@ export default function ApprovalPage() {
                 <div className="flex items-start justify-between gap-3 px-4 pt-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="relative">
-                      <div
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                        style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
-                      >
-                        {getEmployeeInitials(fullName)}
-                      </div>
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt={fullName}
+                          className="h-10 w-10 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+                          style={{ background: 'linear-gradient(135deg, #1DB87A 0%, #0E474E 100%)' }}
+                        >
+                          {getEmployeeInitials(fullName)}
+                        </div>
+                      )}
                       {derivedStatus === 'overdue' && (
                         <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500">
                           <span className="h-1.5 w-1.5 rounded-full bg-white" />
@@ -751,10 +774,13 @@ export default function ApprovalPage() {
                 <div className="px-4 pt-3 pb-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
-                      className="rounded-md px-2 py-0.5 text-[11px] font-bold text-white"
-                      style={{ background: request.leaveType?.color || '#6b7280' }}
+                      className="inline-flex items-center rounded-lg border-2 px-2.5 py-1 text-xs font-extrabold tracking-wide text-white shadow-sm"
+                      style={{
+                        background: request.leaveType?.color || '#6b7280',
+                        borderColor: request.leaveType?.color || '#6b7280',
+                      }}
                     >
-                      {request.leaveType?.code || '—'}
+                      Loại nghỉ: {leaveTypeLabel}
                     </span>
                     <span className="text-sm font-semibold" style={{ color: '#203430' }}>
                       {formatDateVN(request.fromDate)}
@@ -772,8 +798,8 @@ export default function ApprovalPage() {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                       <div>
                         <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#9eb5ae' }}>Lý do</span>
-                        <p className="mt-0.5 text-xs font-medium leading-relaxed" style={{ color: '#48635b' }}>
-                          {getPrimaryReason(request.reason)}
+                        <p className="mt-0.5 text-xs font-medium leading-relaxed whitespace-pre-line" style={{ color: '#48635b' }}>
+                          {getDisplayReason(request.reason)}
                         </p>
                       </div>
                       <div>

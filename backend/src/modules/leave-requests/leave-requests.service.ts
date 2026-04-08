@@ -52,6 +52,7 @@ const LEAVE_REQUEST_INCLUDE = {
       id: true,
       fullName: true,
       username: true,
+      avatar: true,
       department: true,
       managerId: true,
       email: true,
@@ -181,14 +182,8 @@ function sanitizeLeaveRequestForViewer<
     user?: { id?: bigint } | null;
     reason?: string | null;
   },
->(request: T, requestingUser: AuthUser) {
-  const ownerId = request.userId ?? request.user?.id;
-  if (ownerId === requestingUser.id) return request;
-
-  return {
-    ...request,
-    reason: null,
-  };
+>(request: T, _requestingUser: AuthUser) {
+  return request;
 }
 
 function canApproveRequest(
