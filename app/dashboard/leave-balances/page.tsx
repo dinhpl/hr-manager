@@ -1,7 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { CalendarDays, Eye, FileDown, FileText, History, Pencil, Save, Upload, X } from 'lucide-react';
+import {
+  CalendarDays,
+  Eye,
+  FileDown,
+  FileText,
+  History,
+  Pencil,
+  Save,
+  Upload,
+  X,
+} from 'lucide-react';
 import { TiptapNotionEditor } from '@/components/tiptap-notion-editor';
 import {
   Dialog,
@@ -19,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { api, apiClient, getStoredToken } from '@/lib/api-client';
 import { buildQuery, formatDate, formatDateTimeVN, toFrontendRole } from '@/lib/hr-utils';
@@ -193,6 +204,7 @@ export default function LeaveBalancesPage() {
   const [balanceYear, setBalanceYear] = useState(new Date().getFullYear());
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
   const [editingBalance, setEditingBalance] = useState<LeaveBalanceApiRow | null>(null);
+  const [editingModalTab, setEditingModalTab] = useState<'info' | 'history'>('info');
   const [balanceForm, setBalanceForm] = useState({
     annualDays: '',
     carryOverDays: '',
@@ -215,6 +227,11 @@ export default function LeaveBalancesPage() {
   const [balanceHistory, setBalanceHistory] = useState<LeaveBalanceHistoryItem[]>([]);
   const [isLoadingBalanceHistory, setIsLoadingBalanceHistory] = useState(false);
   const [balanceHistoryError, setBalanceHistoryError] = useState<string | null>(null);
+  const [historyTypeFilter, setHistoryTypeFilter] = useState('all');
+  const [editingBalanceHistory, setEditingBalanceHistory] = useState<LeaveBalanceHistoryItem[]>([]);
+  const [isLoadingEditingBalanceHistory, setIsLoadingEditingBalanceHistory] = useState(false);
+  const [editingBalanceHistoryError, setEditingBalanceHistoryError] = useState<string | null>(null);
+  const [editingHistoryTypeFilter, setEditingHistoryTypeFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [nameKeyword, setNameKeyword] = useState('');
 
@@ -252,6 +269,38 @@ export default function LeaveBalancesPage() {
       return matchesDepartment && matchesKeyword;
     });
   }, [departmentFilter, leaveBalances, nameKeyword]);
+
+  const editingHistoryTypeOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        editingBalanceHistory
+          .map((item) => String(item.leaveType?.code ?? '').trim())
+          .filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [editingBalanceHistory]);
+
+  const filteredEditingBalanceHistory = useMemo(() => {
+    if (editingHistoryTypeFilter === 'all') return editingBalanceHistory;
+    return editingBalanceHistory.filter(
+      (item) => String(item.leaveType?.code ?? '').trim() === editingHistoryTypeFilter,
+    );
+  }, [editingBalanceHistory, editingHistoryTypeFilter]);
+
+  const historyTypeOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        balanceHistory.map((item) => String(item.leaveType?.code ?? '').trim()).filter(Boolean),
+      ),
+    ).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [balanceHistory]);
+
+  const filteredBalanceHistory = useMemo(() => {
+    if (historyTypeFilter === 'all') return balanceHistory;
+    return balanceHistory.filter(
+      (item) => String(item.leaveType?.code ?? '').trim() === historyTypeFilter,
+    );
+  }, [balanceHistory, historyTypeFilter]);
 
   useEffect(() => {
     let isMounted = true;
@@ -355,6 +404,10 @@ export default function LeaveBalancesPage() {
   };
 
   const openInfoDialog = (row: LeaveBalanceApiRow) => {
+    setEditingModalTab('info');
+    setEditingHistoryTypeFilter('all');
+    setEditingBalanceHistory([]);
+    setEditingBalanceHistoryError(null);
     setEditingBalance(row);
     setBalanceForm({
       annualDays: String(row.annualDays),
@@ -370,6 +423,7 @@ export default function LeaveBalancesPage() {
 
   const openHistoryDialog = (row: LeaveBalanceApiRow) => {
     setHistoryBalance(row);
+    setHistoryTypeFilter('all');
     setBalanceHistory([]);
     setBalanceHistoryError(null);
   };
@@ -379,6 +433,24 @@ export default function LeaveBalancesPage() {
     setNoteEditorValue(row.note ?? '');
   };
 
+  const fetchLeaveRequestHistory = useCallback(async (targetBalance: LeaveBalanceApiRow) => {
+    const query = buildQuery({
+      scope: 'global',
+      userId: targetBalance.userId,
+      fromDate: `${targetBalance.year}-01-01 00:00`,
+      toDate: `${targetBalance.year}-12-31 23:59`,
+      limit: 100,
+      page: 1,
+    });
+
+    const response = await apiClient.get<LeaveBalanceHistoryItem[]>(`/api/leave-requests?${query}`);
+    return (response.data ?? []).filter(
+      (item) =>
+        String(item.user?.id ?? '') === String(targetBalance.userId) &&
+        !['REJECTED', 'CANCELLED'].includes(String(item.status ?? '').toUpperCase()),
+    );
+  }, []);
+
   const handleSaveNote = async () => {
     if (!noteBalance || !canEditNote) return;
     setIsSavingNote(true);
@@ -387,9 +459,7 @@ export default function LeaveBalancesPage() {
         note: noteEditorValue || null,
       });
       setLeaveBalances((prev) =>
-        prev.map((b) =>
-          b.id === noteBalance.id ? { ...b, note: noteEditorValue || null } : b,
-        ),
+        prev.map((b) => (b.id === noteBalance.id ? { ...b, note: noteEditorValue || null } : b)),
       );
       setNoteBalance(null);
       toast.success('Đã lưu ghi chú.');
@@ -408,26 +478,11 @@ export default function LeaveBalancesPage() {
       return;
     }
 
-    const query = buildQuery({
-      scope: 'global',
-      userId: historyBalance.userId,
-      fromDate: `${historyBalance.year}-01-01 00:00`,
-      toDate: `${historyBalance.year}-12-31 23:59`,
-      limit: 100,
-      page: 1,
-    });
-
     setIsLoadingBalanceHistory(true);
     setBalanceHistoryError(null);
 
-    apiClient
-      .get<LeaveBalanceHistoryItem[]>(`/api/leave-requests?${query}`)
-      .then((response) => {
-        const rows = (response.data ?? []).filter(
-          (item) =>
-            String(item.user?.id ?? '') === String(historyBalance.userId) &&
-            !['REJECTED', 'CANCELLED'].includes(String(item.status ?? '').toUpperCase()),
-        );
+    fetchLeaveRequestHistory(historyBalance)
+      .then((rows) => {
         setBalanceHistory(rows);
       })
       .catch((error) => {
@@ -439,7 +494,33 @@ export default function LeaveBalancesPage() {
       .finally(() => {
         setIsLoadingBalanceHistory(false);
       });
-  }, [historyBalance]);
+  }, [fetchLeaveRequestHistory, historyBalance]);
+
+  useEffect(() => {
+    if (!editingBalance) {
+      setEditingBalanceHistory([]);
+      setEditingBalanceHistoryError(null);
+      setIsLoadingEditingBalanceHistory(false);
+      return;
+    }
+
+    setIsLoadingEditingBalanceHistory(true);
+    setEditingBalanceHistoryError(null);
+
+    fetchLeaveRequestHistory(editingBalance)
+      .then((rows) => {
+        setEditingBalanceHistory(rows);
+      })
+      .catch((error) => {
+        setEditingBalanceHistory([]);
+        setEditingBalanceHistoryError(
+          error instanceof Error ? error.message : 'Không thể tải lịch sử nghỉ phép.',
+        );
+      })
+      .finally(() => {
+        setIsLoadingEditingBalanceHistory(false);
+      });
+  }, [editingBalance, fetchLeaveRequestHistory]);
 
   const handleSaveBalance = async () => {
     if (!editingBalance || !canManageLeaveBalances) return;
@@ -1016,61 +1097,188 @@ export default function LeaveBalancesPage() {
                 </button>
               </div>
               <div className="overflow-y-auto px-6 py-5">
-                <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                  {getBalanceFormSections(editingBalance.year).map((section) => (
-                    <div
-                      key={section.title}
-                      className="rounded-2xl border p-4"
-                      style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
-                    >
-                      <div className="mb-4">
-                        <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
-                          {section.title}
-                        </h3>
-                        <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
-                          {section.description}
-                        </p>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {section.fields.map(({ key, label, hint }) => (
-                          <div key={key} className="space-y-1.5">
-                            <label
-                              className="block text-xs font-semibold"
-                              style={{ color: '#6b7f78' }}
-                            >
-                              {label}
-                            </label>
-                            <Input
-                              type="text"
-                              inputMode="decimal"
-                              pattern="-?[0-9]*[.,]?[0-9]*"
-                              value={balanceForm[key as keyof typeof balanceForm]}
-                              onChange={(e) =>
-                                setBalanceForm((prev) => ({
-                                  ...prev,
-                                  [key]: sanitizeBalanceInput(e.target.value),
-                                }))
-                              }
-                            />
-                            <p className="text-[11px]" style={{ color: '#94a3b8' }}>
-                              {hint}
+                <Tabs
+                  value={editingModalTab}
+                  onValueChange={(value) => setEditingModalTab(value as 'info' | 'history')}
+                  className="space-y-4"
+                >
+                  <TabsList className="grid h-auto w-full grid-cols-2">
+                    <TabsTrigger value="info">Thông Tin phép năm</TabsTrigger>
+                    <TabsTrigger value="history">Lịch Sử phép năm</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="info" className="mt-0 space-y-4">
+                    <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                      {getBalanceFormSections(editingBalance.year).map((section) => (
+                        <div
+                          key={section.title}
+                          className="rounded-2xl border p-4"
+                          style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
+                        >
+                          <div className="mb-4">
+                            <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                              {section.title}
+                            </h3>
+                            <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
+                              {section.description}
                             </p>
                           </div>
-                        ))}
-                      </div>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {section.fields.map(({ key, label, hint }) => (
+                              <div key={key} className="space-y-1.5">
+                                <label
+                                  className="block text-xs font-semibold"
+                                  style={{ color: '#6b7f78' }}
+                                >
+                                  {label}
+                                </label>
+                                <Input
+                                  type="text"
+                                  inputMode="decimal"
+                                  pattern="-?[0-9]*[.,]?[0-9]*"
+                                  value={balanceForm[key as keyof typeof balanceForm]}
+                                  onChange={(e) =>
+                                    setBalanceForm((prev) => ({
+                                      ...prev,
+                                      [key]: sanitizeBalanceInput(e.target.value),
+                                    }))
+                                  }
+                                />
+                                <p className="text-[11px]" style={{ color: '#94a3b8' }}>
+                                  {hint}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <div
-                  className="mt-4 rounded-2xl px-4 py-3 text-xs"
-                  style={{ background: '#f0fdf9', color: '#6b7f78' }}
-                >
-                  <p>
-                    <strong style={{ color: '#203430' }}>Giá trị còn lại</strong> trên bảng sẽ được
-                    tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
-                  </p>
-                </div>
+                    <div
+                      className="rounded-2xl px-4 py-3 text-xs"
+                      style={{ background: '#f0fdf9', color: '#6b7f78' }}
+                    >
+                      <p>
+                        <strong style={{ color: '#203430' }}>Giá trị còn lại</strong> trên bảng sẽ
+                        được tính lại ngay sau khi lưu dựa trên các số liệu bạn chỉnh ở đây.
+                      </p>
+                    </div>
+                  </TabsContent>
 
+                  <TabsContent value="history" className="mt-0">
+                    <div
+                      className="rounded-2xl border"
+                      style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
+                    >
+                      <div
+                        className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3"
+                        style={{ borderColor: '#e2ede9' }}
+                      >
+                        <div>
+                          <h3 className="text-sm font-semibold" style={{ color: '#203430' }}>
+                            Lịch sử nghỉ phép năm {editingBalance.year}
+                          </h3>
+                          <p className="mt-1 text-xs" style={{ color: '#6b7f78' }}>
+                            Chỉ hiển thị các đơn của member đang chọn.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={editingHistoryTypeFilter}
+                            onValueChange={setEditingHistoryTypeFilter}
+                          >
+                            <SelectTrigger className="h-8 w-[180px]">
+                              <SelectValue placeholder="Lọc theo type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Tất cả</SelectItem>
+                              {editingHistoryTypeOptions.map((typeCode) => (
+                                <SelectItem key={typeCode} value={typeCode}>
+                                  {typeCode}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                            {filteredEditingBalanceHistory.length} bản ghi
+                          </span>
+                        </div>
+                      </div>
+
+                      {isLoadingEditingBalanceHistory ? (
+                        <div className="px-4 py-8 text-center text-sm" style={{ color: '#6b7f78' }}>
+                          Đang tải lịch sử...
+                        </div>
+                      ) : editingBalanceHistoryError ? (
+                        <div className="px-4 py-8 text-center text-sm text-red-500">
+                          {editingBalanceHistoryError}
+                        </div>
+                      ) : filteredEditingBalanceHistory.length === 0 ? (
+                        <div className="px-4 py-8 text-center text-sm" style={{ color: '#6b7f78' }}>
+                          Chưa có lịch sử nghỉ phép theo bộ lọc đã chọn.
+                        </div>
+                      ) : (
+                        <div className="space-y-3 p-4">
+                          {filteredEditingBalanceHistory.map((item) => {
+                            const status = getStatusBadge(item.status);
+                            const leaveTypeLabel = item.leaveType?.name
+                              ? `${item.leaveType.code} - ${item.leaveType.name}`
+                              : item.leaveType?.code || 'Nghỉ phép';
+
+                            return (
+                              <div
+                                key={item.id}
+                                className="rounded-2xl border p-4"
+                                style={{ borderColor: '#e2ede9', background: '#fff' }}
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span
+                                        className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                                        style={{
+                                          background: `${item.leaveType?.color || '#e2ede9'}20`,
+                                          color: item.leaveType?.color || '#203430',
+                                        }}
+                                      >
+                                        {leaveTypeLabel}
+                                      </span>
+                                      <span
+                                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${status.className}`}
+                                      >
+                                        {status.label}
+                                      </span>
+                                    </div>
+                                    <p
+                                      className="text-sm font-semibold"
+                                      style={{ color: '#203430' }}
+                                    >
+                                      {formatDate(item.fromDate)} - {formatDate(item.toDate)} ·{' '}
+                                      {Number(item.totalDays)} ngày
+                                    </p>
+                                    <p className="text-xs" style={{ color: '#6b7f78' }}>
+                                      Lý do: {getHistoryReason(item.reason)}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className="space-y-1 text-right text-xs"
+                                    style={{ color: '#6b7f78' }}
+                                  >
+                                    <p>Tạo lúc: {formatDateTimeVN(item.createdAt)}</p>
+                                    <p>
+                                      Duyệt lúc:{' '}
+                                      {item.approvedAt ? formatDateTimeVN(item.approvedAt) : '—'}
+                                    </p>
+                                    <p>Người duyệt: {item.approver?.fullName || '—'}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </div>
 
               <div
@@ -1085,16 +1293,18 @@ export default function LeaveBalancesPage() {
                 >
                   Hủy
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSaveBalance()}
-                  disabled={isSavingBalance}
-                  className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  style={{ background: '#1DB87A' }}
-                >
-                  <Save size={14} />
-                  {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
-                </button>
+                {editingModalTab === 'info' ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveBalance()}
+                    disabled={isSavingBalance}
+                    className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ background: '#1DB87A' }}
+                  >
+                    <Save size={14} />
+                    {isSavingBalance ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  </button>
+                ) : null}
               </div>
             </div>
           </DialogContent>
@@ -1146,7 +1356,7 @@ export default function LeaveBalancesPage() {
                   style={{ borderColor: '#e2ede9', background: '#fcfefd' }}
                 >
                   <div
-                    className="flex items-center justify-between gap-3 border-b px-4 py-3"
+                    className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"
                     style={{ borderColor: '#e2ede9' }}
                   >
                     <div>
@@ -1157,9 +1367,24 @@ export default function LeaveBalancesPage() {
                         Chỉ hiển thị các đơn của member đang chọn.
                       </p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                      {balanceHistory.length} bản ghi
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <Select value={historyTypeFilter} onValueChange={setHistoryTypeFilter}>
+                        <SelectTrigger className="h-8 w-[180px]">
+                          <SelectValue placeholder="Lọc theo type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Tất cả</SelectItem>
+                          {historyTypeOptions.map((typeCode) => (
+                            <SelectItem key={typeCode} value={typeCode}>
+                              {typeCode}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                        {filteredBalanceHistory.length} bản ghi
+                      </span>
+                    </div>
                   </div>
 
                   {isLoadingBalanceHistory ? (
@@ -1170,13 +1395,13 @@ export default function LeaveBalancesPage() {
                     <div className="px-4 py-8 text-center text-sm text-red-500">
                       {balanceHistoryError}
                     </div>
-                  ) : balanceHistory.length === 0 ? (
+                  ) : filteredBalanceHistory.length === 0 ? (
                     <div className="px-4 py-8 text-center text-sm" style={{ color: '#6b7f78' }}>
-                      Chưa có lịch sử nghỉ phép trong năm {historyBalance.year}.
+                      Chưa có lịch sử nghỉ phép theo bộ lọc đã chọn.
                     </div>
                   ) : (
                     <div className="space-y-3 p-4">
-                      {balanceHistory.map((item) => {
+                      {filteredBalanceHistory.map((item) => {
                         const status = getStatusBadge(item.status);
                         const leaveTypeLabel = item.leaveType?.name
                           ? `${item.leaveType.code} - ${item.leaveType.name}`
@@ -1282,7 +1507,8 @@ export default function LeaveBalancesPage() {
                       Ghi chú
                     </h2>
                     <p className="text-xs" style={{ color: '#6b7f78' }}>
-                      {noteBalance.user.fullName} · {noteBalance.leaveType.name} · {noteBalance.year}
+                      {noteBalance.user.fullName} · {noteBalance.leaveType.name} ·{' '}
+                      {noteBalance.year}
                     </p>
                   </div>
                 </div>

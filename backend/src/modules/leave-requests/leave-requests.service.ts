@@ -33,6 +33,8 @@ type AuthUser = {
   role: UserRole;
 };
 
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 type LeavePolicySettings = {
   advanceRequestDays?: number;
   maxConsecutiveDays?: number;
@@ -121,6 +123,44 @@ function formatLeaveTotalDaysLabel(totalDays: string | number | Prisma.Decimal) 
   }
 
   return `${numericTotalDays.toFixed(1)} ngay`;
+}
+
+async function adjustWfhDaysOnAnnualBalance(
+  tx: TxClient,
+  userId: bigint,
+  year: number,
+  totalDays: number,
+  mode: 'increment' | 'decrement',
+) {
+  if (totalDays <= 0) return;
+
+  const annualLeaveType = await tx.leaveType.findFirst({
+    where: { code: 'AL' },
+    select: { id: true },
+  });
+  if (!annualLeaveType) return;
+
+  await tx.leaveBalance.upsert({
+    where: {
+      userId_leaveTypeId_year: {
+        userId,
+        leaveTypeId: annualLeaveType.id,
+        year,
+      },
+    },
+    create: {
+      userId,
+      leaveTypeId: annualLeaveType.id,
+      year,
+      wfhDays: totalDays,
+    },
+    update: {
+      wfhDays:
+        mode === 'increment'
+          ? { increment: totalDays }
+          : { decrement: totalDays },
+    },
+  });
 }
 
 async function sendLeaveMailSafely(task: () => Promise<unknown>) {
@@ -899,6 +939,15 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
         request.leaveType.code === 'CO',
       );
     }
+    if (request.leaveType.code === 'WFH') {
+      await adjustWfhDaysOnAnnualBalance(
+        tx,
+        request.userId,
+        year,
+        Number(request.totalDays),
+        'increment',
+      );
+    }
 
     return serializeRequestById(tx, id);
   });
@@ -1060,6 +1109,15 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
           year,
           undefined,
           request.leaveType.code === 'CO',
+        );
+      }
+      if (request.leaveType.code === 'WFH') {
+        await adjustWfhDaysOnAnnualBalance(
+          tx,
+          request.userId,
+          year,
+          Number(request.totalDays),
+          'decrement',
         );
       }
     }
@@ -1266,6 +1324,15 @@ export async function bulkApproveLeaveRequests(
           year,
           undefined,
           request.leaveType.code === 'CO',
+        );
+      }
+      if (request.leaveType.code === 'WFH') {
+        await adjustWfhDaysOnAnnualBalance(
+          tx,
+          request.userId,
+          year,
+          Number(request.totalDays),
+          'increment',
         );
       }
     }
