@@ -5,6 +5,7 @@ const SETTINGS_KEYS = {
   APPROVAL_FLOW: 'approval_flow',
   ATTENDANCE: 'attendance',
   MAIL: 'mail_settings',
+  WORKSPACE_MAP: 'workspace_map',
 } as const;
 
 const DEFAULTS: Record<string, unknown> = {
@@ -83,4 +84,12 @@ export async function getMailSettings() {
 
 export async function updateMailSettings(value: unknown) {
   return updateSetting(SETTINGS_KEYS.MAIL, value);
+}
+
+export async function getWorkspaceMap() {
+  return getSetting(SETTINGS_KEYS.WORKSPACE_MAP);
+}
+
+export async function updateWorkspaceMap(value: unknown) {
+  return updateSetting(SETTINGS_KEYS.WORKSPACE_MAP, value);
 }
