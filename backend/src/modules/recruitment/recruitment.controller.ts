@@ -12,8 +12,15 @@ import type {
   UpsertWeeklyKpiDto,
   RecruitmentStatus,
   CandidateStage,
+  CreateInsightDto,
 } from './recruitment.types';
-import { VALID_STATUSES, VALID_STAGES, VALID_PRIORITIES, VALID_SOURCES } from './recruitment.types';
+import {
+  VALID_STATUSES,
+  VALID_STAGES,
+  VALID_PRIORITIES,
+  VALID_SOURCES,
+  VALID_INSIGHT_TYPES,
+} from './recruitment.types';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -67,6 +74,14 @@ export async function postPosition(req: Request, res: Response, next: NextFuncti
     if (body.priority && !VALID_PRIORITIES.includes(body.priority)) {
       return sendError(res, `priority must be one of ${VALID_PRIORITIES.join(', ')}`, 'VALIDATION_ERROR', 400);
     }
+    if (body.currentStage && !VALID_STAGES.includes(body.currentStage)) {
+      return sendError(
+        res,
+        `currentStage must be one of ${VALID_STAGES.join(', ')}`,
+        'VALIDATION_ERROR',
+        400,
+      );
+    }
     if (body.headcount !== undefined && (!Number.isInteger(body.headcount) || body.headcount < 1)) {
       return sendError(res, 'headcount must be an integer >= 1', 'VALIDATION_ERROR', 400);
     }
@@ -97,6 +112,14 @@ export async function patchPosition(req: Request, res: Response, next: NextFunct
     }
     if (body.priority && !VALID_PRIORITIES.includes(body.priority)) {
       return sendError(res, `priority must be one of ${VALID_PRIORITIES.join(', ')}`, 'VALIDATION_ERROR', 400);
+    }
+    if (body.currentStage && !VALID_STAGES.includes(body.currentStage)) {
+      return sendError(
+        res,
+        `currentStage must be one of ${VALID_STAGES.join(', ')}`,
+        'VALIDATION_ERROR',
+        400,
+      );
     }
     if (body.headcount !== undefined && (!Number.isInteger(body.headcount) || body.headcount < 1)) {
       return sendError(res, 'headcount must be an integer >= 1', 'VALIDATION_ERROR', 400);
@@ -285,6 +308,42 @@ export async function getStats(req: Request, res: Response, next: NextFunction) 
     const month = Number(req.query.month ?? new Date().getMonth() + 1);
     const stats = await svc.getDashboardStats(year, month);
     sendSuccess(res, stats);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─── Highlights & Blockers ───────────────────────────────────
+
+export async function postInsight(req: Request, res: Response, next: NextFunction) {
+  try {
+    const positionId = parseBigInt(req.params.id, res);
+    if (positionId === null) return;
+    const body = req.body as CreateInsightDto;
+    if (!body.type || !VALID_INSIGHT_TYPES.includes(body.type)) {
+      return sendError(
+        res,
+        `type must be one of ${VALID_INSIGHT_TYPES.join(', ')}`,
+        'VALIDATION_ERROR',
+        400,
+      );
+    }
+    if (!body.content?.trim()) {
+      return sendError(res, 'content is required', 'VALIDATION_ERROR', 400);
+    }
+    const insight = await svc.createInsight(positionId, body, req.user!.id);
+    sendSuccess(res, insight, undefined, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function removeInsight(req: Request, res: Response, next: NextFunction) {
+  try {
+    const insightId = parseBigInt(req.params.insightId, res);
+    if (insightId === null) return;
+    await svc.deleteInsight(insightId);
+    sendSuccess(res, { deleted: true });
   } catch (err) {
     next(err);
   }

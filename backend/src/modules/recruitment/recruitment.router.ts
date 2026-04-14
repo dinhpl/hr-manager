@@ -27,6 +27,10 @@ recruitmentRouter.delete('/positions/:id', requireRoles('HR', 'ADMIN'), ctrl.rem
 recruitmentRouter.get('/positions/:id/weekly', ctrl.getWeeklyKpi);
 recruitmentRouter.put('/positions/:id/weekly', requireRoles('HR', 'ADMIN'), ctrl.putWeeklyKpi);
 
+// ─── Insights (highlights/blockers) ──────────────────────────
+recruitmentRouter.post('/positions/:id/insights', requireRoles('HR', 'ADMIN'), ctrl.postInsight);
+recruitmentRouter.delete('/insights/:insightId', requireRoles('HR', 'ADMIN'), ctrl.removeInsight);
+
 // ─── Candidates (nested under position) ─────────────────────
 recruitmentRouter.get(  '/positions/:id/candidates',    ctrl.getCandidates);
 recruitmentRouter.post( '/positions/:id/candidates',    requireRoles('HR', 'ADMIN'), ctrl.postCandidate);

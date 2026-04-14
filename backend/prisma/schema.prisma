@@ -186,6 +186,7 @@ model JobPosition {
   domain            String    @default("") @db.VarChar(100)
   priority          String    @default("B") @db.VarChar(10)
   headcount         Int       @default(1)
+  currentStage      String    @default("APPLIED") @map("current_stage") @db.VarChar(50)
   status            String    @default("NOT_STARTED") @db.VarChar(50)
   requestDate       DateTime? @map("request_date")
   onboardDeadline   DateTime? @map("onboard_deadline")
@@ -205,8 +206,24 @@ model JobPosition {
   createdBy   User                   @relation("PositionCreatedBy", fields: [createdById], references: [id])
   candidates  RecruitmentCandidate[]
   weeklyStats WeeklyKpi[]
+  insights    RecruitmentInsight[]
 
   @@map("job_positions")
+}
+
+model RecruitmentInsight {
+  id          BigInt   @id @default(autoincrement())
+  positionId  BigInt   @map("position_id")
+  type        String   @db.VarChar(20)
+  content     String   @db.Text
+  createdById BigInt?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  position JobPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+
+  @@index([positionId, type])
+  @@map("recruitment_insights")
 }
 
 model RecruitmentCandidate {

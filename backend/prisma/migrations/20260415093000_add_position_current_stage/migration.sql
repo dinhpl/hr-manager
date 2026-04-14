@@ -1,0 +1,2 @@
+ALTER TABLE "job_positions"
+  ADD COLUMN "current_stage" VARCHAR(50) NOT NULL DEFAULT 'APPLIED';

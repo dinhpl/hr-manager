@@ -4,6 +4,7 @@ export type RecruitmentStatus =
   | 'INTERVIEWING'
   | 'OFFER_SENT'
   | 'HIRED'
+  | 'DONE'
   | 'ON_HOLD'
   | 'CANCELLED';
 
@@ -17,6 +18,7 @@ export type CandidateStage =
   | 'REJECTED';
 
 export type Priority = 'A' | 'B' | 'C';
+export type RecruitmentInsightType = 'HIGHLIGHT' | 'BLOCKER';
 
 export const VALID_STATUSES: RecruitmentStatus[] = [
   'NOT_STARTED',
@@ -24,6 +26,7 @@ export const VALID_STATUSES: RecruitmentStatus[] = [
   'INTERVIEWING',
   'OFFER_SENT',
   'HIRED',
+  'DONE',
   'ON_HOLD',
   'CANCELLED',
 ];
@@ -39,6 +42,7 @@ export const VALID_STAGES: CandidateStage[] = [
 ];
 
 export const VALID_PRIORITIES: Priority[] = ['A', 'B', 'C'];
+export const VALID_INSIGHT_TYPES: RecruitmentInsightType[] = ['HIGHLIGHT', 'BLOCKER'];
 
 export const VALID_SOURCES = [
   'LINKEDIN',
@@ -53,6 +57,7 @@ export const VALID_SOURCES = [
 
 export interface CreatePositionDto {
   title: string;
+  currentStage?: CandidateStage;
   level?: string;
   domain?: string;
   priority?: Priority;
@@ -71,6 +76,7 @@ export interface CreatePositionDto {
 
 export interface UpdatePositionDto {
   title?: string;
+  currentStage?: CandidateStage;
   level?: string;
   domain?: string;
   priority?: Priority;
@@ -129,4 +135,9 @@ export interface UpsertWeeklyKpiDto {
   stage: CandidateStage;
   kpiTarget?: number;
   actual?: number;
+}
+
+export interface CreateInsightDto {
+  type: RecruitmentInsightType;
+  content: string;
 }

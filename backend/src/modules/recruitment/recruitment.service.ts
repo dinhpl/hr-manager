@@ -8,8 +8,10 @@ import {
   UpdateCandidateDto,
   UpdateStageDto,
   UpsertWeeklyKpiDto,
+  CreateInsightDto,
   VALID_STATUSES,
   VALID_STAGES,
+  VALID_INSIGHT_TYPES,
 } from './recruitment.types';
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -44,6 +46,7 @@ const CANDIDATE_SELECT = {
 const POSITION_SELECT = {
   id: true,
   title: true,
+  currentStage: true,
   level: true,
   domain: true,
   priority: true,
@@ -60,6 +63,16 @@ const POSITION_SELECT = {
   blocker: true,
   openedAt: true,
   closedAt: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+};
+
+const INSIGHT_SELECT = {
+  id: true,
+  positionId: true,
+  type: true,
+  content: true,
   createdById: true,
   createdAt: true,
   updatedAt: true,
@@ -106,6 +119,11 @@ export async function listPositions(query: GetPositionsQuery) {
           where: hasMonthFilter ? { year: Number(query.year), month: Number(query.month) } : undefined,
           orderBy: [{ week: 'asc' }],
         },
+        insights: {
+          where: { type: { in: VALID_INSIGHT_TYPES } },
+          select: INSIGHT_SELECT,
+          orderBy: [{ createdAt: 'desc' }],
+        },
       },
       orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
       skip,
@@ -131,6 +149,11 @@ export async function getPosition(id: bigint) {
       weeklyStats: {
         orderBy: [{ year: 'asc' }, { month: 'asc' }, { week: 'asc' }],
       },
+      insights: {
+        where: { type: { in: VALID_INSIGHT_TYPES } },
+        select: INSIGHT_SELECT,
+        orderBy: [{ createdAt: 'desc' }],
+      },
     },
   });
   if (!pos) return null;
@@ -140,6 +163,7 @@ export async function getPosition(id: bigint) {
 export async function createPosition(dto: CreatePositionDto, createdById: bigint) {
   const createData: Record<string, unknown> = {
     title: dto.title.trim(),
+    currentStage: dto.currentStage ?? 'APPLIED',
     level: dto.level?.trim() ?? '',
     domain: dto.domain?.trim() ?? '',
     priority: dto.priority ?? 'B',
@@ -167,6 +191,9 @@ export async function createPosition(dto: CreatePositionDto, createdById: bigint
 export async function updatePosition(id: bigint, dto: UpdatePositionDto) {
   const updateData: Record<string, unknown> = {
     ...(dto.title !== undefined && { title: dto.title.trim() }),
+    ...(dto.currentStage !== undefined && VALID_STAGES.includes(dto.currentStage) && {
+      currentStage: dto.currentStage,
+    }),
     ...(dto.level !== undefined && { level: dto.level.trim() }),
     ...(dto.domain !== undefined && { domain: dto.domain.trim() }),
     ...(dto.priority !== undefined && { priority: dto.priority }),
@@ -384,7 +411,10 @@ export async function getDashboardStats(year: number, month: number) {
     select: {
       id: true,
       status: true,
-      blocker: true,
+      insights: {
+        where: { type: 'BLOCKER' },
+        select: { id: true },
+      },
       candidates: {
         select: { currentStage: true },
       },
@@ -400,8 +430,27 @@ export async function getDashboardStats(year: number, month: number) {
     leaderRound:    allCandidates.filter((c) => ['LEADER_INTERVIEW', 'CEO_INTERVIEW', 'OFFER', 'HIRED'].includes(c.currentStage)).length,
     ceoRound:       allCandidates.filter((c) => ['CEO_INTERVIEW', 'OFFER', 'HIRED'].includes(c.currentStage)).length,
     offerHired:     positions.filter((p) => p.status === 'OFFER_SENT' || p.status === 'HIRED').length,
-    atRisk:         positions.filter((p) => p.blocker && p.blocker.length > 0).length,
+    atRisk:         positions.filter((p) => p.insights.length > 0).length,
   };
 
   return stats;
+}
+
+// ─── Highlights & Blockers ───────────────────────────────────
+
+export async function createInsight(positionId: bigint, dto: CreateInsightDto, createdById: bigint) {
+  const insight = await prisma.recruitmentInsight.create({
+    data: {
+      positionId,
+      type: dto.type,
+      content: dto.content.trim(),
+      createdById,
+    },
+    select: INSIGHT_SELECT,
+  });
+  return serializeBigInt(insight);
+}
+
+export async function deleteInsight(id: bigint) {
+  await prisma.recruitmentInsight.delete({ where: { id } });
 }

@@ -6,8 +6,10 @@ import {
   AlertCircle,
   BarChart2,
   Briefcase,
+  Check,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   CloudUpload,
   Download,
   Eye,
@@ -32,6 +34,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { TiptapNotionEditor } from '@/components/tiptap-notion-editor';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import {
@@ -50,6 +62,7 @@ type RecruitmentStatus =
   | 'INTERVIEWING'
   | 'OFFER_SENT'
   | 'HIRED'
+  | 'DONE'
   | 'ON_HOLD'
   | 'CANCELLED';
 
@@ -83,9 +96,20 @@ interface WeeklyData {
   actual: [number, number, number, number];
 }
 
+type InsightType = 'HIGHLIGHT' | 'BLOCKER';
+
+interface PositionInsight {
+  id: string;
+  positionId: string;
+  type: InsightType;
+  content: string;
+  createdAt: string;
+}
+
 interface Position {
   id: string;
   title: string;
+  currentStage: CandidateStage;
   level: string;
   domain: string;
   priority: Priority;
@@ -103,6 +127,7 @@ interface Position {
   openedAt: string;
   candidates: Candidate[];
   weekly: WeeklyData[];
+  insights: PositionInsight[];
 }
 
 // ─── Constants ─────────────────────────────────────────────
@@ -114,9 +139,13 @@ const STATUS_CONFIG: Record<RecruitmentStatus, { label: string; bg: string; text
   INTERVIEWING: { label: 'Interviewing', bg: '#DBEAFE', text: '#1D4ED8' },
   OFFER_SENT: { label: 'Offer sent', bg: '#D1FAE5', text: '#065F46' },
   HIRED: { label: 'Hired / Onboarded', bg: '#BBF7D0', text: '#065F46' },
+  DONE: { label: 'Done', bg: '#E0F2FE', text: '#0369A1' },
   ON_HOLD: { label: 'On hold', bg: '#FEE2E2', text: '#991B1B' },
   CANCELLED: { label: 'Cancelled', bg: '#E5E7EB', text: '#6B7280' },
 };
+
+const STATUS_OPTIONS = Object.keys(STATUS_CONFIG) as RecruitmentStatus[];
+const DEFAULT_STATUS_FILTERS = STATUS_OPTIONS.filter((s) => s !== 'DONE');
 
 const STAGE_CONFIG: Record<
   CandidateStage,
@@ -175,6 +204,15 @@ const FUNNEL_STAGES: CandidateStage[] = [
   'LEADER_INTERVIEW',
   'CEO_INTERVIEW',
 ];
+const POSITION_STAGE_OPTIONS: CandidateStage[] = [
+  'APPLIED',
+  'HR_SCREEN',
+  'LEADER_INTERVIEW',
+  'CEO_INTERVIEW',
+  'OFFER',
+  'HIRED',
+  'REJECTED',
+];
 
 // ─── API types ───────────────────────────────────────────────
 interface ApiCandidate {
@@ -204,6 +242,7 @@ interface ApiWeeklyKpi {
 interface ApiPosition {
   id: string;
   title: string;
+  currentStage: CandidateStage;
   level: string;
   domain: string;
   priority: Priority;
@@ -221,6 +260,15 @@ interface ApiPosition {
   openedAt: string;
   candidates: ApiCandidate[];
   weeklyStats: ApiWeeklyKpi[];
+  insights?: ApiInsight[];
+}
+
+interface ApiInsight {
+  id: string;
+  positionId: string;
+  type: InsightType;
+  content: string;
+  createdAt: string;
 }
 
 function transformPosition(api: ApiPosition): Position {
@@ -252,9 +300,18 @@ function transformPosition(api: ApiPosition): Position {
     cvUrls: parseCandidateCvUrls(c.cvUrl),
   }));
 
+  const insights: PositionInsight[] = (api.insights ?? []).map((i) => ({
+    id: i.id,
+    positionId: i.positionId,
+    type: i.type,
+    content: i.content ?? '',
+    createdAt: i.createdAt ? i.createdAt.slice(0, 19) : '',
+  }));
+
   return {
     id: api.id,
     title: api.title,
+    currentStage: api.currentStage ?? 'APPLIED',
     level: api.level,
     domain: api.domain,
     priority: api.priority,
@@ -272,6 +329,7 @@ function transformPosition(api: ApiPosition): Position {
     openedAt: api.openedAt ? api.openedAt.slice(0, 10) : '',
     candidates,
     weekly,
+    insights,
   };
 }
 
@@ -284,6 +342,21 @@ function getInitials(name: string) {
 
 function sumArr(arr: number[]) {
   return arr.reduce((s, v) => s + v, 0);
+}
+
+function hasMeaningfulHtml(html: string) {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .trim().length > 0;
+}
+
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function parseCandidateCvUrls(cvUrl?: string | null): string[] {
@@ -428,20 +501,19 @@ function CandidateChip({
 
 // ─── Funnel card ────────────────────────────────────────────
 function FunnelCard({ positions }: { positions: Position[] }) {
-  // Dùng giá trị W4 đã nhập thay vì tự tính từ candidates
+  // Tổng tháng = sum W1+W2+W3+W4
   const totals = FUNNEL_STAGES.map((stage) =>
     positions.reduce((sum, p) => {
       const stageData = p.weekly.find((w) => w.stage === stage);
-      return sum + (stageData ? stageData.actual[3] : 0);
+      return sum + (stageData ? sumArr(stageData.actual) : 0);
     }, 0),
   );
   const kpis = FUNNEL_STAGES.map((stage) =>
     positions.reduce((sum, p) => {
       const stageData = p.weekly.find((w) => w.stage === stage);
-      return sum + (stageData ? stageData.kpi[3] : 0);
+      return sum + (stageData ? sumArr(stageData.kpi) : 0);
     }, 0),
   );
-  const maxVal = Math.max(...kpis, 1);
   const COLORS = ['#3b82f6', '#f59e0b', '#22c55e', '#8b5cf6'];
 
   return (
@@ -456,10 +528,16 @@ function FunnelCard({ positions }: { positions: Position[] }) {
       <div className="py-1">
         {FUNNEL_STAGES.map((stage, i) => {
           const cfg = STAGE_CONFIG[stage];
-          const kpPct = Math.min(Math.round((kpis[i] / maxVal) * 100), 100);
-          const actPct = Math.min(Math.round((totals[i] / maxVal) * 100), 100);
+          const kpPct = kpis[i] > 0 ? 100 : 0;
+          const actPct = kpis[i] > 0 ? Math.min(Math.round((totals[i] / kpis[i]) * 100), 100) : 0;
           const rate =
-            i > 0 && totals[i - 1] > 0 ? Math.round((totals[i] / totals[i - 1]) * 100) : null;
+            i === 0
+              ? kpis[i] > 0
+                ? Math.round((totals[i] / kpis[i]) * 100)
+                : null
+              : totals[i - 1] > 0
+                ? Math.round((totals[i] / totals[i - 1]) * 100)
+                : null;
           return (
             <div
               key={stage}
@@ -701,16 +779,24 @@ function HBCard({
   canEdit = false,
   onAddHighlight,
   onAddBlocker,
+  onDeleteInsight,
 }: {
   positions: Position[];
   canEdit?: boolean;
   onAddHighlight?: () => void;
   onAddBlocker?: () => void;
+  onDeleteInsight?: (id: string) => void | Promise<void>;
 }) {
-  const highlights = positions.filter((p) => p.note).map((p) => ({ title: p.title, text: p.note }));
-  const blockers = positions
-    .filter((p) => p.blocker)
-    .map((p) => ({ title: p.title, text: p.blocker }));
+  const highlights = positions.flatMap((p) =>
+    p.insights
+      .filter((i) => i.type === 'HIGHLIGHT')
+      .map((i) => ({ id: i.id, title: p.title, content: i.content })),
+  );
+  const blockers = positions.flatMap((p) =>
+    p.insights
+      .filter((i) => i.type === 'BLOCKER')
+      .map((i) => ({ id: i.id, title: p.title, content: i.content })),
+  );
 
   return (
     <div className="bg-white rounded-xl border border-[#e8ecf0] overflow-hidden">
@@ -740,13 +826,26 @@ function HBCard({
             <p className="text-[11px] text-[#bbb] italic">Chưa có điểm nổi bật</p>
           ) : (
             <div className="space-y-2">
-              {highlights.map((h, i) => (
-                <div key={i} className="flex gap-2 pb-2 border-b border-[#f8f9fb] last:border-b-0">
+              {highlights.map((h) => (
+                <div key={h.id} className="flex gap-2 pb-2 border-b border-[#f8f9fb] last:border-b-0">
                   <div className="w-1 h-1 rounded-full bg-green-400 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[11.5px] text-[#2d3a4a]">{h.text}</p>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-[11.5px] text-[#2d3a4a] [&_p]:my-0 [&_ul]:my-1 [&_ol]:my-1"
+                      dangerouslySetInnerHTML={{ __html: h.content }}
+                    />
                     <p className="text-[10px] text-[#9aa5b4] mt-0.5">{h.title}</p>
                   </div>
+                  {canEdit && onDeleteInsight && (
+                    <button
+                      type="button"
+                      className="w-5 h-5 rounded border border-[#e2e6ea] text-[#9aa5b4] hover:text-red-500 hover:border-red-200 hover:bg-red-50 flex items-center justify-center"
+                      onClick={() => void onDeleteInsight(h.id)}
+                      title="Xóa"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -777,13 +876,26 @@ function HBCard({
             <p className="text-[11px] text-[#bbb] italic">Không có blocker</p>
           ) : (
             <div className="space-y-2">
-              {blockers.map((b, i) => (
-                <div key={i} className="flex gap-2 pb-2 border-b border-[#f8f9fb] last:border-b-0">
+              {blockers.map((b) => (
+                <div key={b.id} className="flex gap-2 pb-2 border-b border-[#f8f9fb] last:border-b-0">
                   <div className="w-1 h-1 rounded-full bg-red-400 mt-1.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-[11.5px] text-[#2d3a4a]">{b.text}</p>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-[11.5px] text-[#2d3a4a] [&_p]:my-0 [&_ul]:my-1 [&_ol]:my-1"
+                      dangerouslySetInnerHTML={{ __html: b.content }}
+                    />
                     <p className="text-[10px] text-[#9aa5b4] mt-0.5">{b.title}</p>
                   </div>
+                  {canEdit && onDeleteInsight && (
+                    <button
+                      type="button"
+                      className="w-5 h-5 rounded border border-[#e2e6ea] text-[#9aa5b4] hover:text-red-500 hover:border-red-200 hover:bg-red-50 flex items-center justify-center"
+                      onClick={() => void onDeleteInsight(b.id)}
+                      title="Xóa"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -802,21 +914,21 @@ function InsightDialog({
   onSave,
 }: {
   open: boolean;
-  kind: 'note' | 'blocker';
+  kind: InsightType;
   positions: Position[];
   onClose: () => void;
-  onSave: (data: { positionId: string; text: string }) => void | Promise<void>;
+  onSave: (data: { positionId: string; content: string; type: InsightType }) => void | Promise<void>;
 }) {
   const [positionId, setPositionId] = useState<string>('');
-  const [text, setText] = useState('');
+  const [content, setContent] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setPositionId(positions[0]?.id ?? '');
-    setText('');
+    setContent('');
   }, [open, positions]);
 
-  const isBlocker = kind === 'blocker';
+  const isBlocker = kind === 'BLOCKER';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -824,11 +936,11 @@ function InsightDialog({
       toast.error('Vui lòng chọn vị trí');
       return;
     }
-    if (!text.trim()) {
+    if (!hasMeaningfulHtml(content)) {
       toast.error(`Vui lòng nhập ${isBlocker ? 'blocker' : 'highlight'}`);
       return;
     }
-    onSave({ positionId, text: text.trim() });
+    onSave({ positionId, content, type: kind });
   };
 
   return (
@@ -864,15 +976,14 @@ function InsightDialog({
             <label className="text-[11px] font-medium text-[#5a6a7e] block mb-1">
               Nội dung {isBlocker ? 'blocker' : 'highlight'}
             </label>
-            <Textarea
-              rows={3}
+            <TiptapNotionEditor
+              value={content}
+              onChange={setContent}
               placeholder={
                 isBlocker
                   ? 'VD: Chậm feedback từ hiring manager...'
                   : 'VD: Tăng tốc sourcing, nhiều CV chất lượng...'
               }
-              value={text}
-              onChange={(e) => setText(e.target.value)}
             />
           </div>
           <div className="flex justify-end gap-2 pt-1">
@@ -892,14 +1003,56 @@ function InsightDialog({
 // ─── Weekly KPI Modal ────────────────────────────────────────
 function WeeklyKpiModal({
   position,
+  canEdit,
   onClose,
   onCandidateClick,
+  onSave,
 }: {
   position: Position | null;
+  canEdit: boolean;
   onClose: () => void;
   onCandidateClick: (c: Candidate) => void;
+  onSave: (positionId: string, week: number, stage: CandidateStage, kpi: number, actual: number) => Promise<void>;
 }) {
+  // Hooks must be declared before any conditional return
+  const lastPosIdRef = useRef<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, { kpi: string; actual: string }>>({});
+
+  useEffect(() => {
+    if (!position || position.id === lastPosIdRef.current) return;
+    lastPosIdRef.current = position.id;
+    const d: Record<string, { kpi: string; actual: string }> = {};
+    FUNNEL_STAGES.forEach((stage) => {
+      [0, 1, 2, 3].forEach((wi) => {
+        const weekly = position.weekly.find((w) => w.stage === stage);
+        d[`${stage}-${wi}`] = {
+          kpi: String(weekly?.kpi[wi] ?? 0),
+          actual: String(weekly?.actual[wi] ?? 0),
+        };
+      });
+    });
+    setDraft(d);
+  }, [position]);
+
   if (!position) return null;
+
+  function getDraftVal(stage: CandidateStage, wi: number, field: 'kpi' | 'actual'): string {
+    return draft[`${stage}-${wi}`]?.[field] ?? '0';
+  }
+
+  function updateDraft(stage: CandidateStage, wi: number, field: 'kpi' | 'actual', val: string) {
+    setDraft((prev) => ({
+      ...prev,
+      [`${stage}-${wi}`]: { ...(prev[`${stage}-${wi}`] ?? { kpi: '0', actual: '0' }), [field]: val },
+    }));
+  }
+
+  async function handleCellBlur(stage: CandidateStage, wi: number) {
+    if (!position) return;
+    const k = Math.max(0, parseInt(draft[`${stage}-${wi}`]?.kpi ?? '0', 10) || 0);
+    const a = Math.max(0, parseInt(draft[`${stage}-${wi}`]?.actual ?? '0', 10) || 0);
+    await onSave(position.id, wi + 1, stage, k, a);
+  }
 
   function numCls(kpi: number, act: number) {
     if (act === 0) return 'text-[#d1d5db]';
@@ -907,56 +1060,45 @@ function WeeklyKpiModal({
     return 'text-amber-600 font-semibold';
   }
 
-  const toWeekIndex = (appliedAt: string) => {
-    const d = new Date(appliedAt);
-    if (Number.isNaN(d.getTime())) return null;
-    return Math.max(0, Math.min(3, Math.floor((d.getDate() - 1) / 7)));
-  };
-
-  const funnelIdxFromStage = (stage: CandidateStage) => {
-    const idx = FUNNEL_STAGES.indexOf(stage);
-    if (idx >= 0) return idx;
-    if (stage === 'OFFER' || stage === 'HIRED') return FUNNEL_STAGES.length - 1;
-    if (stage === 'REJECTED') return 0;
-    return -1;
-  };
-
-  const liveActualByStage = FUNNEL_STAGES.reduce(
-    (acc, stage) => {
-      acc[stage] = [0, 0, 0, 0];
-      return acc;
-    },
-    {} as Record<CandidateStage, number[]>,
-  );
-
-  position.candidates.forEach((c) => {
-    const wi = toWeekIndex(c.appliedAt);
-    if (wi === null) return;
-    const stageIdx = funnelIdxFromStage(c.currentStage);
-    if (stageIdx < 0) return;
-    FUNNEL_STAGES.forEach((stage, si) => {
-      if (si <= stageIdx) {
-        liveActualByStage[stage][wi] += 1;
-      }
-    });
-  });
-
-  const mergedActual = FUNNEL_STAGES.reduce(
-    (acc, stage) => {
-      const weekly = position.weekly.find((w) => w.stage === stage);
-      acc[stage] = [0, 1, 2, 3].map((wi) => {
-        const base = weekly?.actual[wi] ?? 0;
-        const live = liveActualByStage[stage][wi] ?? 0;
-        return Math.max(base, live);
-      });
-      return acc;
-    },
-    {} as Record<CandidateStage, number[]>,
-  );
-
+  // Totals: in edit mode use draft, in view mode use stored weekly + mergedActual
   const totals = FUNNEL_STAGES.map((stage) => {
+    if (canEdit) {
+      const kpi = [0, 1, 2, 3].reduce(
+        (s, wi) => s + (parseInt(draft[`${stage}-${wi}`]?.kpi ?? '0', 10) || 0),
+        0,
+      );
+      const actual = [0, 1, 2, 3].reduce(
+        (s, wi) => s + (parseInt(draft[`${stage}-${wi}`]?.actual ?? '0', 10) || 0),
+        0,
+      );
+      return { kpi, actual };
+    }
+    // Read-only: merge stored actual with live candidate count
+    const toWeekIndex = (appliedAt: string) => {
+      const d = new Date(appliedAt);
+      if (Number.isNaN(d.getTime())) return null;
+      return Math.max(0, Math.min(3, Math.floor((d.getDate() - 1) / 7)));
+    };
+    const funnelIdxFromStage = (s: CandidateStage) => {
+      const idx = FUNNEL_STAGES.indexOf(s);
+      if (idx >= 0) return idx;
+      if (s === 'OFFER' || s === 'HIRED') return FUNNEL_STAGES.length - 1;
+      if (s === 'REJECTED') return 0;
+      return -1;
+    };
+    const liveByWeek = [0, 0, 0, 0];
+    position.candidates.forEach((c) => {
+      const wi = toWeekIndex(c.appliedAt);
+      if (wi === null) return;
+      const stageIdx = funnelIdxFromStage(c.currentStage);
+      const thisIdx = FUNNEL_STAGES.indexOf(stage);
+      if (stageIdx >= thisIdx) liveByWeek[wi] += 1;
+    });
     const d = position.weekly.find((w) => w.stage === stage);
-    return { kpi: d ? sumArr(d.kpi) : 0, actual: sumArr(mergedActual[stage]) };
+    const mergedByWeek = [0, 1, 2, 3].map((wi) =>
+      Math.max(d?.actual[wi] ?? 0, liveByWeek[wi]),
+    );
+    return { kpi: d ? sumArr(d.kpi) : 0, actual: sumArr(mergedByWeek) };
   });
 
   return (
@@ -971,6 +1113,11 @@ function WeeklyKpiModal({
           <DialogTitle className="text-base flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-[#1DB87A]" />
             Weekly KPI — {position.title}
+            {canEdit && (
+              <span className="text-[10px] font-normal text-[#9aa5b4] ml-1">
+                · Nhập trực tiếp vào ô để chỉnh sửa
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -1009,16 +1156,16 @@ function WeeklyKpiModal({
                 {FUNNEL_STAGES.map((stage) => (
                   <>
                     <th
-                      key={`${stage}-kpi`}
+                      key={`${stage}-act`}
                       className="px-3 pb-2 text-center text-[9px] text-[#bbb] font-normal border-l border-[#f0f2f5]"
                     >
-                      KPI
+                      Act
                     </th>
                     <th
-                      key={`${stage}-act`}
+                      key={`${stage}-kpi`}
                       className="px-3 pb-2 text-center text-[9px] text-[#bbb] font-normal"
                     >
-                      Act
+                      KPI
                     </th>
                   </>
                 ))}
@@ -1029,22 +1176,64 @@ function WeeklyKpiModal({
                 <tr key={wi} className="border-b border-[#f8f9fb] hover:bg-[#fafbfc]">
                   <td className="py-2 px-3 text-[#9aa5b4] font-medium">W{wi + 1}</td>
                   {FUNNEL_STAGES.map((stage) => {
+                    if (canEdit) {
+                      const kVal = getDraftVal(stage, wi, 'kpi');
+                      const aVal = getDraftVal(stage, wi, 'actual');
+                      const kNum = parseInt(kVal, 10) || 0;
+                      const aNum = parseInt(aVal, 10) || 0;
+                      return (
+                        <>
+                          <td
+                            key={`${stage}-act-${wi}`}
+                            className="py-1.5 px-2 text-center border-l border-[#f8f9fb]"
+                          >
+                            <input
+                              type="number"
+                              min={0}
+                              value={aVal}
+                              onChange={(e) => updateDraft(stage, wi, 'actual', e.target.value)}
+                              onBlur={() => void handleCellBlur(stage, wi)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className={`w-10 text-center text-[11px] border rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${numCls(kNum, aNum).includes('green') ? 'border-green-300' : numCls(kNum, aNum).includes('amber') ? 'border-amber-300' : 'border-[#e2e6ea]'}`}
+                            />
+                          </td>
+                          <td
+                            key={`${stage}-kpi-${wi}`}
+                            className="py-1.5 px-2 text-center"
+                          >
+                            <input
+                              type="number"
+                              min={0}
+                              value={kVal}
+                              onChange={(e) => updateDraft(stage, wi, 'kpi', e.target.value)}
+                              onBlur={() => void handleCellBlur(stage, wi)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                              }}
+                              className="w-10 text-center text-[11px] border border-[#e2e6ea] rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </td>
+                        </>
+                      );
+                    }
                     const d = position.weekly.find((w) => w.stage === stage);
                     const k = d?.kpi[wi] ?? 0;
-                    const a = mergedActual[stage][wi] ?? 0;
+                    const a = d?.actual[wi] ?? 0;
                     return (
                       <>
                         <td
-                          key={`${stage}-kpi-${wi}`}
-                          className="py-2 px-3 text-center text-[#bbb] border-l border-[#f8f9fb]"
-                        >
-                          {k || '—'}
-                        </td>
-                        <td
                           key={`${stage}-act-${wi}`}
-                          className={`py-2 px-3 text-center ${numCls(k, a)}`}
+                          className={`py-2 px-3 text-center border-l border-[#f8f9fb] ${numCls(k, a)}`}
                         >
                           {a || '—'}
+                        </td>
+                        <td
+                          key={`${stage}-kpi-${wi}`}
+                          className="py-2 px-3 text-center text-[#bbb]"
+                        >
+                          {k || '—'}
                         </td>
                       </>
                     );
@@ -1057,16 +1246,16 @@ function WeeklyKpiModal({
                 {FUNNEL_STAGES.map((stage, si) => (
                   <>
                     <td
-                      key={`${stage}-kpi-total`}
-                      className="py-2 px-3 text-center text-[#9aa5b4] font-semibold border-l border-[#f0f2f5]"
-                    >
-                      {totals[si].kpi || '—'}
-                    </td>
-                    <td
                       key={`${stage}-act-total`}
-                      className={`py-2 px-3 text-center font-semibold ${numCls(totals[si].kpi, totals[si].actual)}`}
+                      className={`py-2 px-3 text-center font-semibold border-l border-[#f0f2f5] ${numCls(totals[si].kpi, totals[si].actual)}`}
                     >
                       {totals[si].actual || '—'}
+                    </td>
+                    <td
+                      key={`${stage}-kpi-total`}
+                      className="py-2 px-3 text-center text-[#9aa5b4] font-semibold"
+                    >
+                      {totals[si].kpi || '—'}
                     </td>
                   </>
                 ))}
@@ -1220,6 +1409,7 @@ function WeeklyKpiModal({
 // ─── Position Row ─────────────────────────────────────────────
 function PositionRow({
   position,
+  filterWeek,
   canEdit,
   onStatusChange,
   onEdit,
@@ -1227,9 +1417,11 @@ function PositionRow({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
-  onWeeklyKpiSave,
+  onStageChange,
+  onOpenNote,
 }: {
   position: Position;
+  filterWeek: 0 | 1 | 2 | 3 | 4;
   canEdit: boolean;
   onStatusChange: (id: string, status: RecruitmentStatus) => void | Promise<void>;
   onEdit: (p: Position) => void;
@@ -1237,46 +1429,23 @@ function PositionRow({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
-  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
+  onStageChange: (id: string, stage: CandidateStage) => void | Promise<void>;
+  onOpenNote: (p: Position) => void;
 }) {
-  // Read actual from weekly data (W4) — manually entered by user
+  const [stagePopoverOpen, setStagePopoverOpen] = useState(false);
+  const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
+  // Show KPI/Actual for the selected week or sum of all weeks
+  const weekIdx = filterWeek - 1;
   const stageActuals = FUNNEL_STAGES.map((stage) => {
     const d = position.weekly.find((w) => w.stage === stage);
-    return d ? d.actual[3] : 0;
+    if (!d) return 0;
+    return filterWeek === 0 ? sumArr(d.actual) : (d.actual[weekIdx] ?? 0);
   });
   const stageKpis = FUNNEL_STAGES.map((stage) => {
     const d = position.weekly.find((w) => w.stage === stage);
-    return d ? d.kpi[3] : 0;
+    if (!d) return 0;
+    return filterWeek === 0 ? sumArr(d.kpi) : (d.kpi[weekIdx] ?? 0);
   });
-
-  // Inline edit state
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
-  const [editKpi, setEditKpi] = useState('');
-  const [editActual, setEditActual] = useState('');
-
-  function startEdit(si: number) {
-    setEditingIdx(si);
-    setEditKpi(String(stageKpis[si]));
-    setEditActual(String(stageActuals[si]));
-  }
-
-  function commitEdit() {
-    if (editingIdx === null) return;
-    const stage = FUNNEL_STAGES[editingIdx];
-    const kpi = Math.max(0, parseInt(editKpi, 10) || 0);
-    const actual = Math.max(0, parseInt(editActual, 10) || 0);
-    onWeeklyKpiSave(position.id, stage, kpi, actual);
-    setEditingIdx(null);
-  }
-
-  function cancelEdit() {
-    setEditingIdx(null);
-  }
-
-  // Highest active stage
-  const highestIdx = [...stageActuals].reverse().findIndex((v) => v > 0);
-  const currentStageIdx = highestIdx >= 0 ? FUNNEL_STAGES.length - 1 - highestIdx : 0;
-  const currentStage = FUNNEL_STAGES[currentStageIdx];
 
   // Progress pct (applied actual vs kpi)
   const pct =
@@ -1328,96 +1497,138 @@ function PositionRow({
       </td>
       {/* Current stage */}
       <td className="py-2 px-2 text-center">
-        <span
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap cursor-pointer hover:opacity-80"
-          style={{
-            background: STAGE_CONFIG[currentStage].bg,
-            color: STAGE_CONFIG[currentStage].text,
-          }}
-          onClick={() => onWeeklyKpiClick(position)}
-          title="Xem chi tiết KPI"
-        >
-          {STAGE_CONFIG[currentStage].label}
-        </span>
+        {canEdit ? (
+          <Popover open={stagePopoverOpen} onOpenChange={setStagePopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap border border-transparent hover:border-[#dbe3ea]"
+                style={{
+                  background: STAGE_CONFIG[position.currentStage].bg,
+                  color: STAGE_CONFIG[position.currentStage].text,
+                }}
+                title="Đổi stage"
+              >
+                {STAGE_CONFIG[position.currentStage].label}
+                <ChevronsUpDown className="w-3 h-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="center" className="w-[220px] p-2">
+              <div className="text-[10px] font-semibold text-[#9aa5b4] px-1.5 pb-1">Chọn Stage</div>
+              <div className="space-y-1">
+                {POSITION_STAGE_OPTIONS.map((stage) => (
+                  <button
+                    key={stage}
+                    type="button"
+                    className="w-full flex items-center justify-between text-left px-2 py-1.5 rounded-md hover:bg-[#f3f6fa]"
+                    onClick={() => {
+                      void onStageChange(position.id, stage);
+                      setStagePopoverOpen(false);
+                    }}
+                  >
+                    <span className="text-[11px]" style={{ color: STAGE_CONFIG[stage].text }}>
+                      {STAGE_CONFIG[stage].label}
+                    </span>
+                    {position.currentStage === stage ? <Check className="w-3.5 h-3.5 text-[#1DB87A]" /> : null}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
+            style={{
+              background: STAGE_CONFIG[position.currentStage].bg,
+              color: STAGE_CONFIG[position.currentStage].text,
+            }}
+          >
+            {STAGE_CONFIG[position.currentStage].label}
+          </span>
+        )}
       </td>
-      {/* KPI / Actual per stage — inline editable */}
+      {/* KPI / Actual per stage — read-only, click opens Weekly KPI modal */}
       {FUNNEL_STAGES.map((stage, si) => (
         <td key={stage} className="py-2 px-1 text-center text-[11.5px]">
-          {canEdit && editingIdx === si ? (
-            <div
-              className="inline-flex items-center gap-0.5"
-              onBlur={(e) => {
-                // commit chỉ khi focus rời khỏi cả 2 input
-                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                  commitEdit();
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
-                if (e.key === 'Escape') cancelEdit();
-              }}
-            >
-              <input
-                autoFocus
-                type="number"
-                min={0}
-                value={editKpi}
-                onChange={(e) => setEditKpi(e.target.value)}
-                className="w-9 text-center text-[11px] border border-[#1DB87A] rounded px-0.5 py-0.5 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <span className="text-[#bbb] text-[10px]">/</span>
-              <input
-                type="number"
-                min={0}
-                value={editActual}
-                onChange={(e) => setEditActual(e.target.value)}
-                className="w-9 text-center text-[11px] border border-[#1DB87A] rounded px-0.5 py-0.5 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-            </div>
-          ) : (
-            <div
-              className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 ${canEdit ? 'cursor-pointer hover:bg-[#f0f9f5] hover:outline hover:outline-1 hover:outline-[#1DB87A]/30' : ''}`}
-              onClick={() => canEdit && startEdit(si)}
-              title={canEdit ? 'Click để chỉnh sửa KPI / Actual' : undefined}
-            >
-              <span className="text-[#bbb] text-[10px]">{stageKpis[si]}</span>
-              <span className="text-[#bbb] text-[10px]">/</span>
-              <span className={numCls(stageKpis[si], stageActuals[si])}>{stageActuals[si]}</span>
-            </div>
-          )}
+          <div
+            className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 cursor-pointer hover:bg-[#f0f9f5]"
+            onClick={() => onWeeklyKpiClick(position)}
+            title="Xem & chỉnh sửa KPI theo tuần"
+          >
+            <span className={numCls(stageKpis[si], stageActuals[si])}>
+              {stageActuals[si] || '—'}
+            </span>
+            <span className="text-[#bbb] text-[10px]">/</span>
+            <span className="text-[#bbb] text-[10px]">{stageKpis[si] || '—'}</span>
+          </div>
         </td>
       ))}
       {/* Status — select only */}
       <td className="py-2 px-3">
         {canEdit ? (
-          <Select
-            value={position.status}
-            onValueChange={(v) => onStatusChange(position.id, v as RecruitmentStatus)}
-          >
-            <SelectTrigger className="h-6 text-[10px] max-w-[130px] border-[#e2e6ea]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(STATUS_CONFIG) as RecruitmentStatus[]).map((s) => (
-                <SelectItem key={s} value={s} className="text-xs">
-                  {STATUS_CONFIG[s].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap border border-transparent hover:border-[#dbe3ea]"
+                style={{
+                  background: STATUS_CONFIG[position.status].bg,
+                  color: STATUS_CONFIG[position.status].text,
+                }}
+                title="Đổi status"
+              >
+                {STATUS_CONFIG[position.status].label}
+                <ChevronsUpDown className="w-3 h-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="center" className="w-[220px] p-2">
+              <div className="text-[10px] font-semibold text-[#9aa5b4] px-1.5 pb-1">Chọn Status</div>
+              <div className="space-y-1">
+                {STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="w-full flex items-center justify-between text-left px-2 py-1.5 rounded-md hover:bg-[#f3f6fa]"
+                    onClick={() => {
+                      void onStatusChange(position.id, s);
+                      setStatusPopoverOpen(false);
+                    }}
+                  >
+                    <span className="text-[11px]" style={{ color: STATUS_CONFIG[s].text }}>
+                      {STATUS_CONFIG[s].label}
+                    </span>
+                    {position.status === s ? <Check className="w-3.5 h-3.5 text-[#1DB87A]" /> : null}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         ) : (
           <span className="text-[10px] text-[#9aa5b4]">{STATUS_CONFIG[position.status].label}</span>
         )}
       </td>
-      {/* Weekly KPI icon */}
+      {/* Quick actions: Note + Weekly KPI */}
       <td className="py-2 px-2 text-center">
-        <button
-          className="w-7 h-7 rounded border border-[#e2e6ea] bg-white text-[#5a6a7e] hover:bg-blue-50 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center transition-colors mx-auto"
-          onClick={() => onWeeklyKpiClick(position)}
-          title="Xem chi tiết KPI tuần"
-        >
-          <Eye className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center justify-center gap-1">
+          <button
+            className="w-7 h-7 rounded border bg-white hover:bg-amber-50 flex items-center justify-center transition-colors"
+            style={{
+              borderColor: position.note ? '#fde68a' : '#e2e6ea',
+              color: position.note ? '#d97706' : '#9ca3af',
+            }}
+            onClick={() => onOpenNote(position)}
+            title={canEdit ? 'Ghi chú' : 'Xem ghi chú'}
+          >
+            <FileText className="w-3.5 h-3.5" />
+          </button>
+          <button
+            className="w-7 h-7 rounded border border-[#e2e6ea] bg-white text-[#5a6a7e] hover:bg-blue-50 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center transition-colors"
+            onClick={() => onWeeklyKpiClick(position)}
+            title="Xem chi tiết KPI tuần"
+          >
+            <Eye className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </td>
       {/* Actions */}
       {canEdit && (
@@ -1454,6 +1665,7 @@ function PositionRow({
 // ─── Positions table ─────────────────────────────────────────
 function PositionsTable({
   positions,
+  filterWeek,
   canEdit,
   onStatusChange,
   onEdit,
@@ -1461,9 +1673,11 @@ function PositionsTable({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
-  onWeeklyKpiSave,
+  onStageChange,
+  onOpenNote,
 }: {
   positions: Position[];
+  filterWeek: 0 | 1 | 2 | 3 | 4;
   canEdit: boolean;
   onStatusChange: (id: string, status: RecruitmentStatus) => void | Promise<void>;
   onEdit: (p: Position) => void;
@@ -1471,8 +1685,10 @@ function PositionsTable({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
-  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
+  onStageChange: (id: string, stage: CandidateStage) => void | Promise<void>;
+  onOpenNote: (p: Position) => void;
 }) {
+  const weekLabel = filterWeek === 0 ? 'Tổng' : `W${filterWeek}`;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -1493,7 +1709,9 @@ function PositionsTable({
                 className="text-center px-2 py-2.5 text-[10px] font-medium text-[#9aa5b4] uppercase tracking-wide whitespace-nowrap"
               >
                 <div>{STAGE_CONFIG[stage].short === 'Applied' ? 'Applied' : STAGE_CONFIG[stage].label}</div>
-                <div className="text-[8.5px] font-normal normal-case tracking-normal text-[#c0c8d2] mt-0.5">KPI / Actual</div>
+                <div className="text-[8.5px] font-normal normal-case tracking-normal text-[#c0c8d2] mt-0.5">
+                  {weekLabel}: Act / KPI
+                </div>
               </th>
             ))}
             <th className="text-center px-3 py-2.5 text-[10px] font-medium text-[#9aa5b4] uppercase tracking-wide min-w-[130px]">
@@ -1521,6 +1739,7 @@ function PositionsTable({
               <PositionRow
                 key={p.id}
                 position={p}
+                filterWeek={filterWeek}
                 canEdit={canEdit}
                 onStatusChange={onStatusChange}
                 onEdit={onEdit}
@@ -1528,7 +1747,8 @@ function PositionsTable({
                 onAddCandidate={onAddCandidate}
                 onCandidateClick={onCandidateClick}
                 onWeeklyKpiClick={onWeeklyKpiClick}
-                onWeeklyKpiSave={onWeeklyKpiSave}
+                onStageChange={onStageChange}
+                onOpenNote={onOpenNote}
               />
             ))
           )}
@@ -2290,6 +2510,7 @@ function CandidateDetailDialog({
 // ─── Monthly Tracker view ─────────────────────────────────────
 function MonthlyTrackerView({
   positions,
+  filterWeek,
   canEdit,
   onStatusChange,
   onEdit,
@@ -2297,11 +2518,14 @@ function MonthlyTrackerView({
   onAddCandidate,
   onCandidateClick,
   onWeeklyKpiClick,
-  onWeeklyKpiSave,
+  onStageChange,
+  onOpenNote,
   onAddHighlight,
   onAddBlocker,
+  onDeleteInsight,
 }: {
   positions: Position[];
+  filterWeek: 0 | 1 | 2 | 3 | 4;
   canEdit: boolean;
   onStatusChange: (id: string, status: RecruitmentStatus) => void | Promise<void>;
   onEdit: (p: Position) => void;
@@ -2309,18 +2533,21 @@ function MonthlyTrackerView({
   onAddCandidate: (p: Position) => void;
   onCandidateClick: (c: Candidate) => void;
   onWeeklyKpiClick: (p: Position) => void;
-  onWeeklyKpiSave: (positionId: string, stage: CandidateStage, kpi: number, actual: number) => void | Promise<void>;
+  onStageChange: (id: string, stage: CandidateStage) => void | Promise<void>;
+  onOpenNote: (p: Position) => void;
   onAddHighlight: () => void;
   onAddBlocker: () => void;
+  onDeleteInsight?: (id: string) => void | Promise<void>;
 }) {
+  const atRiskCount = positions.filter((p) => p.insights.some((i) => i.type === 'BLOCKER')).length;
   return (
     <div className="space-y-3.5">
       {/* Status strip */}
       <div className="flex gap-2 flex-wrap">
         {[
           { label: 'Tổng', count: positions.length, dot: '#9aa5b4' },
-          { label: 'On Track', count: positions.filter((p) => !p.blocker).length, dot: '#22c55e' },
-          { label: 'At Risk', count: positions.filter((p) => p.blocker).length, dot: '#ef4444' },
+          { label: 'On Track', count: Math.max(0, positions.length - atRiskCount), dot: '#22c55e' },
+          { label: 'At Risk', count: atRiskCount, dot: '#ef4444' },
           {
             label: 'Offer/Hired',
             count: positions.filter((p) => p.status === 'OFFER_SENT' || p.status === 'HIRED')
@@ -2350,6 +2577,7 @@ function MonthlyTrackerView({
         </div>
         <PositionsTable
           positions={positions}
+          filterWeek={filterWeek}
           canEdit={canEdit}
           onStatusChange={onStatusChange}
           onEdit={onEdit}
@@ -2357,7 +2585,8 @@ function MonthlyTrackerView({
           onAddCandidate={onAddCandidate}
           onCandidateClick={onCandidateClick}
           onWeeklyKpiClick={onWeeklyKpiClick}
-          onWeeklyKpiSave={onWeeklyKpiSave}
+          onStageChange={onStageChange}
+          onOpenNote={onOpenNote}
         />
       </div>
       <HBCard
@@ -2365,6 +2594,7 @@ function MonthlyTrackerView({
         canEdit={canEdit}
         onAddHighlight={onAddHighlight}
         onAddBlocker={onAddBlocker}
+        onDeleteInsight={onDeleteInsight}
       />
     </div>
   );
@@ -2382,7 +2612,16 @@ export default function RecruitmentPage() {
   const [curYear, setCurYear] = useState(new Date().getFullYear());
   const [search, setSearch] = useState('');
   const [filterDomain, setFilterDomain] = useState<string>('ALL');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [selectedStatuses, setSelectedStatuses] = useState<RecruitmentStatus[]>(DEFAULT_STATUS_FILTERS);
+  const [filterWeek, setFilterWeek] = useState<0 | 1 | 2 | 3 | 4>(0);
+
+  const selectedStatusLabel = useMemo(() => {
+    const count = selectedStatuses.length;
+    if (count === 0) return 'No status';
+    if (count === STATUS_OPTIONS.length) return 'All status';
+    if (count === 1) return STATUS_CONFIG[selectedStatuses[0]].label;
+    return `${count} status`;
+  }, [selectedStatuses]);
 
   const canEdit =
     viewer?.role?.toUpperCase() === 'HR' ||
@@ -2398,11 +2637,14 @@ export default function RecruitmentPage() {
     editing: Candidate | null;
     position: Position | null;
   }>({ open: false, editing: null, position: null });
+  const [notePosition, setNotePosition] = useState<Position | null>(null);
+  const [noteEditorValue, setNoteEditorValue] = useState('');
+  const [isSavingPositionNote, setIsSavingPositionNote] = useState(false);
   const [candidateDetail, setCandidateDetail] = useState<Candidate | null>(null);
   const [weeklyKpiModal, setWeeklyKpiModal] = useState<Position | null>(null);
-  const [insightDialog, setInsightDialog] = useState<{ open: boolean; kind: 'note' | 'blocker' }>({
+  const [insightDialog, setInsightDialog] = useState<{ open: boolean; kind: InsightType }>({
     open: false,
-    kind: 'note',
+    kind: 'HIGHLIGHT',
   });
 
   // Fetch positions from API
@@ -2447,10 +2689,10 @@ export default function RecruitmentPage() {
         p.title.toLowerCase().includes(search.toLowerCase()) ||
         p.domain.toLowerCase().includes(search.toLowerCase());
       const matchDomain = filterDomain === 'ALL' || p.domain === filterDomain;
-      const matchStatus = filterStatus === 'ALL' || p.status === filterStatus;
+      const matchStatus = selectedStatuses.includes(p.status);
       return matchSearch && matchDomain && matchStatus;
     });
-  }, [positions, search, filterDomain, filterStatus]);
+  }, [positions, search, filterDomain, selectedStatuses]);
 
   // KPI aggregates
   const kpi = useMemo(() => {
@@ -2466,11 +2708,19 @@ export default function RecruitmentPage() {
         ['CEO_INTERVIEW', 'OFFER', 'HIRED'].includes(c.currentStage),
       ).length,
       offerHired: filtered.filter((p) => p.status === 'OFFER_SENT' || p.status === 'HIRED').length,
-      atRisk: filtered.filter((p) => Boolean(p.blocker)).length,
+      atRisk: filtered.filter((p) => p.insights.some((i) => i.type === 'BLOCKER')).length,
     };
   }, [filtered]);
 
-  const blockers = filtered.filter((p) => p.blocker);
+  const blockers = filtered.flatMap((p) =>
+    p.insights
+      .filter((i) => i.type === 'BLOCKER')
+      .map((i) => ({
+        id: i.id,
+        title: p.title,
+        text: htmlToPlainText(i.content) || '—',
+      })),
+  );
 
   // Month navigation
   function prevMonth() {
@@ -2498,6 +2748,20 @@ export default function RecruitmentPage() {
         // Rollback not practical here — refetch to restore truth
         void fetchPositions(curYear, curMonth);
         toast.error(err instanceof Error ? err.message : 'Cập nhật thất bại');
+      }
+    },
+    [curYear, curMonth, fetchPositions],
+  );
+
+  const handlePositionStageChange = useCallback(
+    async (id: string, stage: CandidateStage) => {
+      setPositions((prev) => prev.map((p) => (p.id === id ? { ...p, currentStage: stage } : p)));
+      try {
+        await apiClient.patch(`/api/recruitment/positions/${id}`, { currentStage: stage });
+        toast.success(`Đã cập nhật Stage: ${STAGE_CONFIG[stage].label}`);
+      } catch (err: unknown) {
+        void fetchPositions(curYear, curMonth);
+        toast.error(err instanceof Error ? err.message : 'Cập nhật Stage thất bại');
       }
     },
     [curYear, curMonth, fetchPositions],
@@ -2571,7 +2835,8 @@ export default function RecruitmentPage() {
   );
 
   const handleWeeklyKpiSave = useCallback(
-    async (positionId: string, stage: CandidateStage, kpi: number, actual: number) => {
+    async (positionId: string, week: number, stage: CandidateStage, kpi: number, actual: number) => {
+      const weekIdx = week - 1;
       // Optimistic update
       setPositions((prev) =>
         prev.map((p) => {
@@ -2582,8 +2847,8 @@ export default function RecruitmentPage() {
               if (w.stage !== stage) return w;
               const newKpi = [...w.kpi] as [number, number, number, number];
               const newActual = [...w.actual] as [number, number, number, number];
-              newKpi[3] = kpi;
-              newActual[3] = actual;
+              newKpi[weekIdx] = kpi;
+              newActual[weekIdx] = actual;
               return { ...w, kpi: newKpi, actual: newActual };
             }),
           };
@@ -2592,7 +2857,7 @@ export default function RecruitmentPage() {
       try {
         await apiClient.put(
           `/api/recruitment/positions/${positionId}/weekly?year=${curYear}&month=${curMonth + 1}`,
-          { week: 4, stage, kpiTarget: kpi, actual },
+          { week, stage, kpiTarget: kpi, actual },
         );
       } catch (err: unknown) {
         void fetchPositions(curYear, curMonth);
@@ -2603,23 +2868,57 @@ export default function RecruitmentPage() {
   );
 
   const handleSaveInsight = useCallback(
-    async ({ positionId, text }: { positionId: string; text: string }) => {
+    async ({ positionId, content, type }: { positionId: string; content: string; type: InsightType }) => {
       try {
-        if (insightDialog.kind === 'blocker') {
-          await apiClient.patch(`/api/recruitment/positions/${positionId}`, { blocker: text });
-          toast.success('Đã thêm blocker');
-        } else {
-          await apiClient.patch(`/api/recruitment/positions/${positionId}`, { note: text });
-          toast.success('Đã thêm highlight');
-        }
-        setInsightDialog({ open: false, kind: 'note' });
+        await apiClient.post(`/api/recruitment/positions/${positionId}/insights`, { type, content });
+        toast.success(type === 'BLOCKER' ? 'Đã thêm blocker' : 'Đã thêm highlight');
+        setInsightDialog({ open: false, kind: 'HIGHLIGHT' });
         void fetchPositions(curYear, curMonth);
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : 'Lưu thất bại');
       }
     },
-    [insightDialog.kind, curYear, curMonth, fetchPositions],
+    [curYear, curMonth, fetchPositions],
   );
+
+  const handleDeleteInsight = useCallback(
+    async (insightId: string) => {
+      try {
+        await apiClient.delete(`/api/recruitment/insights/${insightId}`);
+        setPositions((prev) =>
+          prev.map((p) => ({ ...p, insights: p.insights.filter((i) => i.id !== insightId) })),
+        );
+        toast.success('Đã xoá');
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Không thể xoá');
+      }
+    },
+    [],
+  );
+
+  const openPositionNoteDialog = useCallback((position: Position) => {
+    setNotePosition(position);
+    setNoteEditorValue(position.note ?? '');
+  }, []);
+
+  const handleSavePositionNote = useCallback(async () => {
+    if (!notePosition || !canEdit) return;
+    setIsSavingPositionNote(true);
+    try {
+      await apiClient.patch(`/api/recruitment/positions/${notePosition.id}`, {
+        note: noteEditorValue,
+      });
+      setPositions((prev) =>
+        prev.map((p) => (p.id === notePosition.id ? { ...p, note: noteEditorValue } : p)),
+      );
+      setNotePosition((prev) => (prev ? { ...prev, note: noteEditorValue } : prev));
+      toast.success('Đã lưu ghi chú');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Không thể lưu ghi chú');
+    } finally {
+      setIsSavingPositionNote(false);
+    }
+  }, [notePosition, noteEditorValue, canEdit]);
 
   const handleStageChange = useCallback(
     async (candidateId: string, stage: CandidateStage) => {
@@ -2771,13 +3070,13 @@ export default function RecruitmentPage() {
           <div className="bg-[#FFF7ED] border border-[#FED7AA] rounded-lg px-4 py-2.5 flex items-start gap-2.5 text-[11px] text-[#92400E]">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
             <span>
-              {blockers.map((p, i) => (
-                <span key={p.id}>
-                  {i > 0 && <span className="mx-2 text-[#FCA5A5]">·</span>}
-                  <strong>{p.title}</strong>: {p.blocker}
+                  {blockers.map((p, i) => (
+                    <span key={p.id}>
+                      {i > 0 && <span className="mx-2 text-[#FCA5A5]">·</span>}
+                      <strong>{p.title}</strong>: {p.text}
+                    </span>
+                  ))}
                 </span>
-              ))}
-            </span>
           </div>
         )}
 
@@ -2805,19 +3104,49 @@ export default function RecruitmentPage() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="h-8 w-[150px] text-[12px]">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-              {(Object.keys(STATUS_CONFIG) as RecruitmentStatus[]).map((s) => (
-                <SelectItem key={s} value={s}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-[12px] min-w-[150px] justify-between">
+                <span className="truncate">Status: {selectedStatusLabel}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-52">
+              <DropdownMenuLabel className="text-xs">Filter status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {STATUS_OPTIONS.map((s) => (
+                <DropdownMenuCheckboxItem
+                  key={s}
+                  checked={selectedStatuses.includes(s)}
+                  onCheckedChange={(checked) => {
+                    const isChecked = checked === true;
+                    setSelectedStatuses((prev) => {
+                      if (isChecked) return prev.includes(s) ? prev : [...prev, s];
+                      return prev.filter((v) => v !== s);
+                    });
+                  }}
+                  className="text-xs"
+                >
                   {STATUS_CONFIG[s].label}
-                </SelectItem>
+                </DropdownMenuCheckboxItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Week filter */}
+          <div className="flex items-center gap-1 bg-[#f0f2f5] p-[3px] rounded-[8px]">
+            {([0, 1, 2, 3, 4] as const).map((w) => (
+              <button
+                key={w}
+                onClick={() => setFilterWeek(w)}
+                className={`text-[11px] px-2.5 py-[4px] rounded-[6px] cursor-pointer transition-all ${
+                  filterWeek === w
+                    ? 'bg-white text-[#1DB87A] font-medium shadow-sm'
+                    : 'text-[#5a6a7e] hover:text-[#1a2332]'
+                }`}
+              >
+                {w === 0 ? 'All' : `W${w}`}
+              </button>
+            ))}
+          </div>
           <div className="ml-auto flex gap-2">
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-[12px]">
               <Download className="w-3.5 h-3.5" />
@@ -2845,13 +3174,22 @@ export default function RecruitmentPage() {
                   <span className="text-[12.5px] font-semibold text-[#1a2332] flex items-center gap-1.5">
                     <Briefcase className="w-3.5 h-3.5 text-[#9aa5b4]" />
                     Active Positions ({filtered.length})
+                    {filterWeek > 0 && (
+                      <span className="text-[10px] font-normal text-[#1DB87A] bg-[#ecfdf5] px-1.5 py-0.5 rounded ml-1">
+                        W{filterWeek}
+                      </span>
+                    )}
                   </span>
-                  <span className="text-[10px] text-[#9aa5b4]">KPI / Actual — click ô để chỉnh sửa</span>
+                  <span className="text-[10px] text-[#9aa5b4]">
+                    Click ô KPI/Actual để mở Weekly KPI Modal
+                  </span>
                 </div>
                 <PositionsTable
                   positions={filtered}
+                  filterWeek={filterWeek}
                   canEdit={canEdit}
                   onStatusChange={handleStatusChange}
+                  onStageChange={handlePositionStageChange}
                   onEdit={(p) => setPositionDialog({ open: true, editing: p })}
                   onDelete={handleDeletePosition}
                   onAddCandidate={(p) =>
@@ -2859,7 +3197,7 @@ export default function RecruitmentPage() {
                   }
                   onCandidateClick={setCandidateDetail}
                   onWeeklyKpiClick={setWeeklyKpiModal}
-                  onWeeklyKpiSave={handleWeeklyKpiSave}
+                  onOpenNote={openPositionNoteDialog}
                 />
               </div>
               {/* Funnel */}
@@ -2871,8 +3209,9 @@ export default function RecruitmentPage() {
             <HBCard
               positions={filtered}
               canEdit={canEdit}
-              onAddHighlight={() => setInsightDialog({ open: true, kind: 'note' })}
-              onAddBlocker={() => setInsightDialog({ open: true, kind: 'blocker' })}
+              onAddHighlight={() => setInsightDialog({ open: true, kind: 'HIGHLIGHT' })}
+              onAddBlocker={() => setInsightDialog({ open: true, kind: 'BLOCKER' })}
+              onDeleteInsight={handleDeleteInsight}
             />
           </div>
         )}
@@ -2880,16 +3219,19 @@ export default function RecruitmentPage() {
         {activeView === 'tracker' && (
           <MonthlyTrackerView
             positions={filtered}
+            filterWeek={filterWeek}
             canEdit={canEdit}
             onStatusChange={handleStatusChange}
+            onStageChange={handlePositionStageChange}
             onEdit={(p) => setPositionDialog({ open: true, editing: p })}
             onDelete={handleDeletePosition}
             onAddCandidate={(p) => setCandidateDialog({ open: true, editing: null, position: p })}
             onCandidateClick={setCandidateDetail}
             onWeeklyKpiClick={setWeeklyKpiModal}
-            onWeeklyKpiSave={handleWeeklyKpiSave}
-            onAddHighlight={() => setInsightDialog({ open: true, kind: 'note' })}
-            onAddBlocker={() => setInsightDialog({ open: true, kind: 'blocker' })}
+            onOpenNote={openPositionNoteDialog}
+            onAddHighlight={() => setInsightDialog({ open: true, kind: 'HIGHLIGHT' })}
+            onAddBlocker={() => setInsightDialog({ open: true, kind: 'BLOCKER' })}
+            onDeleteInsight={handleDeleteInsight}
           />
         )}
 
@@ -2917,16 +3259,59 @@ export default function RecruitmentPage() {
       {/* ── Dialogs ── */}
       <WeeklyKpiModal
         position={weeklyKpiModal}
+        canEdit={canEdit}
         onClose={() => setWeeklyKpiModal(null)}
         onCandidateClick={setCandidateDetail}
+        onSave={handleWeeklyKpiSave}
       />
       <InsightDialog
         open={insightDialog.open}
         kind={insightDialog.kind}
         positions={filtered}
-        onClose={() => setInsightDialog({ open: false, kind: 'note' })}
+        onClose={() => setInsightDialog({ open: false, kind: 'HIGHLIGHT' })}
         onSave={handleSaveInsight}
       />
+      <Dialog open={Boolean(notePosition)} onOpenChange={(open) => !open && setNotePosition(null)}>
+        {notePosition && (
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-amber-600" />
+                Ghi chú
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2">
+              <p className="text-[11px] text-[#7b8797]">
+                {notePosition.title} · {notePosition.domain} · {notePosition.level}
+              </p>
+              {!canEdit && !noteEditorValue && (
+                <p className="text-sm italic text-[#b0c8bf]">Chưa có ghi chú nào.</p>
+              )}
+              <TiptapNotionEditor
+                value={noteEditorValue}
+                onChange={setNoteEditorValue}
+                placeholder="Thêm ghi chú cho vị trí này..."
+                readOnly={!canEdit}
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-[#9aa5b4]">
+                  {canEdit ? 'Ghi chú nội bộ cho từng vị trí tuyển dụng.' : 'Bạn chỉ có quyền xem ghi chú này.'}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setNotePosition(null)}>
+                    {canEdit ? 'Hủy' : 'Đóng'}
+                  </Button>
+                  {canEdit && (
+                    <Button size="sm" onClick={() => void handleSavePositionNote()} disabled={isSavingPositionNote}>
+                      {isSavingPositionNote ? 'Đang lưu...' : 'Lưu ghi chú'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        )}
+      </Dialog>
       <PositionDialog
         open={positionDialog.open}
         editing={positionDialog.editing}
