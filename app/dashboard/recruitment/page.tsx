@@ -1006,52 +1006,76 @@ function WeeklyKpiModal({
   canEdit,
   onClose,
   onCandidateClick,
-  onSave,
+  onSaveKpi,
+  onSaveActual,
 }: {
   position: Position | null;
   canEdit: boolean;
   onClose: () => void;
   onCandidateClick: (c: Candidate) => void;
-  onSave: (positionId: string, week: number, stage: CandidateStage, kpi: number, actual: number) => Promise<void>;
+  onSaveKpi: (positionId: string, stage: CandidateStage, kpi: number) => Promise<void>;
+  onSaveActual: (positionId: string, week: number, stage: CandidateStage, actual: number) => Promise<void>;
 }) {
-  // Hooks must be declared before any conditional return
-  const lastPosIdRef = useRef<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, { kpi: string; actual: string }>>({});
+  const [draftKpi, setDraftKpi] = useState<Record<CandidateStage, string>>({
+    APPLIED: '0',
+    HR_SCREEN: '0',
+    LEADER_INTERVIEW: '0',
+    CEO_INTERVIEW: '0',
+    OFFER: '0',
+    HIRED: '0',
+    REJECTED: '0',
+  });
+  const [draftActual, setDraftActual] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!position || position.id === lastPosIdRef.current) return;
-    lastPosIdRef.current = position.id;
-    const d: Record<string, { kpi: string; actual: string }> = {};
+    if (!position) return;
+    const k = {
+      APPLIED: '0',
+      HR_SCREEN: '0',
+      LEADER_INTERVIEW: '0',
+      CEO_INTERVIEW: '0',
+      OFFER: '0',
+      HIRED: '0',
+      REJECTED: '0',
+    } as Record<CandidateStage, string>;
+    const a: Record<string, string> = {};
     FUNNEL_STAGES.forEach((stage) => {
+      const weekly = position.weekly.find((w) => w.stage === stage);
+      k[stage] = String(weekly ? sumArr(weekly.kpi) : 0);
       [0, 1, 2, 3].forEach((wi) => {
-        const weekly = position.weekly.find((w) => w.stage === stage);
-        d[`${stage}-${wi}`] = {
-          kpi: String(weekly?.kpi[wi] ?? 0),
-          actual: String(weekly?.actual[wi] ?? 0),
-        };
+        a[`${stage}-${wi}`] = String(weekly?.actual[wi] ?? 0);
       });
     });
-    setDraft(d);
+    setDraftKpi(k);
+    setDraftActual(a);
   }, [position]);
 
   if (!position) return null;
+  const pos = position;
+  const positionId = pos.id;
 
-  function getDraftVal(stage: CandidateStage, wi: number, field: 'kpi' | 'actual'): string {
-    return draft[`${stage}-${wi}`]?.[field] ?? '0';
-  }
-
-  function updateDraft(stage: CandidateStage, wi: number, field: 'kpi' | 'actual', val: string) {
-    setDraft((prev) => ({
+  function updateKpiDraft(stage: CandidateStage, val: string) {
+    setDraftKpi((prev) => ({
       ...prev,
-      [`${stage}-${wi}`]: { ...(prev[`${stage}-${wi}`] ?? { kpi: '0', actual: '0' }), [field]: val },
+      [stage]: val,
     }));
   }
 
-  async function handleCellBlur(stage: CandidateStage, wi: number) {
-    if (!position) return;
-    const k = Math.max(0, parseInt(draft[`${stage}-${wi}`]?.kpi ?? '0', 10) || 0);
-    const a = Math.max(0, parseInt(draft[`${stage}-${wi}`]?.actual ?? '0', 10) || 0);
-    await onSave(position.id, wi + 1, stage, k, a);
+  function updateActualDraft(stage: CandidateStage, wi: number, val: string) {
+    setDraftActual((prev) => ({
+      ...prev,
+      [`${stage}-${wi}`]: val,
+    }));
+  }
+
+  async function handleKpiBlur(stage: CandidateStage) {
+    const k = Math.max(0, parseInt(draftKpi[stage] ?? '0', 10) || 0);
+    await onSaveKpi(positionId, stage, k);
+  }
+
+  async function handleActualBlur(stage: CandidateStage, wi: number) {
+    const actual = Math.max(0, parseInt(draftActual[`${stage}-${wi}`] ?? '0', 10) || 0);
+    await onSaveActual(positionId, wi + 1, stage, actual);
   }
 
   function numCls(kpi: number, act: number) {
@@ -1060,45 +1084,50 @@ function WeeklyKpiModal({
     return 'text-amber-600 font-semibold';
   }
 
-  // Totals: in edit mode use draft, in view mode use stored weekly + mergedActual
-  const totals = FUNNEL_STAGES.map((stage) => {
+  const funnelIdxFromStage = (stage: CandidateStage) => {
+    const idx = FUNNEL_STAGES.indexOf(stage);
+    if (idx >= 0) return idx;
+    if (stage === 'OFFER' || stage === 'HIRED') return FUNNEL_STAGES.length - 1;
+    if (stage === 'REJECTED') return 0;
+    return -1;
+  };
+
+  function getActualByWeek(stage: CandidateStage): number[] {
+    const row = pos.weekly.find((w) => w.stage === stage);
     if (canEdit) {
-      const kpi = [0, 1, 2, 3].reduce(
-        (s, wi) => s + (parseInt(draft[`${stage}-${wi}`]?.kpi ?? '0', 10) || 0),
-        0,
-      );
-      const actual = [0, 1, 2, 3].reduce(
-        (s, wi) => s + (parseInt(draft[`${stage}-${wi}`]?.actual ?? '0', 10) || 0),
-        0,
-      );
-      return { kpi, actual };
+      return [0, 1, 2, 3].map((wi) => Math.max(0, parseInt(draftActual[`${stage}-${wi}`] ?? '0', 10) || 0));
     }
-    // Read-only: merge stored actual with live candidate count
     const toWeekIndex = (appliedAt: string) => {
       const d = new Date(appliedAt);
       if (Number.isNaN(d.getTime())) return null;
       return Math.max(0, Math.min(3, Math.floor((d.getDate() - 1) / 7)));
     };
-    const funnelIdxFromStage = (s: CandidateStage) => {
-      const idx = FUNNEL_STAGES.indexOf(s);
-      if (idx >= 0) return idx;
-      if (s === 'OFFER' || s === 'HIRED') return FUNNEL_STAGES.length - 1;
-      if (s === 'REJECTED') return 0;
-      return -1;
-    };
     const liveByWeek = [0, 0, 0, 0];
-    position.candidates.forEach((c) => {
+    pos.candidates.forEach((c) => {
       const wi = toWeekIndex(c.appliedAt);
       if (wi === null) return;
       const stageIdx = funnelIdxFromStage(c.currentStage);
       const thisIdx = FUNNEL_STAGES.indexOf(stage);
       if (stageIdx >= thisIdx) liveByWeek[wi] += 1;
     });
-    const d = position.weekly.find((w) => w.stage === stage);
-    const mergedByWeek = [0, 1, 2, 3].map((wi) =>
-      Math.max(d?.actual[wi] ?? 0, liveByWeek[wi]),
-    );
-    return { kpi: d ? sumArr(d.kpi) : 0, actual: sumArr(mergedByWeek) };
+    return [0, 1, 2, 3].map((wi) => Math.max(row?.actual[wi] ?? 0, liveByWeek[wi]));
+  }
+
+  const totals = FUNNEL_STAGES.map((stage) => {
+    const thisIdx = FUNNEL_STAGES.indexOf(stage);
+    const liveActual = pos.candidates.reduce((sum, c) => {
+      const stageIdx = funnelIdxFromStage(c.currentStage);
+      return stageIdx >= thisIdx ? sum + 1 : sum;
+    }, 0);
+    const row = pos.weekly.find((w) => w.stage === stage);
+    const storedActual = sumArr(getActualByWeek(stage));
+    const actual = Math.max(storedActual, liveActual);
+    const kpi = canEdit
+      ? Math.max(0, parseInt(draftKpi[stage] ?? '0', 10) || 0)
+      : row
+        ? sumArr(row.kpi)
+        : 0;
+    return { kpi, actual };
   });
 
   return (
@@ -1108,14 +1137,14 @@ function WeeklyKpiModal({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-6xl">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-[#1DB87A]" />
-            Weekly KPI — {position.title}
+            Monthly KPI + Weekly Actual — {pos.title}
             {canEdit && (
               <span className="text-[10px] font-normal text-[#9aa5b4] ml-1">
-                · Nhập trực tiếp vào ô để chỉnh sửa
+                · Actual theo tuần, KPI theo tháng
               </span>
             )}
           </DialogTitle>
@@ -1124,140 +1153,94 @@ function WeeklyKpiModal({
         {/* Position meta */}
         <div className="flex items-center gap-2 -mt-1 mb-1">
           <span className="text-[10px] bg-[#f0f2f5] text-[#5a6a7e] px-1.5 py-0.5 rounded">
-            {position.domain}
+            {pos.domain}
           </span>
-          <span className="text-[10px] text-[#9aa5b4]">{position.level}</span>
-          <PriorityBadge priority={position.priority} />
-          <StatusBadge status={position.status} />
+          <span className="text-[10px] text-[#9aa5b4]">{pos.level}</span>
+          <PriorityBadge priority={pos.priority} />
+          <StatusBadge status={pos.status} />
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-[11px] border-collapse">
             <thead>
-              <tr className="bg-[#fafbfc]">
-                <th className="py-2 px-3 text-left text-[9.5px] text-[#9aa5b4] font-medium w-[60px]">
-                  Week
-                </th>
+              <tr className="bg-[#fafbfc] border-b border-[#f0f2f5]">
+                <th className="py-2 px-3 text-left text-[9.5px] text-[#9aa5b4] font-medium w-[72px]">Week</th>
                 {FUNNEL_STAGES.map((stage) => (
                   <th
                     key={stage}
-                    colSpan={2}
-                    className="py-2 px-3 text-center font-semibold whitespace-nowrap border-l border-[#f0f2f5]"
+                    className="py-2 px-3 text-center text-[9.5px] font-semibold border-l border-[#f0f2f5]"
                     style={{ color: STAGE_CONFIG[stage].text }}
                   >
-                    {STAGE_CONFIG[stage].short === 'Applied'
-                      ? 'Applied'
-                      : STAGE_CONFIG[stage].label}
+                    {STAGE_CONFIG[stage].short === 'Applied' ? 'Applied' : STAGE_CONFIG[stage].label}
                   </th>
-                ))}
-              </tr>
-              <tr className="border-b border-[#f0f2f5]">
-                <th />
-                {FUNNEL_STAGES.map((stage) => (
-                  <>
-                    <th
-                      key={`${stage}-act`}
-                      className="px-3 pb-2 text-center text-[9px] text-[#bbb] font-normal border-l border-[#f0f2f5]"
-                    >
-                      Act
-                    </th>
-                    <th
-                      key={`${stage}-kpi`}
-                      className="px-3 pb-2 text-center text-[9px] text-[#bbb] font-normal"
-                    >
-                      KPI
-                    </th>
-                  </>
                 ))}
               </tr>
             </thead>
             <tbody>
               {[0, 1, 2, 3].map((wi) => (
                 <tr key={wi} className="border-b border-[#f8f9fb] hover:bg-[#fafbfc]">
-                  <td className="py-2 px-3 text-[#9aa5b4] font-medium">W{wi + 1}</td>
-                  {FUNNEL_STAGES.map((stage) => {
-                    if (canEdit) {
-                      const kVal = getDraftVal(stage, wi, 'kpi');
-                      const aVal = getDraftVal(stage, wi, 'actual');
-                      const kNum = parseInt(kVal, 10) || 0;
-                      const aNum = parseInt(aVal, 10) || 0;
-                      return (
-                        <>
-                          <td
-                            key={`${stage}-act-${wi}`}
-                            className="py-1.5 px-2 text-center border-l border-[#f8f9fb]"
-                          >
-                            <input
-                              type="number"
-                              min={0}
-                              value={aVal}
-                              onChange={(e) => updateDraft(stage, wi, 'actual', e.target.value)}
-                              onBlur={() => void handleCellBlur(stage, wi)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className={`w-10 text-center text-[11px] border rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${numCls(kNum, aNum).includes('green') ? 'border-green-300' : numCls(kNum, aNum).includes('amber') ? 'border-amber-300' : 'border-[#e2e6ea]'}`}
-                            />
-                          </td>
-                          <td
-                            key={`${stage}-kpi-${wi}`}
-                            className="py-1.5 px-2 text-center"
-                          >
-                            <input
-                              type="number"
-                              min={0}
-                              value={kVal}
-                              onChange={(e) => updateDraft(stage, wi, 'kpi', e.target.value)}
-                              onBlur={() => void handleCellBlur(stage, wi)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                              }}
-                              className="w-10 text-center text-[11px] border border-[#e2e6ea] rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                          </td>
-                        </>
-                      );
-                    }
-                    const d = position.weekly.find((w) => w.stage === stage);
-                    const k = d?.kpi[wi] ?? 0;
-                    const a = d?.actual[wi] ?? 0;
+                  <td className="py-2 px-3 text-[#5a6a7e] font-medium">W{wi + 1}</td>
+                  {FUNNEL_STAGES.map((stage, si) => {
+                    const weekVals = getActualByWeek(stage);
+                    const weekActual = weekVals[wi] ?? 0;
+                    const monthKpi = totals[si].kpi;
                     return (
-                      <>
-                        <td
-                          key={`${stage}-act-${wi}`}
-                          className={`py-2 px-3 text-center border-l border-[#f8f9fb] ${numCls(k, a)}`}
-                        >
-                          {a || '—'}
-                        </td>
-                        <td
-                          key={`${stage}-kpi-${wi}`}
-                          className="py-2 px-3 text-center text-[#bbb]"
-                        >
-                          {k || '—'}
-                        </td>
-                      </>
+                      <td key={`${stage}-${wi}`} className="py-1.5 px-2 text-center border-l border-[#f8f9fb]">
+                        {canEdit ? (
+                          <input
+                            type="number"
+                            min={0}
+                            value={draftActual[`${stage}-${wi}`] ?? '0'}
+                            onChange={(e) => updateActualDraft(stage, wi, e.target.value)}
+                            onBlur={() => void handleActualBlur(stage, wi)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                            }}
+                            className={`w-12 text-center text-[11px] border rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${numCls(monthKpi, weekActual).includes('green') ? 'border-green-300' : numCls(monthKpi, weekActual).includes('amber') ? 'border-amber-300' : 'border-[#e2e6ea]'}`}
+                          />
+                        ) : (
+                          <span className={numCls(monthKpi, weekActual)}>{weekActual || '—'}</span>
+                        )}
+                      </td>
                     );
                   })}
                 </tr>
               ))}
-              {/* Total row */}
-              <tr className="bg-[#fafbfc] border-t border-[#e8ecf0]">
-                <td className="py-2 px-3 text-[10px] font-semibold text-[#5a6a7e]">Total</td>
+
+              <tr className="bg-[#f9fcff] border-b border-[#e8ecf0]">
+                <td className="py-2 px-3 text-[10px] font-semibold text-[#5a6a7e]">KPI tháng</td>
                 {FUNNEL_STAGES.map((stage, si) => (
-                  <>
-                    <td
-                      key={`${stage}-act-total`}
-                      className={`py-2 px-3 text-center font-semibold border-l border-[#f0f2f5] ${numCls(totals[si].kpi, totals[si].actual)}`}
-                    >
-                      {totals[si].actual || '—'}
-                    </td>
-                    <td
-                      key={`${stage}-kpi-total`}
-                      className="py-2 px-3 text-center text-[#9aa5b4] font-semibold"
-                    >
-                      {totals[si].kpi || '—'}
-                    </td>
-                  </>
+                  <td key={`${stage}-kpi-month`} className="py-1.5 px-2 text-center border-l border-[#edf2f7]">
+                    {canEdit ? (
+                      <input
+                        type="number"
+                        min={0}
+                        value={draftKpi[stage] ?? '0'}
+                        onChange={(e) => updateKpiDraft(stage, e.target.value)}
+                        onBlur={() => void handleKpiBlur(stage)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
+                        className="w-14 text-center text-[11px] border border-[#e2e6ea] rounded px-0.5 py-0.5 focus:border-[#1DB87A] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                    ) : (
+                      <span className="text-[#9aa5b4] font-semibold">{totals[si].kpi || '—'}</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+
+              <tr className="bg-[#fafbfc] border-t border-[#e8ecf0]">
+                <td className="py-2 px-3 text-[10px] font-semibold text-[#5a6a7e]">Tổng tháng (Act/KPI)</td>
+                {FUNNEL_STAGES.map((stage, si) => (
+                  <td
+                    key={`${stage}-total`}
+                    className={`py-2 px-3 text-center font-semibold border-l border-[#f0f2f5] ${numCls(totals[si].kpi, totals[si].actual)}`}
+                  >
+                    {totals[si].actual || '—'}
+                    <span className="text-[#bbb] text-[10px] mx-1">/</span>
+                    <span className="text-[#9aa5b4]">{totals[si].kpi || '—'}</span>
+                  </td>
                 ))}
               </tr>
             </tbody>
@@ -1316,10 +1299,10 @@ function WeeklyKpiModal({
           <div className="flex items-center justify-between mb-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9aa5b4] flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5" />
-              Ứng viên ({position.candidates.length})
+              Ứng viên ({pos.candidates.length})
             </p>
           </div>
-          {position.candidates.length === 0 ? (
+          {pos.candidates.length === 0 ? (
             <p className="text-[11px] text-[#bbb] italic text-center py-4">
               Chưa có ứng viên nào cho vị trí này.
             </p>
@@ -1346,7 +1329,7 @@ function WeeklyKpiModal({
                   </tr>
                 </thead>
                 <tbody>
-                  {position.candidates.map((c) => (
+                  {pos.candidates.map((c) => (
                     <tr
                       key={c.id}
                       className="border-b border-[#f8f9fb] last:border-b-0 hover:bg-[#fafbfc] cursor-pointer transition-colors"
@@ -1444,7 +1427,8 @@ function PositionRow({
   const stageKpis = FUNNEL_STAGES.map((stage) => {
     const d = position.weekly.find((w) => w.stage === stage);
     if (!d) return 0;
-    return filterWeek === 0 ? sumArr(d.kpi) : (d.kpi[weekIdx] ?? 0);
+    // KPI month is stored on W1, so keep KPI fixed to W1 when filtering W1..W4
+    return filterWeek === 0 ? sumArr(d.kpi) : (d.kpi[0] ?? 0);
   });
 
   // Progress pct (applied actual vs kpi)
@@ -1553,7 +1537,7 @@ function PositionRow({
           <div
             className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 cursor-pointer hover:bg-[#f0f9f5]"
             onClick={() => onWeeklyKpiClick(position)}
-            title="Xem & chỉnh sửa KPI theo tuần"
+            title="Xem & chỉnh sửa KPI theo tháng"
           >
             <span className={numCls(stageKpis[si], stageActuals[si])}>
               {stageActuals[si] || '—'}
@@ -1624,7 +1608,7 @@ function PositionRow({
           <button
             className="w-7 h-7 rounded border border-[#e2e6ea] bg-white text-[#5a6a7e] hover:bg-blue-50 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center transition-colors"
             onClick={() => onWeeklyKpiClick(position)}
-            title="Xem chi tiết KPI tuần"
+            title="Xem chi tiết KPI tháng"
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
@@ -1761,11 +1745,16 @@ function PositionsTable({
 // ─── Pipeline view (Kanban) ───────────────────────────────────
 function PipelineView({
   positions,
+  canEdit,
   onCandidateClick,
+  onStageDrop,
 }: {
   positions: Position[];
+  canEdit: boolean;
   onCandidateClick: (c: Candidate) => void;
+  onStageDrop: (candidateId: string, stage: CandidateStage) => void | Promise<void>;
 }) {
+  const [dragOverStage, setDragOverStage] = useState<CandidateStage | null>(null);
   const allCandidates = positions.flatMap((p) => p.candidates);
   const columns: CandidateStage[] = [
     'APPLIED',
@@ -1777,12 +1766,12 @@ function PipelineView({
   ];
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
+    <div className="flex items-start gap-3 overflow-x-auto pb-2">
       {columns.map((stage) => {
         const cands = allCandidates.filter((c) => c.currentStage === stage);
         const cfg = STAGE_CONFIG[stage];
         return (
-          <div key={stage} className="flex-shrink-0 w-48">
+          <div key={stage} className="flex-1 min-w-[170px]">
             <div
               className="flex items-center justify-between px-3 py-2 rounded-t-lg mb-0.5"
               style={{ background: cfg.bg }}
@@ -1797,13 +1786,43 @@ function PipelineView({
                 {cands.length}
               </span>
             </div>
-            <div className="space-y-2 min-h-[200px]">
+            <div
+              className={`space-y-2 min-h-[200px] rounded-b-lg transition-colors ${
+                dragOverStage === stage ? 'bg-[#ecfdf5]' : ''
+              }`}
+              onDragOver={(e) => {
+                if (!canEdit) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverStage !== stage) setDragOverStage(stage);
+              }}
+              onDragLeave={() => {
+                if (dragOverStage === stage) setDragOverStage(null);
+              }}
+              onDrop={(e) => {
+                if (!canEdit) return;
+                e.preventDefault();
+                setDragOverStage(null);
+                const candidateId = e.dataTransfer.getData('text/plain');
+                const fromStage = e.dataTransfer.getData('application/x-stage') as CandidateStage;
+                if (!candidateId || !fromStage || fromStage === stage) return;
+                void onStageDrop(candidateId, stage);
+              }}
+            >
               {cands.map((c) => {
                 const pos = positions.find((p) => p.id === c.positionId);
                 return (
                   <div
                     key={c.id}
                     className="bg-white border border-[#e2ede9] rounded-lg p-2.5 cursor-pointer hover:border-[#1DB87A] hover:shadow-sm transition-all"
+                    draggable={canEdit}
+                    onDragStart={(e) => {
+                      if (!canEdit) return;
+                      e.dataTransfer.setData('text/plain', c.id);
+                      e.dataTransfer.setData('application/x-stage', c.currentStage);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragEnd={() => setDragOverStage(null)}
                     onClick={() => onCandidateClick(c)}
                   >
                     <div className="flex items-center gap-2 mb-1">
@@ -2696,21 +2715,33 @@ export default function RecruitmentPage() {
 
   // KPI aggregates
   const kpi = useMemo(() => {
-    const allCandidates = filtered.flatMap((p) => p.candidates);
+    const weekIdx = filterWeek - 1;
+    const stageActuals = FUNNEL_STAGES.map((stage) =>
+      filtered.reduce((sum, p) => {
+        const stageData = p.weekly.find((w) => w.stage === stage);
+        if (!stageData) return sum;
+        const val = filterWeek === 0 ? sumArr(stageData.actual) : (stageData.actual[weekIdx] ?? 0);
+        return sum + val;
+      }, 0),
+    );
     return {
-      applied: allCandidates.length,
-      hrScreen: allCandidates.filter((c) => !['APPLIED', 'REJECTED'].includes(c.currentStage))
-        .length,
-      leaderRound: allCandidates.filter((c) =>
-        ['LEADER_INTERVIEW', 'CEO_INTERVIEW', 'OFFER', 'HIRED'].includes(c.currentStage),
-      ).length,
-      ceoRound: allCandidates.filter((c) =>
-        ['CEO_INTERVIEW', 'OFFER', 'HIRED'].includes(c.currentStage),
-      ).length,
+      applied: stageActuals[0] ?? 0,
+      hrScreen: stageActuals[1] ?? 0,
+      leaderRound: stageActuals[2] ?? 0,
+      ceoRound: stageActuals[3] ?? 0,
       offerHired: filtered.filter((p) => p.status === 'OFFER_SENT' || p.status === 'HIRED').length,
       atRisk: filtered.filter((p) => p.insights.some((i) => i.type === 'BLOCKER')).length,
     };
-  }, [filtered]);
+  }, [filtered, filterWeek]);
+
+  const appliedKpiTotal = useMemo(() => {
+    return filtered.reduce((sum, p) => {
+      const stageData = p.weekly.find((w) => w.stage === 'APPLIED');
+      if (!stageData) return sum;
+      // Weekly view keeps KPI fixed to W1 by design.
+      return sum + (filterWeek === 0 ? sumArr(stageData.kpi) : (stageData.kpi[0] ?? 0));
+    }, 0);
+  }, [filtered, filterWeek]);
 
   const blockers = filtered.flatMap((p) =>
     p.insights
@@ -2834,9 +2865,8 @@ export default function RecruitmentPage() {
     [candidateDialog, curYear, curMonth, fetchPositions],
   );
 
-  const handleWeeklyKpiSave = useCallback(
-    async (positionId: string, week: number, stage: CandidateStage, kpi: number, actual: number) => {
-      const weekIdx = week - 1;
+  const handleMonthlyKpiSave = useCallback(
+    async (positionId: string, stage: CandidateStage, kpi: number) => {
       // Optimistic update
       setPositions((prev) =>
         prev.map((p) => {
@@ -2845,11 +2875,41 @@ export default function RecruitmentPage() {
             ...p,
             weekly: p.weekly.map((w) => {
               if (w.stage !== stage) return w;
-              const newKpi = [...w.kpi] as [number, number, number, number];
+              return { ...w, kpi: [kpi, 0, 0, 0] };
+            }),
+          };
+        }),
+      );
+      try {
+        await Promise.all(
+          [1, 2, 3, 4].map((week) =>
+            apiClient.put(
+              `/api/recruitment/positions/${positionId}/weekly?year=${curYear}&month=${curMonth + 1}`,
+              { week, stage, kpiTarget: week === 1 ? kpi : 0 },
+            ),
+          ),
+        );
+      } catch (err: unknown) {
+        void fetchPositions(curYear, curMonth);
+        toast.error(err instanceof Error ? err.message : 'Lưu KPI thất bại');
+      }
+    },
+    [curYear, curMonth, fetchPositions],
+  );
+
+  const handleWeeklyActualSave = useCallback(
+    async (positionId: string, week: number, stage: CandidateStage, actual: number) => {
+      const weekIdx = week - 1;
+      setPositions((prev) =>
+        prev.map((p) => {
+          if (p.id !== positionId) return p;
+          return {
+            ...p,
+            weekly: p.weekly.map((w) => {
+              if (w.stage !== stage) return w;
               const newActual = [...w.actual] as [number, number, number, number];
-              newKpi[weekIdx] = kpi;
               newActual[weekIdx] = actual;
-              return { ...w, kpi: newKpi, actual: newActual };
+              return { ...w, actual: newActual };
             }),
           };
         }),
@@ -2857,11 +2917,11 @@ export default function RecruitmentPage() {
       try {
         await apiClient.put(
           `/api/recruitment/positions/${positionId}/weekly?year=${curYear}&month=${curMonth + 1}`,
-          { week, stage, kpiTarget: kpi, actual },
+          { week, stage, actual },
         );
       } catch (err: unknown) {
         void fetchPositions(curYear, curMonth);
-        toast.error(err instanceof Error ? err.message : 'Lưu KPI thất bại');
+        toast.error(err instanceof Error ? err.message : 'Lưu Actual thất bại');
       }
     },
     [curYear, curMonth, fetchPositions],
@@ -3024,11 +3084,11 @@ export default function RecruitmentPage() {
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto pt-4 pb-6 space-y-3.5">
         {/* KPI grid */}
-        <div className="grid grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           <KpiCard
             label="Total Applied"
             value={kpi.applied}
-            sub={`KPI: ${filtered.reduce((s, p) => s + (p.weekly[0]?.kpi[3] ?? 0), 0)}`}
+            sub={`KPI: ${appliedKpiTotal}`}
             color="#3b82f6"
           />
           <KpiCard
@@ -3048,20 +3108,6 @@ export default function RecruitmentPage() {
             value={kpi.ceoRound}
             sub={`${kpi.leaderRound > 0 ? Math.round((kpi.ceoRound / kpi.leaderRound) * 100) : 0}% từ Leader`}
             color="#10b981"
-          />
-          <KpiCard
-            label="Offer / Hired"
-            value={kpi.offerHired}
-            sub="positions"
-            color="#22c55e"
-            alertClass={kpi.offerHired > 0 ? 'border-green-200 bg-green-50' : ''}
-          />
-          <KpiCard
-            label="At Risk"
-            value={kpi.atRisk}
-            sub="có blocker"
-            color="#ef4444"
-            alertClass={kpi.atRisk > 0 ? 'border-red-200 bg-red-50' : ''}
           />
         </div>
 
@@ -3181,7 +3227,7 @@ export default function RecruitmentPage() {
                     )}
                   </span>
                   <span className="text-[10px] text-[#9aa5b4]">
-                    Click ô KPI/Actual để mở Weekly KPI Modal
+                    Click ô KPI/Actual để mở Monthly KPI Modal
                   </span>
                 </div>
                 <PositionsTable
@@ -3237,10 +3283,6 @@ export default function RecruitmentPage() {
 
         {activeView === 'pipeline' && (
           <div className="space-y-3.5">
-            <div className="grid grid-cols-[1fr_300px] gap-3.5">
-              <FunnelCard positions={filtered} />
-              <TrendCard positions={filtered} />
-            </div>
             <div className="bg-white rounded-xl border border-[#e8ecf0] overflow-hidden">
               <div className="px-4 py-3 border-b border-[#f0f2f5]">
                 <span className="text-[12.5px] font-semibold text-[#1a2332] flex items-center gap-1.5">
@@ -3249,7 +3291,12 @@ export default function RecruitmentPage() {
                 </span>
               </div>
               <div className="p-4">
-                <PipelineView positions={filtered} onCandidateClick={setCandidateDetail} />
+                <PipelineView
+                  positions={filtered}
+                  canEdit={canEdit}
+                  onCandidateClick={setCandidateDetail}
+                  onStageDrop={handleStageChange}
+                />
               </div>
             </div>
           </div>
@@ -3262,7 +3309,8 @@ export default function RecruitmentPage() {
         canEdit={canEdit}
         onClose={() => setWeeklyKpiModal(null)}
         onCandidateClick={setCandidateDetail}
-        onSave={handleWeeklyKpiSave}
+        onSaveKpi={handleMonthlyKpiSave}
+        onSaveActual={handleWeeklyActualSave}
       />
       <InsightDialog
         open={insightDialog.open}
