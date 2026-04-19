@@ -402,11 +402,6 @@ export default function LeaveRequestModal({
       return;
     }
 
-    if (policyValidationMessage) {
-      toast.error(policyValidationMessage);
-      return;
-    }
-
     const validatedLeaveType = selectedLeaveType;
     if (!validatedLeaveType) {
       toast.error('Vui lòng chọn loại nghỉ phép.');
