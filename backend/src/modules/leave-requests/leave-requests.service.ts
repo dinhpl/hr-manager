@@ -48,6 +48,47 @@ type ApprovalFlowSettings = {
 
 const BALANCE_EXEMPT_LEAVE_TYPE_CODES = new Set(['WFH']);
 
+type ApproverInfo = { id: string; fullName: string | null; email: string };
+
+function parseApproverIds(approverIdStr: string | null | undefined): bigint[] {
+  if (!approverIdStr) return [];
+  return approverIdStr
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => BigInt(s));
+}
+
+function stringifyApproverIds(ids: bigint[]): string {
+  return ids.map((id) => id.toString()).join(',');
+}
+
+async function fetchApproverMap(
+  ids: bigint[],
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<Map<string, ApproverInfo>> {
+  if (!ids.length) return new Map();
+  const users = await (client as typeof prisma).user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, fullName: true, email: true },
+  });
+  return new Map(
+    users.map((u: { id: bigint; fullName: string | null; email: string }) => [
+      u.id.toString(),
+      { id: u.id.toString(), fullName: u.fullName, email: u.email },
+    ]),
+  );
+}
+
+function resolveApproversFromMap<T extends { approverId?: string | null }>(
+  request: T,
+  approverMap: Map<string, ApproverInfo>,
+): T & { approver: ApproverInfo | null; approvers: ApproverInfo[] } {
+  const ids = parseApproverIds(request.approverId);
+  const approvers = ids.map((id) => approverMap.get(id.toString())).filter(Boolean) as ApproverInfo[];
+  return { ...request, approver: approvers[0] ?? null, approvers };
+}
+
 const LEAVE_REQUEST_INCLUDE = {
   user: {
     select: {
@@ -70,7 +111,6 @@ const LEAVE_REQUEST_INCLUDE = {
       maxConsecutiveDays: true,
     },
   },
-  approver: { select: { id: true, fullName: true, email: true } },
   handoverPerson: { select: { id: true, fullName: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
@@ -184,10 +224,14 @@ function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery
   } else if (requestingUser.role === 'EMPLOYEE') {
     and.push({ userId: requestingUser.id });
   } else if (requestingUser.role === 'MANAGER') {
+    const mid = requestingUser.id.toString();
     and.push({
       OR: [
         { userId: requestingUser.id },
-        { approverId: requestingUser.id },
+        { approverId: mid },
+        { approverId: { startsWith: `${mid},` } },
+        { approverId: { contains: `,${mid},` } },
+        { approverId: { endsWith: `,${mid}` } },
         { user: { managerId: requestingUser.id } },
       ],
     });
@@ -208,7 +252,7 @@ function buildScopeFilter(requestingUser: AuthUser, query: GetLeaveRequestsQuery
 function canViewRequest(
   request: {
     userId: bigint;
-    approverId: bigint | null;
+    approverId: string | null;
     user: { managerId: bigint | null };
   },
   requestingUser: AuthUser,
@@ -229,17 +273,18 @@ function sanitizeLeaveRequestForViewer<
 function canApproveRequest(
   request: {
     userId: bigint;
-    approverId: bigint | null;
+    approverId: string | null;
     user: { managerId: bigint | null };
   },
   requestingUser: AuthUser,
 ) {
   if (requestingUser.role === 'ADMIN' || requestingUser.role === 'HR') return true;
   if (requestingUser.role !== 'MANAGER') return false;
-  return request.approverId === requestingUser.id;
+  const approverIds = parseApproverIds(request.approverId);
+  return approverIds.some((id) => id === requestingUser.id);
 }
 
-async function validateApprover(approverId: bigint) {
+async function validateApprover(approverId: bigint): Promise<bigint> {
   const approver = await prisma.user.findUnique({
     where: { id: approverId },
     select: { id: true, role: true, isActive: true },
@@ -258,11 +303,11 @@ async function validateApprover(approverId: bigint) {
   return approver.id;
 }
 
-async function resolveApproverId(
+async function resolveApproverIds(
   targetUserId: bigint,
   requestingUser: AuthUser,
-  requestedApproverId?: bigint,
-) {
+  requestedApproverIds?: string,
+): Promise<string> {
   const targetUser = await prisma.user.findUnique({
     where: { id: targetUserId },
     select: {
@@ -276,19 +321,24 @@ async function resolveApproverId(
     throw Object.assign(new Error('Target user not found'), { status: 404 });
   }
 
-  if (requestedApproverId) {
-    const approverId = await validateApprover(requestedApproverId);
-    if (approverId === targetUserId) {
-      throw Object.assign(new Error('Self-approval is not allowed'), { status: 400 });
+  if (requestedApproverIds) {
+    const ids = parseApproverIds(requestedApproverIds);
+    if (!ids.length) throw Object.assign(new Error('Invalid approver IDs'), { status: 400 });
+    const validatedIds: bigint[] = [];
+    for (const id of ids) {
+      if (id === targetUserId) {
+        throw Object.assign(new Error('Self-approval is not allowed'), { status: 400 });
+      }
+      validatedIds.push(await validateApprover(id));
     }
-    return approverId;
+    return stringifyApproverIds(validatedIds);
   }
 
   if (
     targetUser.manager?.isActive &&
     ['MANAGER', 'HR', 'ADMIN'].includes(targetUser.manager.role)
   ) {
-    return targetUser.manager.id;
+    return targetUser.manager.id.toString();
   }
 
   const fallbackApprover = await prisma.user.findFirst({
@@ -307,7 +357,7 @@ async function resolveApproverId(
     );
   }
 
-  return fallbackApprover.id;
+  return fallbackApprover.id.toString();
 }
 
 async function assertNoOverlap(
@@ -489,7 +539,10 @@ async function serializeRequestById(tx: Prisma.TransactionClient, id: bigint) {
     include: LEAVE_REQUEST_INCLUDE,
   });
   if (!request) throw Object.assign(new Error('Leave request not found'), { status: 404 });
-  return serializeLeaveRequestDates(request);
+  const serialized = serializeLeaveRequestDates(request);
+  const ids = parseApproverIds(request.approverId);
+  const approverMap = await fetchApproverMap(ids, tx);
+  return resolveApproversFromMap(serialized, approverMap);
 }
 
 function getActorName(requestingUser: AuthUser, fallback?: string | null) {
@@ -536,9 +589,22 @@ export async function getLeaveRequests(requestingUser: AuthUser, query: GetLeave
     prisma.leaveRequest.count({ where }),
   ]);
 
+  const seenIds = new Set<string>();
+  const allApproverIds: bigint[] = [];
+  for (const r of requests) {
+    for (const id of parseApproverIds(r.approverId as string | null | undefined)) {
+      const key = id.toString();
+      if (!seenIds.has(key)) { seenIds.add(key); allApproverIds.push(id); }
+    }
+  }
+  const approverMap = await fetchApproverMap(allApproverIds);
+
   return {
     data: requests.map((request) =>
-      serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser)),
+      resolveApproversFromMap(
+        serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser)),
+        approverMap,
+      ),
     ),
     meta: buildMeta(total, page, limit),
   };
@@ -555,7 +621,10 @@ export async function getLeaveRequestById(id: bigint, requestingUser: AuthUser) 
     throw Object.assign(new Error('Access denied'), { status: 403 });
   }
 
-  return serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser));
+  const serialized = serializeLeaveRequestDates(sanitizeLeaveRequestForViewer(request, requestingUser));
+  const ids = parseApproverIds(request.approverId);
+  const approverMap = await fetchApproverMap(ids);
+  return resolveApproversFromMap(serialized, approverMap);
 }
 
 export async function createLeaveRequest(
@@ -579,7 +648,7 @@ export async function createLeaveRequest(
   const totalDays = data.durationMode ? calculateTotalDays(data) : data.totalDays;
   const fromDate = parseVietnamDateTime(data.fromDate);
   const toDate = parseVietnamDateTime(data.toDate);
-  const approverId = await resolveApproverId(targetUserId, requestingUser, data.approverId);
+  const approverId = await resolveApproverIds(targetUserId, requestingUser, data.approverId);
 
   const ruleResult = await validateLeaveRequestRules({
     userId: targetUserId,
@@ -655,19 +724,21 @@ export async function createLeaveRequest(
         toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
       }),
     );
-  } else if (createdRequest.approver?.id) {
-    await createNotification(
-      buildLeaveRequestNotification({
-        recipientUserId: BigInt(createdRequest.approver.id),
-        type: 'LEAVE_REQUEST_CREATED',
-        requestId: BigInt(createdRequest.id),
-        actorName: createdRequest.user?.fullName || 'Nhan vien',
-        requesterName: createdRequest.user?.fullName || 'Nhan vien',
-        leaveTypeName:
-          createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
-        fromDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.fromDate)),
-        toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
-      }),
+  } else if (createdRequest.approvers && createdRequest.approvers.length > 0) {
+    await createManyNotifications(
+      createdRequest.approvers.map((approver) =>
+        buildLeaveRequestNotification({
+          recipientUserId: BigInt(approver.id),
+          type: 'LEAVE_REQUEST_CREATED',
+          requestId: BigInt(createdRequest.id),
+          actorName: createdRequest.user?.fullName || 'Nhan vien',
+          requesterName: createdRequest.user?.fullName || 'Nhan vien',
+          leaveTypeName:
+            createdRequest.leaveType?.name || createdRequest.leaveType?.code || 'nghi phep',
+          fromDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.fromDate)),
+          toDateLabel: getVietnamDatePart(parseVietnamDateTime(createdRequest.toDate)),
+        }),
+      ),
     );
 
     await sendLeaveMailSafely(() =>
@@ -716,7 +787,7 @@ export async function updateLeaveRequest(
   const totalDays = data.durationMode ? calculateTotalDays(data) : data.totalDays;
   const fromDate = parseVietnamDateTime(data.fromDate);
   const toDate = parseVietnamDateTime(data.toDate);
-  const approverId = await resolveApproverId(
+  const approverId = await resolveApproverIds(
     targetUserId,
     requestingUser,
     data.approverId ?? existingRequest.approverId ?? undefined,
@@ -750,7 +821,10 @@ export async function updateLeaveRequest(
     include: LEAVE_REQUEST_INCLUDE,
   });
 
-  return serializeLeaveRequestDates(updatedRequest);
+  const serialized = serializeLeaveRequestDates(updatedRequest);
+  const ids = parseApproverIds(updatedRequest.approverId);
+  const approverMap = await fetchApproverMap(ids);
+  return resolveApproversFromMap(serialized, approverMap);
 }
 
 export async function updateLeaveRequestAttachment(
@@ -786,7 +860,10 @@ export async function updateLeaveRequestAttachment(
     include: LEAVE_REQUEST_INCLUDE,
   });
 
-  return serializeLeaveRequestDates(updatedRequest);
+  const serialized = serializeLeaveRequestDates(updatedRequest);
+  const ids = parseApproverIds(updatedRequest.approverId);
+  const approverMap = await fetchApproverMap(ids);
+  return resolveApproversFromMap(serialized, approverMap);
 }
 
 export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, note?: string) {
@@ -906,7 +983,7 @@ export async function approveLeaveRequest(id: bigint, requestingUser: AuthUser, 
       where: { id },
       data: {
         status: 'APPROVED',
-        approverId: requestingUser.id,
+        approverId: requestingUser.id.toString(),
         approvedAt: new Date(),
         approvedNote: note,
       },
@@ -1002,14 +1079,15 @@ export async function rejectLeaveRequest(id: bigint, requestingUser: AuthUser, n
     where: { id },
     data: {
       status: 'REJECTED',
-      approverId: requestingUser.id,
+      approverId: requestingUser.id.toString(),
       approvedAt: new Date(),
       approvedNote: note,
     },
     include: LEAVE_REQUEST_INCLUDE,
   });
 
-  const serializedRequest = serializeLeaveRequestDates(updatedRequest);
+  const approverMap = await fetchApproverMap([requestingUser.id]);
+  const serializedRequest = resolveApproversFromMap(serializeLeaveRequestDates(updatedRequest), approverMap);
 
   await createNotification(
     buildLeaveRequestNotification({
@@ -1127,7 +1205,9 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
 
   const recipientIds = new Set<string>();
   if (cancelledRequest.user?.id) recipientIds.add(cancelledRequest.user.id.toString());
-  if (cancelledRequest.approver?.id) recipientIds.add(cancelledRequest.approver.id.toString());
+  for (const aid of parseApproverIds(cancelledRequest.approverId)) {
+    recipientIds.add(aid.toString());
+  }
 
   await createManyNotifications(
     Array.from(recipientIds).map((recipientId) =>
@@ -1135,10 +1215,7 @@ export async function cancelLeaveRequest(id: bigint, requestingUser: AuthUser) {
         recipientUserId: BigInt(recipientId),
         type: 'LEAVE_REQUEST_CANCELLED',
         requestId: BigInt(cancelledRequest.id),
-        actorName:
-          cancelledRequest.user?.id === requestingUser.id
-            ? cancelledRequest.user?.fullName || 'Nhan vien'
-            : getActorName(requestingUser),
+        actorName: getActorName(requestingUser, cancelledRequest.user?.fullName),
         requesterName: cancelledRequest.user?.fullName || 'Nhan vien',
         leaveTypeName:
           cancelledRequest.leaveType?.name || cancelledRequest.leaveType?.code || 'nghi phep',
@@ -1293,7 +1370,7 @@ export async function bulkApproveLeaveRequests(
         where: { id: request.id },
         data: {
           status: 'APPROVED',
-          approverId: requestingUser.id,
+          approverId: requestingUser.id.toString(),
           approvedAt: new Date(),
           approvedNote: note,
         },
@@ -1337,11 +1414,7 @@ export async function bulkApproveLeaveRequests(
       }
     }
 
-    const serializedRequests = await Promise.all(
-      pendingRequests.map((request) => serializeRequestById(tx, request.id)),
-    );
-
-    return serializedRequests;
+    return Promise.all(pendingRequests.map((request) => serializeRequestById(tx, request.id)));
   });
 
   await createManyNotifications(

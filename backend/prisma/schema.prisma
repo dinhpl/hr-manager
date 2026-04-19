@@ -150,7 +150,6 @@ model User {
   manager          User?            @relation("UserManager", fields: [managerId], references: [id])
   subordinates     User[]           @relation("UserManager")
   leaveRequests     LeaveRequest[]   @relation("UserLeaveRequests")
-  approvedRequests  LeaveRequest[]   @relation("ApproverLeaveRequests")
   handoverRequests  LeaveRequest[]   @relation("HandoverPersonRequests")
   overtimeRecords  OvertimeRecord[] @relation("UserOvertimeRecords")
   approvedOT       OvertimeRecord[] @relation("ApproverOvertimeRecords")
@@ -312,7 +311,7 @@ model LeaveRequest {
   handoverPersonId BigInt?            @map("handover_person_id")
   status           LeaveRequestStatus @default(PENDING)
   attachmentUrl    String?            @map("attachment_url")
-  approverId       BigInt?            @map("approver_id")
+  approverId       String?            @map("approver_id")
   approvedAt       DateTime?          @map("approved_at")
   approvedNote     String?            @map("approved_note")
   createdAt        DateTime           @default(now()) @map("created_at")
@@ -320,7 +319,6 @@ model LeaveRequest {
 
   user           User      @relation("UserLeaveRequests", fields: [userId], references: [id])
   leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id])
-  approver       User?     @relation("ApproverLeaveRequests", fields: [approverId], references: [id])
   handoverPerson User?     @relation("HandoverPersonRequests", fields: [handoverPersonId], references: [id])
 
   @@map("leave_requests")

@@ -4,8 +4,16 @@ import { serializeLeaveRequestDates } from '../../utils/date-time';
 import { getHolidayMapForMonth } from '../holidays/holidays.service';
 
 function buildManagerLeaveScope(userId: bigint) {
+  const mid = userId.toString();
   return {
-    OR: [{ userId }, { approverId: userId }, { user: { managerId: userId } }],
+    OR: [
+      { userId },
+      { approverId: mid },
+      { approverId: { startsWith: `${mid},` } },
+      { approverId: { contains: `,${mid},` } },
+      { approverId: { endsWith: `,${mid}` } },
+      { user: { managerId: userId } },
+    ],
   };
 }
 
@@ -141,7 +149,7 @@ export async function getCalendarData(
         reason: true,
         user: { select: { id: true, fullName: true, username: true, department: true } },
         leaveType: { select: { code: true, name: true, color: true } },
-        approver: { select: { fullName: true } },
+        approverId: true,
       },
     }),
     getHolidayMapForMonth(year, month),
@@ -176,7 +184,7 @@ export async function getCalendarData(
     const leaveType = r.leaveType
       ? { code: r.leaveType.code, name: r.leaveType.name, color: r.leaveType.color }
       : undefined;
-    const approver = r.approver?.fullName;
+    const approver = undefined;
 
     const cur = new Date(r.fromDate);
     while (cur <= r.toDate) {
@@ -222,7 +230,6 @@ export async function getRecentRequests(
     include: {
       user: { select: { id: true, fullName: true, username: true, avatar: true } },
       leaveType: { select: { id: true, code: true, name: true, color: true } },
-      approver: { select: { id: true, fullName: true } },
       handoverPerson: { select: { id: true, fullName: true } },
     },
     orderBy: { createdAt: 'desc' },

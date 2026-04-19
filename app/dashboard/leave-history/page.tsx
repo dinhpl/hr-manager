@@ -84,6 +84,7 @@ interface LeaveRequestItem {
     id?: string;
     fullName?: string | null;
   } | null;
+  approvers?: { id?: string; fullName?: string | null }[] | null;
 }
 
 interface LeaveRecord {
@@ -217,8 +218,10 @@ function mapToRecord(item: LeaveRequestItem): LeaveRecord {
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
     submittedAtValue: getDateTimeValue(item.createdAt),
-    approver: item.approver?.fullName || '-',
-    approverRole: item.approver?.fullName ? 'Người duyệt' : '',
+    approver: item.approvers?.length
+      ? item.approvers.map((a) => a.fullName || '').filter(Boolean).join(', ')
+      : item.approver?.fullName || '-',
+    approverRole: (item.approvers?.length || item.approver?.fullName) ? 'Người duyệt' : '',
     approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : '-',
     attachmentUrl: item.attachmentUrl,
   };
@@ -236,8 +239,10 @@ function toDetailData(item: LeaveRequestItem): LeaveDetailData {
     handover: item.handoverPerson?.fullName || '-',
     status: normalizeStatus(item.status),
     submittedAt: formatDateTimeVN(item.createdAt),
-    approver: item.approver?.fullName || undefined,
-    approverRole: item.approver?.fullName ? 'Người duyệt' : undefined,
+    approver: item.approvers?.length
+      ? item.approvers.map((a) => a.fullName || '').filter(Boolean).join(', ')
+      : item.approver?.fullName || undefined,
+    approverRole: (item.approvers?.length || item.approver?.fullName) ? 'Người duyệt' : undefined,
     approvedAt: item.approvedAt ? formatDateTimeVN(item.approvedAt) : undefined,
     approvedNote: item.approvedNote || undefined,
     fileAttachment: item.attachmentUrl || undefined,
@@ -254,7 +259,9 @@ function toEditData(item: LeaveRequestItem): LeaveRequestData {
     durationMode: inferLeaveRequestModeFromDbValue(item.durationMode),
     reason: getLeaveRequestReasonInput(item.reason),
     handoverPersonId: item.handoverPerson?.id || '',
-    approverId: item.approver?.id || '',
+    approverId: item.approvers?.length
+      ? item.approvers.map((a) => a.id || '').filter(Boolean).join(',')
+      : item.approver?.id || '',
   };
 }
 

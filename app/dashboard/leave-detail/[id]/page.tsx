@@ -58,6 +58,7 @@ interface LeaveRequestDetail {
     color?: string | null;
   };
   approver?: { id?: string; fullName?: string | null } | null;
+  approvers?: { id?: string; fullName?: string | null }[] | null;
   handoverPerson?: { id?: string; fullName?: string | null } | null;
 }
 
@@ -258,7 +259,9 @@ export default function LeaveDetailPage() {
       durationMode: (data.durationMode as import('@/lib/hr-utils').LeaveRequestMode) || 'FULL_DAY',
       reason: data.reason || '',
       handoverPersonId: data.handoverPerson?.id ? String(data.handoverPerson.id) : '',
-      approverId: data.approver?.id ? String(data.approver.id) : '',
+      approverId: data.approvers?.length
+        ? data.approvers.map((a) => a.id || '').filter(Boolean).join(',')
+        : data.approver?.id ? String(data.approver.id) : '',
     });
     setEditModalOpen(true);
   };
@@ -472,7 +475,7 @@ export default function LeaveDetailPage() {
           </div>
 
           {/* Approval info */}
-          {data.approver?.fullName && (
+          {(data.approvers?.length || data.approver?.fullName) && (
             <div
               className="p-4 rounded-xl border mb-5"
               style={{
@@ -486,7 +489,23 @@ export default function LeaveDetailPage() {
                   {statusKey === 'rejected' ? 'Từ chối bởi' : statusKey === 'approved' ? 'Được duyệt bởi' : 'Người duyệt'}
                 </span>
               </div>
-              <p className="text-sm font-semibold" style={{ color: '#203430' }}>{data.approver.fullName}</p>
+              {data.approvers && data.approvers.length > 1 ? (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {data.approvers.map((a) => (
+                    <span
+                      key={a.id}
+                      className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                      style={{ background: '#D3F2E7', color: '#0E474E' }}
+                    >
+                      {a.fullName}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-semibold" style={{ color: '#203430' }}>
+                  {data.approvers?.[0]?.fullName ?? data.approver?.fullName}
+                </p>
+              )}
               {data.approvedAt && <p className="text-xs mt-1" style={{ color: '#6b7f78' }}>Thời gian: {formatDateTimeVN(data.approvedAt)}</p>}
               {data.approvedNote && <p className="text-xs mt-1 italic" style={{ color: '#6b7f78' }}>Ghi chú: {data.approvedNote}</p>}
             </div>

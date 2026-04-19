@@ -7,7 +7,8 @@ const vietnamDateTimeSchema = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
 export const createLeaveRequestSchema = z.object({
   leaveTypeId: z.coerce.bigint(),
   userId: z.coerce.bigint().optional(),
-  approverId: z.coerce.bigint().optional(),
+  // Comma-separated approver IDs, e.g. "6" or "6,7"
+  approverId: z.string().regex(/^\d+(,\d+)*$/).optional(),
   fromDate: vietnamDateTimeSchema,
   toDate: vietnamDateTimeSchema,
   durationMode: durationModeSchema.optional(),

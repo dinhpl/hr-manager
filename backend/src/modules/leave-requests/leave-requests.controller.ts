@@ -16,7 +16,6 @@ import { formatVietnamDateTime } from '../../utils/date-time';
 const LEAVE_REQUEST_AUDIT_INCLUDE = {
   user: { select: { fullName: true, username: true } },
   leaveType: { select: { code: true, name: true } },
-  approver: { select: { fullName: true, username: true } },
   handoverPerson: { select: { fullName: true, username: true } },
 } satisfies Prisma.LeaveRequestInclude;
 
@@ -28,6 +27,8 @@ type LeaveRequestAuditLike = {
   user?: { fullName?: string | null; username?: string | null } | null;
   leaveType?: { code?: string | null; name?: string | null } | null;
   approver?: { fullName?: string | null; username?: string | null } | null;
+  approvers?: { fullName?: string | null }[] | null;
+  approverId?: string | null;
   handoverPerson?: { fullName?: string | null; username?: string | null } | null;
   fromDate?: Date | string | null;
   toDate?: Date | string | null;
@@ -75,7 +76,9 @@ function toLeaveRequestAuditSnapshot(request: LeaveRequestAuditLike) {
         : Number(request.totalDays),
     reason: request.reason ?? null,
     handoverPerson: getPersonName(request.handoverPerson),
-    approver: getPersonName(request.approver),
+    approver: request.approvers?.length
+      ? request.approvers.map((a) => a.fullName?.trim() || '').filter(Boolean).join(', ')
+      : request.approverId || getPersonName(request.approver) || null,
     status: request.status ?? null,
     approvedNote: request.approvedNote ?? null,
   } satisfies Record<(typeof LEAVE_REQUEST_AUDIT_FIELDS)[number], unknown>;

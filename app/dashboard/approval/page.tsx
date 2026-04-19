@@ -83,6 +83,7 @@ interface LeaveRequestItem {
     id?: string;
     fullName?: string | null;
   } | null;
+  approvers?: { id?: string; fullName?: string | null }[] | null;
 }
 
 interface PaginationMeta {
@@ -811,7 +812,9 @@ export default function ApprovalPage() {
                       <div>
                         <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#9eb5ae' }}>Người duyệt</span>
                         <p className="mt-0.5 text-xs font-medium" style={{ color: '#48635b' }}>
-                          {request.approver?.fullName || '—'}
+                          {request.approvers?.length
+                            ? request.approvers.map((a) => a.fullName || '').filter(Boolean).join(', ')
+                            : request.approver?.fullName || '—'}
                         </p>
                       </div>
                       <div>

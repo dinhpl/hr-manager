@@ -100,6 +100,7 @@ export interface LeaveRequestData {
   durationMode?: LeaveRequestMode;
   reason?: string;
   handoverPersonId?: string;
+  /** Comma-separated approver IDs, e.g. "6" or "6,7" */
   approverId?: string;
 }
 
@@ -111,6 +112,11 @@ interface LeaveRequestModalProps {
   defaultDate?: string;
 }
 
+function parseApproverIds(approverIdStr?: string): string[] {
+  if (!approverIdStr) return [];
+  return approverIdStr.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 function getInitialFormState(editData?: LeaveRequestData | null) {
   return {
     leaveType: editData?.typeCode || 'AL',
@@ -119,9 +125,9 @@ function getInitialFormState(editData?: LeaveRequestData | null) {
     durationMode: editData?.durationMode || 'FULL_DAY',
     reason: editData?.reason || '',
     handoverPerson: editData?.handoverPersonId || '',
-    approverId: editData?.approverId || '',
+    approverIds: parseApproverIds(editData?.approverId),
     requestForUserId: editData?.requestForUserId || '',
-  } as const;
+  };
 }
 
 const LEAVE_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
@@ -156,7 +162,7 @@ export default function LeaveRequestModal({
     | 'fromDate'
     | 'toDate'
     | 'reason'
-    | 'approverId'
+    | 'approverIds'
     | 'handoverPerson';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -179,7 +185,8 @@ export default function LeaveRequestModal({
   const [durationMode, setDurationMode] = useState<LeaveRequestMode>(initialFormState.durationMode);
   const [reason, setReason] = useState(initialFormState.reason);
   const [handoverPerson, setHandoverPerson] = useState(initialFormState.handoverPerson);
-  const [approverId, setApproverId] = useState(initialFormState.approverId);
+  const [approverIds, setApproverIds] = useState<string[]>(initialFormState.approverIds);
+  const [approverDropdownOpen, setApproverDropdownOpen] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [submitState, setSubmitState] = useState<'idle' | 'saving' | 'submitting' | 'success'>(
     'idle',
@@ -261,7 +268,8 @@ export default function LeaveRequestModal({
     setDurationMode(nextState.durationMode);
     setReason(nextState.reason);
     setHandoverPerson(nextState.handoverPerson);
-    setApproverId(nextState.approverId);
+    setApproverIds(nextState.approverIds);
+    setApproverDropdownOpen(false);
     setRequestForUserId(nextState.requestForUserId || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
@@ -373,7 +381,7 @@ export default function LeaveRequestModal({
     if (!fromDate) nextErrorFields.fromDate = true;
     if (!toDate) nextErrorFields.toDate = true;
     if (!reason.trim()) nextErrorFields.reason = true;
-    if (!approverId) nextErrorFields.approverId = true;
+    if (approverIds.length === 0) nextErrorFields.approverIds = true;
     if (!handoverPerson) nextErrorFields.handoverPerson = true;
 
     if (Object.keys(nextErrorFields).length > 0) {
@@ -419,8 +427,8 @@ export default function LeaveRequestModal({
     if (isAdmin && effectiveUserId) {
       formData.append('userId', effectiveUserId);
     }
-    if (approverId) {
-      formData.append('approverId', approverId);
+    if (approverIds.length > 0) {
+      formData.append('approverId', approverIds.join(','));
     }
     formData.append('fromDate', leaveRequestPayload.fromDate);
     formData.append('toDate', leaveRequestPayload.toDate);
@@ -473,7 +481,8 @@ export default function LeaveRequestModal({
     setDurationMode('FULL_DAY');
     setReason('');
     setHandoverPerson('');
-    setApproverId('');
+    setApproverIds([]);
+    setApproverDropdownOpen(false);
     setRequestForUserId(editData?.requestForUserId || userInfo?.id || '');
     setAttachedFile(null);
     setDragging(false);
@@ -851,27 +860,101 @@ export default function LeaveRequestModal({
                 <Users2 size={14} style={{ color: '#1DB87A' }} /> Người duyệt{' '}
                 <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <Select
-                value={approverId || 'placeholder'}
-                onValueChange={(value) => {
-                  const next = value === 'placeholder' ? '' : value;
-                  setApproverId(next);
-                  if (next) markFieldValid('approverId');
-                }}
-                disabled={loadingOptions}
-              >
-                <SelectTrigger className={getFieldErrorClass('approverId')}>
-                  <SelectValue placeholder="-- Chọn người duyệt --" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="placeholder">-- Chọn người duyệt --</SelectItem>
-                  {approverOptions.map((person) => (
-                    <SelectItem key={person.id} value={person.id}>
-                      {person.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Multi-select approver dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={loadingOptions}
+                  onClick={() => setApproverDropdownOpen((o) => !o)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm bg-white transition-colors ${
+                    errorFields.approverIds
+                      ? 'border-red-300 bg-red-50/40'
+                      : 'border-input hover:border-gray-300'
+                  }`}
+                >
+                  <span className={approverIds.length === 0 ? 'text-muted-foreground' : ''}>
+                    {approverIds.length === 0
+                      ? '-- Chọn người duyệt --'
+                      : approverOptions
+                          .filter((p) => approverIds.includes(p.id))
+                          .map((p) => p.fullName)
+                          .join(', ')}
+                  </span>
+                  <svg
+                    className={`w-4 h-4 shrink-0 transition-transform ${approverDropdownOpen ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {approverDropdownOpen && (
+                  <div
+                    className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-52 overflow-y-auto"
+                    style={{ borderColor: '#e2ede9' }}
+                  >
+                    {approverOptions.length === 0 ? (
+                      <p className="px-3 py-2 text-sm text-muted-foreground">Không có người duyệt</p>
+                    ) : (
+                      approverOptions.map((person) => {
+                        const checked = approverIds.includes(person.id);
+                        return (
+                          <label
+                            key={person.id}
+                            className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setApproverIds((prev) => {
+                                  const next = checked
+                                    ? prev.filter((id) => id !== person.id)
+                                    : [...prev, person.id];
+                                  if (next.length > 0) markFieldValid('approverIds');
+                                  return next;
+                                });
+                              }}
+                              className="rounded"
+                            />
+                            <span style={{ color: '#203430' }}>{person.fullName}</span>
+                            {person.department && (
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {person.department}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+              {approverIds.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {approverOptions
+                    .filter((p) => approverIds.includes(p.id))
+                    .map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{ background: '#D3F2E7', color: '#0E474E' }}
+                      >
+                        {p.fullName}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setApproverIds((prev) => prev.filter((id) => id !== p.id))
+                          }
+                          className="hover:text-red-500 transition-colors"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
 
             {/* Handover person */}
