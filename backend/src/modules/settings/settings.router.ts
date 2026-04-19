@@ -18,3 +18,6 @@ settingsRouter.get('/mail', ctrl.getMailSettings);
 settingsRouter.patch('/mail', requireRoles('ADMIN', 'HR'), ctrl.updateMailSettings);
 settingsRouter.get('/mail/preview', requireRoles('ADMIN', 'HR'), ctrl.previewMailTemplate);
 settingsRouter.post('/mail/test', requireRoles('ADMIN', 'HR'), ctrl.testMailTemplate);
+
+settingsRouter.get('/workspace-map', ctrl.getWorkspaceMap);
+settingsRouter.patch('/workspace-map', requireRoles('ADMIN', 'HR'), ctrl.updateWorkspaceMap);

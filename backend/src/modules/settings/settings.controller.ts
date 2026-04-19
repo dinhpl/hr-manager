@@ -152,6 +152,33 @@ export async function testMailTemplate(req: Request, res: Response, next: NextFu
   }
 }
 
+export async function getWorkspaceMap(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = await service.getWorkspaceMap();
+    sendSuccess(res, data ?? { items: [] });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateWorkspaceMap(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await service.updateWorkspaceMap(req.body);
+    void createAuditLog({
+      actorId: req.user!.id,
+      actorName: req.user!.username || req.user!.email,
+      actorRole: req.user!.role,
+      action: 'UPDATE',
+      module: 'SETTING',
+      entityName: 'Workspace Map',
+      ipAddress: getClientIp(req),
+    });
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function previewMailTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     const template = String(req.query.template ?? '').trim() as MailTemplateType;

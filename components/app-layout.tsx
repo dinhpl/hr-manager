@@ -230,6 +230,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .filter((item): item is (typeof NAV_ITEMS)[number] => Boolean(item)),
   })).filter((group) => group.items.length > 0);
   const dashboardNavItem = visibleNavItems.find((item) => item.key === 'dashboard');
+  const isWorkspaceMapPage = pathname?.startsWith('/dashboard/workspace-map');
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#f7f7f7' }}>
@@ -629,7 +630,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-5 sm:p-6">{children}</main>
+        <main className={isWorkspaceMapPage ? 'flex-1 overflow-y-auto p-0' : 'flex-1 overflow-y-auto p-5 sm:p-6'}>
+          {children}
+        </main>
       </div>
     </div>
   );
