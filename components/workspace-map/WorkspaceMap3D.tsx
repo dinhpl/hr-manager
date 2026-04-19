@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { RotateCcw } from 'lucide-react';
+import { Bookmark, BookmarkCheck, RotateCcw } from 'lucide-react';
 import * as THREE from 'three';
 import type { WorkspaceItem } from './types';
 
@@ -19,6 +19,28 @@ const FLOOR_T = 3;
 
 const DEFAULT_AZIMUTH = Math.PI / 4;
 const DEFAULT_ELEVATION = Math.PI / 4;
+const CAMERA_STORAGE_KEY = 'workspaceMap3DCamera';
+
+function loadSavedCamera(): { azimuth: number; elevation: number } | null {
+  try {
+    const raw = localStorage.getItem(CAMERA_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'azimuth' in parsed &&
+      'elevation' in parsed &&
+      typeof (parsed as Record<string, unknown>).azimuth === 'number' &&
+      typeof (parsed as Record<string, unknown>).elevation === 'number'
+    ) {
+      return parsed as { azimuth: number; elevation: number };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 interface WorkspaceMap3DProps {
   items: WorkspaceItem[];
@@ -259,10 +281,20 @@ function FurnitureMesh({ item }: { item: WorkspaceItem }) {
 }
 
 export function WorkspaceMap3D({ items }: WorkspaceMap3DProps) {
-  const [azimuth, setAzimuth] = useState(DEFAULT_AZIMUTH);
-  const [elevation, setElevation] = useState(DEFAULT_ELEVATION);
+  const [azimuth, setAzimuth] = useState(() => loadSavedCamera()?.azimuth ?? DEFAULT_AZIMUTH);
+  const [elevation, setElevation] = useState(() => loadSavedCamera()?.elevation ?? DEFAULT_ELEVATION);
   const [isDragging, setIsDragging] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const dragRef = useRef<{ sx: number; sy: number; az: number; el: number } | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSaveCamera = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    localStorage.setItem(CAMERA_STORAGE_KEY, JSON.stringify({ azimuth, elevation }));
+    setSaveStatus('saved');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000);
+  };
 
   const { normalItems, worldW, worldH } = useMemo(() => {
     if (!items.length) return { normalItems: [], worldW: 400, worldH: 300 };
@@ -518,25 +550,45 @@ export function WorkspaceMap3D({ items }: WorkspaceMap3DProps) {
       }}
     >
       {!isDragging && (
-        <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/85 px-4 py-1.5 text-xs text-slate-600 shadow-sm backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-white/85 px-4 py-1.5 text-xs text-slate-600 shadow-sm backdrop-blur-sm">
           Kéo để xoay không gian 3D
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setAzimuth(DEFAULT_AZIMUTH);
-          setElevation(DEFAULT_ELEVATION);
-        }}
-        className="absolute right-4 top-4 rounded-full bg-white/80 p-2 text-slate-600 shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
-        title="Đặt lại góc nhìn"
-      >
-        <RotateCcw className="h-4 w-4" />
-      </button>
+      <div className="absolute right-4 top-4 z-10 flex gap-2">
+        <button
+          type="button"
+          onClick={handleSaveCamera}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm transition-colors ${
+            saveStatus === 'saved'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-white/80 text-slate-600 hover:bg-white'
+          }`}
+          title="Lưu góc camera hiện tại làm mặc định"
+        >
+          {saveStatus === 'saved' ? (
+            <BookmarkCheck className="h-3.5 w-3.5" />
+          ) : (
+            <Bookmark className="h-3.5 w-3.5" />
+          )}
+          {saveStatus === 'saved' ? 'Đã lưu' : 'Lưu góc'}
+        </button>
 
-      <div className="pointer-events-none absolute left-4 top-4 rounded-md bg-white/80 px-2 py-1 text-xs text-slate-600 shadow-sm backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAzimuth(DEFAULT_AZIMUTH);
+            setElevation(DEFAULT_ELEVATION);
+          }}
+          className="rounded-full bg-white/80 p-2 text-slate-600 shadow-sm backdrop-blur-sm transition-colors hover:bg-white"
+          title="Đặt lại góc nhìn"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-md bg-white/80 px-2 py-1 text-xs text-slate-600 shadow-sm backdrop-blur-sm">
         {Math.round(((azimuth % (Math.PI * 2)) * 180) / Math.PI)}° · elev{' '}
         {Math.round((elevation * 180) / Math.PI)}°
       </div>

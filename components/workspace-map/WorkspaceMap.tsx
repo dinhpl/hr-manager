@@ -75,7 +75,7 @@ interface WorkspaceMemberOption {
 }
 
 interface WorkspaceViewerSession {
-  isSystemSuperAdmin?: boolean | string | number | null;
+  systemRole?: string | null;
 }
 
 function normalizeEmailHandle(email?: string | null) {
@@ -464,11 +464,7 @@ export default function WorkspaceMap() {
   const [avatarImageMap, setAvatarImageMap] = useState<Record<string, HTMLImageElement>>({});
   const [isSystemSuperAdmin] = useState(() => {
     const viewer = getStoredUser<WorkspaceViewerSession>();
-    const flag = viewer?.isSystemSuperAdmin;
-    if (typeof flag === 'boolean') return flag;
-    if (typeof flag === 'string') return flag.toLowerCase() === 'true' || flag === '1';
-    if (typeof flag === 'number') return flag === 1;
-    return false;
+    return viewer?.systemRole?.toUpperCase() === 'ADMIN';
   });
 
   const seqRef = useRef(100);
