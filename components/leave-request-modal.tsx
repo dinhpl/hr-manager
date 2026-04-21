@@ -114,7 +114,10 @@ interface LeaveRequestModalProps {
 
 function parseApproverIds(approverIdStr?: string): string[] {
   if (!approverIdStr) return [];
-  return approverIdStr.split(',').map((s) => s.trim()).filter(Boolean);
+  return approverIdStr
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function getInitialFormState(editData?: LeaveRequestData | null) {
@@ -147,7 +150,6 @@ function isValidLeaveAttachment(file: File) {
   const lowerName = file.name.toLowerCase();
   return LEAVE_ATTACHMENT_ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
 }
-
 
 export default function LeaveRequestModal({
   isOpen,
@@ -499,7 +501,7 @@ export default function LeaveRequestModal({
     >
       <DialogContent
         showCloseButton={false}
-        className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-2xl"
+        className="overflow-hidden border-0 p-0 shadow-2xl sm:max-w-5xl"
       >
         <DialogHeader className="sr-only">
           <DialogTitle>
@@ -544,7 +546,7 @@ export default function LeaveRequestModal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)] space-y-5">
+        <div className="px-4 overflow-y-auto max-h-[calc(90vh-120px)] space-y-5">
           {/* Leave balance info */}
           <div
             className="rounded-xl p-4"
@@ -618,9 +620,9 @@ export default function LeaveRequestModal({
           ) : null}
 
           {/* Form fields */}
-          <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {isAdmin && (
-              <div>
+              <div className="lg:col-span-2">
                 <label
                   className="flex items-center gap-2 text-sm font-semibold mb-2"
                   style={{ color: '#203430' }}
@@ -684,8 +686,64 @@ export default function LeaveRequestModal({
               </Select>
             </div>
 
+            {/* Duration mode */}
+            <div>
+              <label
+                className="flex items-center gap-2 text-sm font-semibold mb-2"
+                style={{ color: '#203430' }}
+              >
+                <Clock size={14} style={{ color: '#1DB87A' }} /> Hình thức nghỉ{' '}
+                <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div className="flex gap-3 flex-wrap lg:flex-nowrap">
+                {(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM'] as LeaveRequestMode[]).map((mode) => {
+                  const isSelected = durationMode === mode;
+                  return (
+                    <label
+                      key={mode}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer text-sm font-medium transition-all select-none whitespace-nowrap"
+                      style={
+                        isSelected
+                          ? {
+                              background: '#D3F2E7',
+                              color: '#0E474E',
+                              border: '2px solid #1DB87A',
+                            }
+                          : {
+                              background: '#f7f7f7',
+                              color: '#6b7f78',
+                              border: '2px solid transparent',
+                            }
+                      }
+                    >
+                      <input
+                        type="radio"
+                        name="durationMode"
+                        value={mode}
+                        checked={isSelected}
+                        onChange={() => setDurationMode(mode)}
+                        className="hidden"
+                      />
+                      <span
+                        className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
+                        style={{ borderColor: isSelected ? '#1DB87A' : '#c4d4cf' }}
+                      >
+                        {isSelected && (
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: '#1DB87A' }}
+                          />
+                        )}
+                      </span>
+                      {LEAVE_REQUEST_MODE_CONFIG[mode].label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Date range */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-2">
               <div>
                 <label
                   className="flex items-center gap-2 text-sm font-semibold mb-2"
@@ -722,70 +780,10 @@ export default function LeaveRequestModal({
               </div>
             </div>
 
-            {/* Duration mode */}
-            <div>
-              <label
-                className="flex items-center gap-2 text-sm font-semibold mb-2"
-                style={{ color: '#203430' }}
-              >
-                <Clock size={14} style={{ color: '#1DB87A' }} /> Hình thức nghỉ{' '}
-                <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <div className="flex gap-3 flex-wrap">
-                {(['FULL_DAY', 'HALF_DAY_AM', 'HALF_DAY_PM'] as LeaveRequestMode[]).map(
-                  (mode) => {
-                    const isSelected = durationMode === mode;
-                    return (
-                      <label
-                        key={mode}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg cursor-pointer text-sm font-medium transition-all select-none"
-                        style={
-                          isSelected
-                            ? {
-                                background: '#D3F2E7',
-                                color: '#0E474E',
-                                border: '2px solid #1DB87A',
-                              }
-                            : {
-                                background: '#f7f7f7',
-                                color: '#6b7f78',
-                                border: '2px solid transparent',
-                              }
-                        }
-                      >
-                        <input
-                          type="radio"
-                          name="durationMode"
-                          value={mode}
-                          checked={isSelected}
-                          onChange={() => setDurationMode(mode)}
-                          className="hidden"
-                        />
-                        <span
-                          className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0"
-                          style={{ borderColor: isSelected ? '#1DB87A' : '#c4d4cf' }}
-                        >
-                          {isSelected && (
-                            <span
-                              className="w-2 h-2 rounded-full"
-                              style={{ background: '#1DB87A' }}
-                            />
-                          )}
-                        </span>
-                        {LEAVE_REQUEST_MODE_CONFIG[mode].label}
-                      </label>
-                    );
-                  },
-                )}
-              </div>
-            </div>
-
-
-
             {/* Calculation */}
             {days > 0 && (
               <div
-                className="flex items-center gap-3 px-4 py-3 rounded-lg"
+                className="flex items-center gap-3 px-4 py-3 rounded-lg lg:col-span-2"
                 style={{ background: '#fef3c7', border: '1px solid #fcd34d' }}
               >
                 <Calculator size={16} style={{ color: '#d97706' }} />
@@ -798,7 +796,7 @@ export default function LeaveRequestModal({
             {/* Balance warning */}
             {balanceWarning && (
               <div
-                className="flex items-start gap-3 px-4 py-3 rounded-lg"
+                className="flex items-start gap-3 px-4 py-3 rounded-lg lg:col-span-2"
                 style={{ background: '#fef2f2', border: '1px solid #fecaca' }}
               >
                 <AlertTriangle
@@ -813,7 +811,7 @@ export default function LeaveRequestModal({
 
             {policyValidationMessage ? (
               <div
-                className="flex items-start gap-3 px-4 py-3 rounded-lg"
+                className="flex items-start gap-3 px-4 py-3 rounded-lg lg:col-span-2"
                 style={{ background: '#fff7ed', border: '1px solid #fdba74' }}
               >
                 <AlertTriangle
@@ -827,7 +825,7 @@ export default function LeaveRequestModal({
             ) : null}
 
             {/* Reason */}
-            <div>
+            <div className="lg:col-span-2">
               <label
                 className="flex items-center gap-2 text-sm font-semibold mb-2"
                 style={{ color: '#203430' }}
@@ -865,7 +863,9 @@ export default function LeaveRequestModal({
                     getFieldErrorClass('approverIds') || 'hover:border-gray-300'
                   }`}
                 >
-                  <span className={`line-clamp-1 text-left ${approverIds.length === 0 ? 'text-muted-foreground' : ''}`}>
+                  <span
+                    className={`line-clamp-1 text-left ${approverIds.length === 0 ? 'text-muted-foreground' : ''}`}
+                  >
                     {approverIds.length === 0
                       ? '-- Chọn người duyệt --'
                       : approverOptions
@@ -879,15 +879,20 @@ export default function LeaveRequestModal({
                     stroke="currentColor"
                     viewBox="0 0 24 24"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
                 </button>
                 {approverDropdownOpen && (
-                  <div
-                    className="bg-popover text-popover-foreground absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border p-1 shadow-md"
-                  >
+                  <div className="bg-popover text-popover-foreground absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border p-1 shadow-md">
                     {approverOptions.length === 0 ? (
-                      <p className="px-3 py-2 text-sm text-muted-foreground">Không có người duyệt</p>
+                      <p className="px-3 py-2 text-sm text-muted-foreground">
+                        Không có người duyệt
+                      </p>
                     ) : (
                       approverOptions.map((person) => {
                         const checked = approverIds.includes(person.id);
@@ -936,9 +941,7 @@ export default function LeaveRequestModal({
                         {p.fullName}
                         <button
                           type="button"
-                          onClick={() =>
-                            setApproverIds((prev) => prev.filter((id) => id !== p.id))
-                          }
+                          onClick={() => setApproverIds((prev) => prev.filter((id) => id !== p.id))}
                           className="hover:text-red-500 transition-colors"
                         >
                           <X size={11} />
@@ -981,7 +984,7 @@ export default function LeaveRequestModal({
               </Select>
             </div>
 
-            <div>
+            <div className="lg:col-span-2">
               <label
                 className="flex items-center gap-2 text-sm font-semibold mb-2"
                 style={{ color: '#203430' }}
@@ -1012,7 +1015,7 @@ export default function LeaveRequestModal({
                 </div>
               ) : (
                 <div
-                  className="rounded-lg p-6 text-center cursor-pointer transition-all"
+                  className="rounded-lg p-4 text-center cursor-pointer transition-all"
                   style={{
                     border: `2px dashed ${dragging ? '#1DB87A' : '#D3F2E7'}`,
                     background: dragging ? '#f0f9f5' : '#fafffe',
