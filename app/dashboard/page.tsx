@@ -1498,7 +1498,7 @@ export default function DashboardPage() {
             setSelectedDetail(toDetailData(request));
           }}
           onOpenDayDetail={(date, users, holidays, birthdays) => {
-            if (users.length === 0) {
+            if (users.length === 0 && (birthdays?.length ?? 0) === 0) {
               setLeaveDefaultDate(date);
               setIsLeaveRequestModalOpen(true);
             } else {
@@ -1538,7 +1538,7 @@ export default function DashboardPage() {
             setSelectedDetail(toDetailData(request));
           }}
           onOpenDayDetail={(date, users, holidays, birthdays) => {
-            if (users.length === 0) {
+            if (users.length === 0 && (birthdays?.length ?? 0) === 0) {
               setLeaveDefaultDate(date);
               setIsLeaveRequestModalOpen(true);
             } else {
