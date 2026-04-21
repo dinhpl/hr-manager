@@ -458,6 +458,7 @@ export default function WorkspaceMap() {
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('loading');
   const [wallThickness, setWallThickness] = useState(STYLES.room.strokeWidth);
+  const [savedCamera, setSavedCamera] = useState<{ azimuth: number; elevation: number } | undefined>(undefined);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ x: 0, y: 0, open: false });
   const [memberOptions, setMemberOptions] = useState<WorkspaceMemberOption[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
@@ -593,6 +594,13 @@ export default function WorkspaceMap() {
         }
         if (typeof data.wallThickness === 'number' && Number.isFinite(data.wallThickness)) {
           setWallThickness(clamp(data.wallThickness, WALL_THICKNESS_MIN, WALL_THICKNESS_MAX));
+        }
+        if (
+          data.camera &&
+          typeof data.camera.azimuth === 'number' &&
+          typeof data.camera.elevation === 'number'
+        ) {
+          setSavedCamera(data.camera);
         }
         setSaveStatus('idle');
       })
@@ -783,10 +791,15 @@ export default function WorkspaceMap() {
     return () => window.removeEventListener('click', onWindowClick);
   }, []);
 
+  const handleSaveCamera = async (camera: { azimuth: number; elevation: number }) => {
+    setSavedCamera(camera);
+    await saveWorkspaceMap({ items, wallThickness, camera });
+  };
+
   const handleSave = async () => {
     setSaveStatus('saving');
     try {
-      await saveWorkspaceMap({ items, wallThickness });
+      await saveWorkspaceMap({ items, wallThickness, camera: savedCamera });
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch {
@@ -1815,7 +1828,12 @@ export default function WorkspaceMap() {
           </div>
 
           {view3D ? (
-            <WorkspaceMap3D items={items} />
+            <WorkspaceMap3D
+              items={items}
+              initialCamera={savedCamera}
+              onSaveCamera={handleSaveCamera}
+              isAdmin={isSystemSuperAdmin}
+            />
           ) : (
             <>
               <div ref={containerRef} className="h-full w-full" style={{ cursor: stageCursor }}>

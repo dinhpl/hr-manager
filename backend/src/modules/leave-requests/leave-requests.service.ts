@@ -46,7 +46,7 @@ type ApprovalFlowSettings = {
   requireDocumentTypes?: string[];
 };
 
-const BALANCE_EXEMPT_LEAVE_TYPE_CODES = new Set(['WFH']);
+const BALANCE_EXEMPT_LEAVE_TYPE_CODES = new Set(['WFH', 'UL']);
 
 type ApproverInfo = { id: string; fullName: string | null; email: string };
 
