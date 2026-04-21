@@ -861,13 +861,11 @@ export default function LeaveRequestModal({
                   type="button"
                   disabled={loadingOptions}
                   onClick={() => setApproverDropdownOpen((o) => !o)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm bg-white transition-colors ${
-                    errorFields.approverIds
-                      ? 'border-red-300 bg-red-50/40'
-                      : 'border-input hover:border-gray-300'
+                  className={`w-full border-input focus-visible:border-ring focus-visible:ring-ring/50 flex items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 ${
+                    getFieldErrorClass('approverIds') || 'hover:border-gray-300'
                   }`}
                 >
-                  <span className={approverIds.length === 0 ? 'text-muted-foreground' : ''}>
+                  <span className={`line-clamp-1 text-left ${approverIds.length === 0 ? 'text-muted-foreground' : ''}`}>
                     {approverIds.length === 0
                       ? '-- Chọn người duyệt --'
                       : approverOptions
@@ -886,8 +884,7 @@ export default function LeaveRequestModal({
                 </button>
                 {approverDropdownOpen && (
                   <div
-                    className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-52 overflow-y-auto"
-                    style={{ borderColor: '#e2ede9' }}
+                    className="bg-popover text-popover-foreground absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-md border p-1 shadow-md"
                   >
                     {approverOptions.length === 0 ? (
                       <p className="px-3 py-2 text-sm text-muted-foreground">Không có người duyệt</p>
@@ -897,7 +894,7 @@ export default function LeaveRequestModal({
                         return (
                           <label
                             key={person.id}
-                            className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50 text-sm"
+                            className="focus-within:bg-accent focus-within:text-accent-foreground flex cursor-pointer items-center gap-3 rounded-sm px-2 py-1.5 text-sm hover:bg-gray-50"
                           >
                             <input
                               type="checkbox"
