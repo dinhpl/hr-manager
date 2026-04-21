@@ -359,6 +359,20 @@ function htmlToPlainText(html: string) {
     .trim();
 }
 
+function htmlToMultilineText(html: string) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function parseCandidateCvUrls(cvUrl?: string | null): string[] {
   if (!cvUrl) return [];
   const raw = cvUrl.trim();
@@ -1417,6 +1431,9 @@ function PositionRow({
 }) {
   const [stagePopoverOpen, setStagePopoverOpen] = useState(false);
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
+  const [notePopoverOpen, setNotePopoverOpen] = useState(false);
+  const notePreviewText = htmlToMultilineText(position.note || '');
+  const notePreviewContent = notePreviewText || 'Chưa Có Ghi Chú.';
   // Show KPI/Actual for the selected week or sum of all weeks
   const weekIdx = filterWeek - 1;
   const stageActuals = FUNNEL_STAGES.map((stage) => {
@@ -1594,17 +1611,43 @@ function PositionRow({
       {/* Quick actions: Note + Weekly KPI */}
       <td className="py-2 px-2 text-center">
         <div className="flex items-center justify-center gap-1">
-          <button
-            className="w-7 h-7 rounded border bg-white hover:bg-amber-50 flex items-center justify-center transition-colors"
-            style={{
-              borderColor: position.note ? '#fde68a' : '#e2e6ea',
-              color: position.note ? '#d97706' : '#9ca3af',
-            }}
-            onClick={() => onOpenNote(position)}
-            title={canEdit ? 'Ghi chú' : 'Xem ghi chú'}
-          >
-            <FileText className="w-3.5 h-3.5" />
-          </button>
+          <Popover open={notePopoverOpen} onOpenChange={setNotePopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="w-7 h-7 rounded border bg-white hover:bg-amber-50 flex items-center justify-center transition-colors"
+                style={{
+                  borderColor: position.note ? '#fde68a' : '#e2e6ea',
+                  color: position.note ? '#d97706' : '#9ca3af',
+                }}
+                onMouseEnter={() => setNotePopoverOpen(true)}
+                onMouseLeave={() => setNotePopoverOpen(false)}
+                onClick={() => {
+                  setNotePopoverOpen(false);
+                  onOpenNote(position);
+                }}
+                title={canEdit ? 'Ghi chú' : 'Xem ghi chú'}
+              >
+                <FileText className="w-3.5 h-3.5" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="left"
+              align="center"
+              sideOffset={8}
+              className="w-[280px] p-3"
+              onMouseEnter={() => setNotePopoverOpen(true)}
+              onMouseLeave={() => setNotePopoverOpen(false)}
+            >
+              <div className="space-y-1.5 text-left">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9aa5b4]">
+                  Ghi chú
+                </p>
+                <p className="text-[12px] leading-5 text-[#334155] whitespace-pre-wrap break-words">
+                  {notePreviewContent}
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
           <button
             className="w-7 h-7 rounded border border-[#e2e6ea] bg-white text-[#5a6a7e] hover:bg-blue-50 hover:border-blue-400 hover:text-blue-500 flex items-center justify-center transition-colors"
             onClick={() => onWeeklyKpiClick(position)}
